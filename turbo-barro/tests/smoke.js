@@ -144,6 +144,17 @@ check('copas: sin podio se repite la copa, con una medalla de recuerdo', () => {
   assert(Game.trophies[Game.trophies.length - 1].place === 4, 'no se guardó la medalla');
 });
 
+check('copas: un campeonato guardado antes de las copas sigue en Bronce con los puntos en cero', () => {
+  Game.newSeason(1);
+  Game.racers.forEach(r => { r.points = 25; });
+  Game.save();
+  const old = JSON.parse(memory['turbobarro4x4']);
+  delete old.cup;
+  Game.continueSave(old);
+  assert(Game.cup.tier === 0 && Game.cup.race === 0, 'no empezó en la Copa Bronce, carrera 1');
+  assert(Game.racers.every(r => r.points === 0), 'quedaron puntos de antes de las copas');
+});
+
 check('copas: después del Arcoíris vienen copas Leyenda sin fin', () => {
   assert(cupName(4).includes('Arcoíris'), cupName(4));
   assert(cupName(9).includes('5'), cupName(9));

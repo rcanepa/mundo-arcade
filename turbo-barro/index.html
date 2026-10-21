@@ -2425,6 +2425,8 @@ const Game = {
   continueSave(s) {
     Object.assign(this, { players: s.players, diff: s.diff, autoGas: s.autoGas, trackIndex: s.trackIndex, raceNum: s.raceNum, racers: s.racers });
     this.lastOrder = s.lastOrder ? s.lastOrder.map(id => this.racers[id]) : null;
+    // campeonatos guardados antes de las copas: empiezan la Copa Bronce con los puntos en cero
+    if (!s.cup) for (const r of this.racers) r.points = 0;
     this.cup = s.cup || { tier: 0, race: 0 };
     if (this.cup.race >= CUP_RACES) this.openPodium(); else this.openShop(0);
   }

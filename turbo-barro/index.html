@@ -37,7 +37,7 @@ const STR = {
     title: 'TURBO BARRO', langName: 'Español',
     you: 'TÚ', player: n => 'Jugador ' + n, ai: ['Tornado', 'Coyote', 'Rayo'],
     ord: n => n + '°',
-    tracks: ['Valle Polvoriento', 'Desierto Dorado', 'Cañón Rojo', 'Pantano Loco', 'Montaña Nevada', 'Ocho Loco'],
+    tracks: { valle: 'Valle Polvoriento', playa: 'Playa Brava', desierto: 'Desierto Dorado', selva: 'Selva Salvaje', montana: 'Montaña Nevada', ocho: 'Ocho Loco', canon: 'Cañón Rojo', volcan: 'Volcán Ardiente', pantano: 'Pantano Loco', pico: 'Pico Helado', luna: 'Cráter Lunar' },
     laps: n => n + ' vueltas', lap: (a, b) => `Vuelta ${a}/${b}`, lapBanner: n => 'VUELTA ' + n,
     lastLap: '¡ÚLTIMA VUELTA!', go: '¡YA!', finishTag: '¡META!', won: '¡GANASTE!', placed: n => `¡LLEGASTE ${n}°!`,
     menu: { continue: 'Continuar campeonato', p1: '1 Jugador', p2: '2 Jugadores', options: 'Opciones', back: '← Volver', more: '← Más juegos', lang: '🌐 Idioma: Español' },
@@ -71,7 +71,7 @@ const STR = {
     title: 'TURBO MUD', langName: 'English',
     you: 'YOU', player: n => 'Player ' + n, ai: ['Tornado', 'Coyote', 'Bolt'],
     ord: n => n + (['st', 'nd', 'rd'][n - 1] || 'th'),
-    tracks: ['Dusty Valley', 'Golden Desert', 'Red Canyon', 'Crazy Swamp', 'Snowy Mountain', 'Crazy Eight'],
+    tracks: { valle: 'Dusty Valley', playa: 'Wild Beach', desierto: 'Golden Desert', selva: 'Wild Jungle', montana: 'Snowy Mountain', ocho: 'Crazy Eight', canon: 'Red Canyon', volcan: 'Fiery Volcano', pantano: 'Crazy Swamp', pico: 'Icy Peak', luna: 'Moon Crater' },
     laps: n => n + ' laps', lap: (a, b) => `Lap ${a}/${b}`, lapBanner: n => 'LAP ' + n,
     lastLap: 'FINAL LAP!', go: 'GO!', finishTag: 'FINISH!', won: 'YOU WON!', placed: n => `YOU FINISHED ${STR.en.ord(n).toUpperCase()}!`,
     menu: { continue: 'Continue championship', p1: '1 Player', p2: '2 Players', options: 'Options', back: '← Back', more: '← More games', lang: '🌐 Language: English' },
@@ -105,8 +105,8 @@ const STR = {
 const L = () => STR[LANG];
 
 function trackName(ref) {
-  const def = trackDef(ref), i = TRACK_DEFS.indexOf(def);
-  return i >= 0 ? L().tracks[i] : L().myTrack(def.slot + 1);
+  const def = trackDef(ref);
+  return def.id ? L().tracks[def.id] : L().myTrack(def.slot + 1);
 }
 
 // Nombre que se muestra: el que eligió el jugador, o uno por defecto en el idioma actual
@@ -311,31 +311,61 @@ const THEMES = {
   desierto: { ground: '#dcb46c', g2: '#e6c37f', g3: '#cfa45c', dirt: '#a96d3d', d2: '#965f33', d3: '#b97c4a', wall: '#6b4426', wall2: '#e9d3a2', deco: 'cactus', cover: ['#c98b4a', '#dba468', '#a8703a'] },
   canon:    { ground: '#a9502d', g2: '#b95e37', g3: '#954425', dirt: '#d9a066', d2: '#c58a52', d3: '#e6b37c', wall: '#2c2c2c', wall2: '#ffc61a', deco: 'rock', cover: ['#9c4a28', '#b65c34', '#6e3015'] },
   pantano:  { ground: '#3d6a39', g2: '#477842', g3: '#335c30', dirt: '#7d5b37', d2: '#6b4b2b', d3: '#8c6a44', wall: '#2a5fc9', wall2: '#ececec', deco: 'reed', cover: ['#355e30', '#46773e', '#22401f'] },
-  nieve:    { ground: '#e9eff6', g2: '#dbe5f0', g3: '#f6f9fc', dirt: '#8d6c4d', d2: '#7a5a3e', d3: '#9e7d5d', wall: '#c8262b', wall2: '#ffffff', deco: 'pine', cover: ['#c9d6e6', '#f6f9fc', '#7d8899'] }
+  nieve:    { ground: '#e9eff6', g2: '#dbe5f0', g3: '#f6f9fc', dirt: '#8d6c4d', d2: '#7a5a3e', d3: '#9e7d5d', wall: '#c8262b', wall2: '#ffffff', deco: 'pine', cover: ['#c9d6e6', '#f6f9fc', '#7d8899'] },
+  playa:    { ground: '#f1dca0', g2: '#f6e6b4', g3: '#e6cd8c', dirt: '#c9a36a', d2: '#b8925a', d3: '#d8b37a', wall: '#ff5c5c', wall2: '#ffffff', deco: 'palm', cover: ['#a08a72', '#b9a38a', '#7a6652'] },
+  selva:    { ground: '#2f6b2a', g2: '#3a7d33', g3: '#255a21', dirt: '#8a6a3f', d2: '#76593a', d3: '#9c7a4c', wall: '#f2c21b', wall2: '#2f7d2a', deco: 'jungle', cover: ['#2c6a2a', '#3f8a38', '#1a4a1a'] },
+  volcan:   { ground: '#3a302c', g2: '#463a35', g3: '#2e2522', dirt: '#6b5446', d2: '#5a463a', d3: '#7c6352', wall: '#ff6a00', wall2: '#2a2a2a', deco: 'lavarock', cover: ['#4a3c36', '#5c4b43', '#2a201c'] },
+  luna:     { ground: '#9a9ca4', g2: '#a8aab2', g3: '#8a8c94', dirt: '#6e7078', d2: '#62646c', d3: '#7c7e86', wall: '#3a7bd5', wall2: '#e8e8f0', deco: 'crater', cover: ['#7c7e86', '#90929a', '#5a5c64'] }
 };
 
 // pts: puntos de control (la pista pasa por ellos en orden). feats: [tipo, posición, ...]
 // La posición es "segmento.fracción": 1.5 = a mitad de camino entre el punto 1 y el 2.
+// scenery: paisaje dibujado en el suelo (mar, ríos, lava, volcán, la Tierra). gravity: más baja salta más lejos.
+// El orden es el del campeonato: cada copa de 4 carreras trae pistas con puentes y túneles.
 const TRACK_DEFS = [
-  { name: 'Valle Polvoriento', theme: 'pasto', width: 78, start: 0.5, seed: 11,
+  { id: 'valle', name: 'Valle Polvoriento', theme: 'pasto', width: 78, start: 0.5, seed: 11,
     pts: [[170,130],[512,115],[850,130],[935,240],[910,480],[790,570],[610,570],[545,430],[400,430],[335,570],[170,570],[85,460],[90,240]],
     feats: [['jump',1.5],['jump',3.5],['mud',7.5,0,30],['water',10.4,-0.3,26],['bumps',11.6,12.4]] },
-  { name: 'Desierto Dorado', theme: 'desierto', width: 80, start: 0.5, seed: 23,
+  // Un pez con la cola cruzada: puente en el cruce y túnel por el acantilado; el mar a la derecha
+  { id: 'playa', name: 'Playa Brava', theme: 'playa', width: 76, start: 4.5, seed: 71,
+    pts: [[330,150],[560,520],[740,480],[800,330],[740,160],[580,140],[300,520],[130,470],[90,300],[170,150]],
+    feats: [['bridge',0.08,0.92],['water',2.5,0.2,26],['jump',3.5],['bumps',6.25,6.6],['tunnel',7.15,8.5],['jump',9.5]],
+    scenery: [['ocean']] },
+  { id: 'desierto', name: 'Desierto Dorado', theme: 'desierto', width: 80, start: 0.5, seed: 23,
     pts: [[200,110],[500,170],[800,110],[940,230],[850,340],[940,460],[820,580],[520,500],[220,580],[85,460],[180,340],[85,220]],
     feats: [['jump',1.5],['water',4.0,0.2,28],['bumps',6.3,6.8],['jump',7.5],['mud',9.5,0.2,28],['jump',11.4]] },
-  { name: 'Cañón Rojo', theme: 'canon', width: 74, start: 0.5, seed: 37,
-    pts: [[150,120],[340,110],[420,170],[425,320],[585,325],[600,180],[690,110],[880,120],[945,250],[860,380],[935,500],[840,580],[520,575],[300,580],[120,565],[75,430],[165,335],[85,225]],
-    feats: [['jump',2.5],['jump',4.6],['mud',7.4,0.2,28],['bumps',11.6,12.5],['water',13.5,0.3,26],['jump',15.5]] },
-  { name: 'Pantano Loco', theme: 'pantano', width: 74, start: 19.8, seed: 41,
-    pts: [[110,140],[200,105],[265,170],[270,320],[405,325],[410,170],[480,110],[580,110],[650,170],[655,320],[790,325],[800,170],[880,110],[950,200],[945,520],[860,572],[610,572],[600,450],[460,450],[450,572],[305,574],[160,572],[80,500],[75,260]],
-    feats: [['mud',2.5,0,28],['water',6.5,0,30],['mud',9.5,0.2,28],['jump',13.6],['bumps',15.3,15.9],['mud',17.5,0,26],['jump',22.5]] },
-  { name: 'Montaña Nevada', theme: 'nieve', width: 74, start: 0.6, seed: 53,
+  // Un río cruza la selva: la pista lo pasa por dos puentes y atraviesa un túnel de lianas
+  { id: 'selva', name: 'Selva Salvaje', theme: 'selva', width: 76, start: 7.5, seed: 79,
+    pts: [[160,150],[500,120],[840,150],[930,330],[850,520],[520,560],[180,530],[80,330]],
+    feats: [['water',0.3,0.2,26],['bridge',0.6,1.4],['jump',1.7],['tunnel',2.4,3.6],['mud',4.2,0,28],['bridge',4.6,5.4],['jump',5.75],['bumps',6.3,6.7]],
+    scenery: [['river', [[505,0],[500,120],[468,250],[540,400],[518,560],[522,640]], 40, 'water']] },
+  { id: 'montana', name: 'Montaña Nevada', theme: 'nieve', width: 74, start: 0.6, seed: 53,
     pts: [[120,120],[500,117],[880,115],[945,190],[880,265],[590,268],[300,270],[230,340],[300,410],[590,413],[880,415],[945,490],[880,570],[505,573],[130,575],[75,500],[75,350],[75,200]],
     feats: [['bumps',0.9,1.2],['jump',1.5],['mud',4.5,0.35,26],['jump',5.2],['bumps',8.4,8.9],['jump',9.2],['water',12.6,-0.3,26],['jump',13.2],['tunnel',15.25,16.85]] },
   // Un 8: el primer cruce va por un puente y el segundo por debajo
-  { name: 'Ocho Loco', theme: 'canon', width: 74, start: 3.0, seed: 67,
+  { id: 'ocho', name: 'Ocho Loco', theme: 'canon', width: 74, start: 3.0, seed: 67,
     pts: [[512,345],[712,544],[858,544],[912,345],[858,146],[712,146],[512,345],[312,544],[166,544],[112,345],[166,146],[312,146]],
-    feats: [['jump',1.6],['mud',4.6,0.2,28],['bumps',7.6,8.2],['water',9.4,-0.2,26],['jump',10.3],['bridge',11.45,0.55]] }
+    feats: [['jump',1.6],['mud',4.6,0.2,28],['bumps',7.6,8.2],['water',9.4,-0.2,26],['jump',10.3],['bridge',11.45,0.55]] },
+  { id: 'canon', name: 'Cañón Rojo', theme: 'canon', width: 74, start: 0.5, seed: 37,
+    pts: [[150,120],[340,110],[420,170],[425,320],[585,325],[600,180],[690,110],[880,120],[945,250],[860,380],[935,500],[840,580],[520,575],[300,580],[120,565],[75,430],[165,335],[85,225]],
+    feats: [['jump',2.5],['jump',4.6],['mud',7.4,0.2,28],['bumps',11.6,12.5],['water',13.5,0.3,26],['jump',15.5]] },
+  // Un volcán en el centro: la lava baja hasta el borde y la pista la cruza por un puente
+  { id: 'volcan', name: 'Volcán Ardiente', theme: 'volcan', width: 76, start: 0.5, seed: 83,
+    pts: [[180,140],[512,110],[850,140],[940,330],[860,520],[650,560],[512,575],[370,560],[160,520],[80,330]],
+    feats: [['jump',1.5],['bumps',2.3,2.7],['jump',3.5],['bridge',5.2,6.8],['mud',7.5,0.2,28],['tunnel',8.35,9.65]],
+    scenery: [['river', [[512,420],[520,500],[512,575],[505,640]], 34, 'lava'], ['volcano', 512, 335, 150, 110]] },
+  { id: 'pantano', name: 'Pantano Loco', theme: 'pantano', width: 74, start: 19.8, seed: 41,
+    pts: [[110,140],[200,105],[265,170],[270,320],[405,325],[410,170],[480,110],[580,110],[650,170],[655,320],[790,325],[800,170],[880,110],[950,200],[945,520],[860,572],[610,572],[600,450],[460,450],[450,572],[305,574],[160,572],[80,500],[75,260]],
+    feats: [['mud',2.5,0,28],['water',6.5,0,30],['mud',9.5,0.2,28],['jump',13.6],['bumps',15.3,15.9],['mud',17.5,0,26],['jump',22.5]] },
+  // Un 8 en diagonal con placas de hielo que hacen patinar, puente y túnel por la montaña
+  { id: 'pico', name: 'Pico Helado', theme: 'nieve', width: 74, start: 0.4, seed: 89,
+    pts: [[200,130],[380,170],[640,500],[840,560],[930,420],[860,290],[660,280],[360,400],[180,420],[90,280]],
+    feats: [['ice',2.5,0,34],['tunnel',3.3,4.6],['jump',5.5],['bridge',6.08,6.92],['bumps',7.3,7.7],['ice',8.5,0.1,32],['jump',9.5]] },
+  // En la Luna hay poca gravedad: los saltos duran mucho más
+  { id: 'luna', name: 'Cráter Lunar', theme: 'luna', width: 76, start: 0.4, seed: 97, gravity: 520,
+    pts: [[824,130],[644,170],[384,500],[184,560],[94,420],[164,290],[364,280],[664,400],[844,420],[934,280]],
+    feats: [['bridge',1.08,1.92],['jump',3.5],['bumps',4.3,4.7],['jump',5.5],['jump',7.6],['tunnel',8.3,9.6]],
+    scenery: [['earth', 962, 585, 34]] }
 ];
 
 // Catmull-Rom centrípeta: curva suave que pasa por los puntos sin hacer rulos
@@ -381,7 +411,7 @@ function buildTrack(def) {
     p.tx = (b.x - a.x) / l; p.ty = (b.y - a.y) / l; p.nx = -p.ty; p.ny = p.tx;
   });
   const idxOf = s => (Math.round(sToD(s) / step) - s0 + N * 2) % N;
-  const t = { def, name: def.name, theme: THEMES[def.theme], pts, N, hw: def.width / 2, len,
+  const t = { def, name: def.name, gravity: def.gravity || 950, theme: THEMES[def.theme], pts, N, hw: def.width / 2, len,
               jumps: [], bumps: [], puddles: [], canvas: null, k: 0, idxOf };
   t.height = new Float32Array(N); t.bridgeAt = new Uint8Array(N); t.tunnelAt = new Uint8Array(N);
   t.bridges = []; t.tunnels = [];
@@ -528,6 +558,7 @@ function renderTrack(t, k) {
     const s = 2 + rnd() * 6;
     g.fillRect(rnd() * W, rnd() * H, s, s * 0.6);
   }
+  drawScenery(g, t);
   drawDecos(g, t, rnd);
   const path = trackPath(t, 0, ground);
   // muro de neumáticos con su sombra
@@ -689,6 +720,8 @@ function drawPuddle(g, pd, rnd) {
   };
   if (pd.type === 'mud') {
     fill('#4a2f17', 1); fill('#5e3d1f', 0.82); fill('rgba(255,255,255,0.08)', 0.4, -pd.r * 0.2, -pd.r * 0.2);
+  } else if (pd.type === 'ice') {
+    fill('#8fb8d0', 1); fill('#d6f0ff', 0.86); fill('rgba(255,255,255,0.85)', 0.3, -pd.r * 0.25, -pd.r * 0.2);
   } else {
     fill('#6b5233', 1); fill('#2f6fb0', 0.86); fill('#4a90d0', 0.6, -3, -3);
     fill('rgba(255,255,255,0.35)', 0.18, -pd.r * 0.3, -pd.r * 0.3);
@@ -730,6 +763,109 @@ function drawStartLine(g, t) {
   g.restore();
 }
 
+// ===== Paisaje: mar, ríos, lava, volcán y la Tierra (en el suelo, antes que la pista) =====
+const shoreX = y => 900 + 18 * Math.sin(y / 45) + 10 * Math.sin(y / 17);
+
+function distToPolyline(x, y, P) {
+  let best = Infinity;
+  for (let i = 0; i < P.length - 1; i++) {
+    const [ax, ay] = P[i], [bx, by] = P[i + 1], dx = bx - ax, dy = by - ay;
+    const u = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+    best = Math.min(best, Math.hypot(ax + dx * u - x, ay + dy * u - y));
+  }
+  return best;
+}
+
+// Para que los árboles y piedras no caigan al mar, al río o encima del volcán
+function sceneryBlocks(t, x, y, m) {
+  return (t.def.scenery || []).some(s =>
+    (s[0] === 'ocean' && x > shoreX(y) - m - 10) ||
+    (s[0] === 'river' && distToPolyline(x, y, s[1]) < s[2] / 2 + m + 8) ||
+    (s[0] === 'volcano' && ((x - s[1]) / (s[3] + m)) ** 2 + ((y - s[2]) / (s[4] + m)) ** 2 < 1) ||
+    (s[0] === 'earth' && Math.hypot(x - s[1], y - s[2]) < s[3] + m));
+}
+
+function smoothPath(P) {
+  const p = new Path2D();
+  p.moveTo(P[0][0], P[0][1]);
+  for (let i = 1; i < P.length - 1; i++) p.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2);
+  p.lineTo(P[P.length - 1][0], P[P.length - 1][1]);
+  return p;
+}
+
+function drawScenery(g, t) {
+  for (const s of t.def.scenery || []) {
+    if (s[0] === 'ocean') drawOcean(g);
+    else if (s[0] === 'river') drawRiver(g, s[1], s[2], s[3] === 'lava');
+    else if (s[0] === 'volcano') drawVolcano(g, s[1], s[2], s[3], s[4]);
+    else if (s[0] === 'earth') drawEarth(g, s[1], s[2], s[3]);
+  }
+}
+
+function drawOcean(g) {
+  const sea = new Path2D(), shore = new Path2D();
+  sea.moveTo(W, 0);
+  for (let y = 0; y <= H; y += 8) { sea.lineTo(shoreX(y), y); y ? shore.lineTo(shoreX(y), y) : shore.moveTo(shoreX(y), y); }
+  sea.lineTo(W, H); sea.closePath();
+  g.save(); g.lineJoin = 'round';
+  g.strokeStyle = '#d9c08a'; g.lineWidth = 26; g.stroke(shore);           // arena mojada
+  const grd = g.createLinearGradient(860, 0, W, 0);
+  grd.addColorStop(0, '#45c0dd'); grd.addColorStop(1, '#1a6fb0');
+  g.fillStyle = grd; g.fill(sea);
+  g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 5; g.stroke(shore); // espuma
+  g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2;
+  g.save(); g.translate(12, 0); g.stroke(shore); g.restore();
+  for (let i = 0; i < 14; i++) {
+    const y = 70 + i * 42, x = shoreX(y) + 30 + (i % 3) * 26;
+    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 12, y - 8, x + 24, y); g.stroke();
+  }
+  // un velero
+  g.fillStyle = '#7a4a2a'; roundRect(g, 960, 470, 34, 10, 4); g.fill();
+  g.fillStyle = '#fff'; tri(g, 976, 432, 976, 468, 998, 468); g.fill();
+  g.fillStyle = '#ff5c5c'; tri(g, 974, 440, 974, 468, 958, 468); g.fill();
+  g.restore();
+}
+
+function drawRiver(g, P, w, lava) {
+  const path = smoothPath(P);
+  g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+  g.strokeStyle = lava ? '#1a0f0a' : '#5a4a2a'; g.lineWidth = w + 12; g.stroke(path);
+  if (lava) { g.shadowColor = '#ff6a00'; g.shadowBlur = 18; }
+  g.strokeStyle = lava ? '#ff6a00' : '#2f7fb8'; g.lineWidth = w; g.stroke(path);
+  g.shadowBlur = 0;
+  g.strokeStyle = lava ? '#ffd23f' : '#5fb0e0'; g.lineWidth = w * 0.4;
+  g.setLineDash(lava ? [18, 14] : [26, 20]); g.stroke(path); g.setLineDash([]);
+  g.restore();
+}
+
+function drawVolcano(g, x, y, rx, ry) {
+  g.fillStyle = 'rgba(0,0,0,0.3)'; ellipse(g, x + 10, y + 14, rx, ry);
+  g.fillStyle = '#2a201c'; ellipse(g, x, y, rx, ry);
+  g.fillStyle = '#4a3a33'; ellipse(g, x - rx * 0.08, y - ry * 0.1, rx * 0.78, ry * 0.76);
+  g.fillStyle = '#5c4a40'; ellipse(g, x - rx * 0.12, y - ry * 0.16, rx * 0.5, ry * 0.5);
+  // lava que baja por las laderas
+  g.save(); g.strokeStyle = '#ff6a00'; g.lineWidth = 5; g.lineCap = 'round';
+  for (const a of [0.5, 1.4, 2.4, 3.6, 4.6, 5.5]) {
+    g.beginPath(); g.moveTo(x + Math.cos(a) * rx * 0.25, y + Math.sin(a) * ry * 0.25);
+    g.quadraticCurveTo(x + Math.cos(a + 0.2) * rx * 0.6, y + Math.sin(a + 0.2) * ry * 0.6, x + Math.cos(a) * rx * 0.85, y + Math.sin(a) * ry * 0.85);
+    g.stroke();
+  }
+  g.restore();
+  const grd = g.createRadialGradient(x, y, 2, x, y, rx * 0.3);
+  grd.addColorStop(0, '#fff3a0'); grd.addColorStop(0.5, '#ffb000'); grd.addColorStop(1, '#ff3d00');
+  g.fillStyle = '#1a0f0a'; ellipse(g, x, y, rx * 0.34, ry * 0.32);
+  g.fillStyle = grd; ellipse(g, x, y, rx * 0.28, ry * 0.26);
+  g.fillStyle = 'rgba(120,110,105,0.55)';
+  for (const [dx, dy, r] of [[-10, -40, 18], [12, -62, 22], [-4, -88, 26], [18, -110, 20]]) ellipse(g, x + dx, y + dy, r, r);
+}
+
+function drawEarth(g, x, y, r) {
+  g.fillStyle = '#1d6fd1'; ellipse(g, x, y, r, r);
+  g.fillStyle = '#3cbf4a'; ellipse(g, x - r * 0.3, y - r * 0.2, r * 0.35, r * 0.25); ellipse(g, x + r * 0.25, y + r * 0.3, r * 0.3, r * 0.2);
+  g.fillStyle = 'rgba(255,255,255,0.7)'; ellipse(g, x + r * 0.1, y - r * 0.45, r * 0.4, r * 0.1);
+  g.strokeStyle = 'rgba(140,200,255,0.6)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r + 2, 0, Math.PI * 2); g.stroke();
+}
+
 // ===== Decoración fuera de la pista =====
 function farFromTrack(t, x, y, m) {
   const lim = (t.hw + m) ** 2;
@@ -744,7 +880,7 @@ function drawDecos(g, t, rnd) {
   const items = [];
   for (let tries = 0; tries < 500 && items.length < 55; tries++) {
     const x = 15 + rnd() * (W - 30), y = HUD_H + 14 + rnd() * (H - HUD_H - 28), s = 0.7 + rnd() * 0.6;
-    if (farFromTrack(t, x, y, 18 + 16 * s) && items.every(o => (o.x - x) ** 2 + (o.y - y) ** 2 > 900)) items.push({ x, y, s });
+    if (farFromTrack(t, x, y, 18 + 16 * s) && !sceneryBlocks(t, x, y, 14 * s) && items.every(o => (o.x - x) ** 2 + (o.y - y) ** 2 > 900)) items.push({ x, y, s });
   }
   items.sort((a, b) => a.y - b.y);
   for (const o of items) DECOS[t.theme.deco](g, o.x, o.y, o.s, rnd);
@@ -764,6 +900,73 @@ const DECOS = {
       const yy = y + 6 * s - i * 8 * s, w = (14 - i * 3.5) * s;
       g.fillStyle = '#1f5a3a'; tri(g, x - w, yy, x + w, yy, x, yy - 13 * s); g.fill();
       g.fillStyle = '#ffffff'; tri(g, x - w * 0.4, yy - 8 * s, x + w * 0.4, yy - 8 * s, x, yy - 13 * s); g.fill();
+    }
+  },
+  // playa: palmeras, quitasoles y estrellas de mar
+  palm(g, x, y, s, rnd) {
+    const r = rnd();
+    if (r < 0.25) {
+      g.fillStyle = 'rgba(0,0,0,0.18)'; ellipse(g, x + 6 * s, y + 5 * s, 14 * s, 8 * s);
+      const col = ['#ff5c5c', '#3a9be0', '#ffd23f', '#3cbf4a'][Math.floor(rnd() * 4)];
+      for (let i = 0; i < 8; i++) {
+        g.fillStyle = i % 2 ? '#ffffff' : col;
+        g.beginPath(); g.moveTo(x, y); g.arc(x, y, 13 * s, i * Math.PI / 4, (i + 1) * Math.PI / 4); g.closePath(); g.fill();
+      }
+      g.fillStyle = '#555'; ellipse(g, x, y, 1.5 * s, 1.5 * s);
+      return;
+    }
+    if (r < 0.4) { g.fillStyle = '#ff8a3d'; star(g, x, y, 7 * s); return; }
+    g.fillStyle = 'rgba(0,0,0,0.18)'; ellipse(g, x + 8 * s, y + 6 * s, 16 * s, 6 * s);
+    g.strokeStyle = '#8a5a2b'; g.lineWidth = 4 * s; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x, y + 6 * s); g.quadraticCurveTo(x - 6 * s, y - 4 * s, x - 2 * s, y - 14 * s); g.stroke();
+    g.fillStyle = '#2f8f3a';
+    for (let i = 0; i < 6; i++) {
+      g.save(); g.translate(x - 2 * s, y - 14 * s); g.rotate(i / 6 * Math.PI * 2 + r * 3);
+      g.beginPath(); g.ellipse(9 * s, 0, 10 * s, 3.2 * s, 0, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    g.fillStyle = '#6b3d1a'; ellipse(g, x - 2 * s, y - 14 * s, 2.5 * s, 2.5 * s);
+  },
+  // selva: árboles grandes y frondosos, a veces con flores
+  jungle(g, x, y, s, rnd) {
+    g.fillStyle = 'rgba(0,0,0,0.25)'; ellipse(g, x + 6 * s, y + 8 * s, 20 * s, 12 * s);
+    const greens = ['#1e5a1c', '#2a7a26', '#3d9a35', '#5ab64a'];
+    for (let i = 0; i < 4; i++) {
+      const rr = (20 - i * 4.5) * s;
+      g.fillStyle = greens[i]; ellipse(g, x - i * 2 * s + (rnd() - 0.5) * 4 * s, y - i * 2.5 * s, rr, rr * 0.9);
+    }
+    if (rnd() < 0.4) {
+      g.fillStyle = '#ff5c8a'; ellipse(g, x + 6 * s, y - 6 * s, 2.5 * s, 2.5 * s);
+      g.fillStyle = '#ffd23f'; ellipse(g, x - 7 * s, y + 2 * s, 2 * s, 2 * s);
+    }
+  },
+  // volcán: rocas oscuras con grietas encendidas y pocitas de lava
+  lavarock(g, x, y, s, rnd) {
+    if (rnd() < 0.3) {
+      g.fillStyle = '#1a0f0a'; ellipse(g, x, y, 14 * s, 9 * s);
+      g.fillStyle = '#ff6a00'; ellipse(g, x, y, 11 * s, 6.5 * s);
+      g.fillStyle = '#ffd23f'; ellipse(g, x - 2 * s, y - 1 * s, 5 * s, 2.5 * s);
+      return;
+    }
+    g.fillStyle = 'rgba(0,0,0,0.3)'; ellipse(g, x + 5 * s, y + 6 * s, 14 * s, 8 * s);
+    g.fillStyle = '#221a17'; g.beginPath();
+    for (let i = 0; i < 7; i++) {
+      const a = i / 7 * Math.PI * 2, rr = 13 * s * (0.75 + rnd() * 0.35);
+      g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.8);
+    }
+    g.closePath(); g.fill();
+    g.strokeStyle = '#ff7a1a'; g.lineWidth = 1.5 * s; g.beginPath();
+    g.moveTo(x - 7 * s, y - 2 * s); g.lineTo(x - 1 * s, y + 1 * s); g.lineTo(x + 6 * s, y - 3 * s); g.stroke();
+  },
+  // luna: cráteres y alguna bandera
+  crater(g, x, y, s, rnd) {
+    const r = (10 + rnd() * 14) * s;
+    g.fillStyle = 'rgba(0,0,0,0.18)'; ellipse(g, x + r * 0.15, y + r * 0.15, r * 1.1, r);
+    g.fillStyle = '#b4b6be'; ellipse(g, x, y, r, r * 0.9);
+    g.fillStyle = '#7a7c84'; ellipse(g, x + r * 0.08, y + r * 0.08, r * 0.78, r * 0.7);
+    g.fillStyle = 'rgba(255,255,255,0.15)'; ellipse(g, x - r * 0.3, y - r * 0.3, r * 0.3, r * 0.2);
+    if (rnd() < 0.12) {
+      g.strokeStyle = '#ddd'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + r, y - 16 * s); g.stroke();
+      g.fillStyle = '#e8312a'; g.fillRect(x + r, y - 16 * s, 10 * s, 6 * s);
     }
   },
   cactus(g, x, y, s) {
@@ -1048,7 +1251,7 @@ class Truck {
 
     if (this.z > 0 || this.vz > 0) {
       // en el aire: no se puede doblar ni acelerar
-      this.z += this.vz * dt; this.vz -= 950 * dt;
+      this.z += this.vz * dt; this.vz -= t.gravity * dt;
       if (this.z <= 0) {
         this.z = 0;
         if (this.vz < -120) {
@@ -1072,7 +1275,7 @@ class Truck {
       if (fwd > maxS) fwd += (maxS - fwd) * Math.min(1, 2.5 * dt);
       if (fwd < -90) fwd = -90;
       fwd *= Math.exp(-drag * dt);
-      lat *= Math.exp(-st.grip * dt); // el agarre de las llantas frena el derrape
+      lat *= Math.exp(-st.grip * (this.surface === 'ice' ? 0.15 : 1) * dt); // el agarre de las llantas frena el derrape
       this.vx = fx * fwd - fy * lat; this.vy = fy * fwd + fx * lat;
     }
     this.x += this.vx * dt; this.y += this.vy * dt;
@@ -1391,6 +1594,7 @@ class Race {
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
       if (tr.surface === 'mud') this.burst(tr.x, tr.y, 10, '#4a2f17', 70);
+      if (tr.surface === 'ice') this.burst(tr.x, tr.y, 8, '#ffffff', 60);
       tr.lastSurf = tr.surface;
     }
     if (tr.z > 0) return;
@@ -1400,7 +1604,7 @@ class Race {
     const bx = tr.x - Math.cos(tr.a) * 12, by = tr.y - Math.sin(tr.a) * 12;
     if (tr.surface === 'mud') this.part(bx, by, '#4a2f17', 3, 40, 0.5, false);
     else if (tr.surface === 'water') { this.part(bx, by, '#6fb0ff', 2.5, 70, 0.5, false); this.part(bx, by, '#e6f4ff', 2, 70, 0.4, false); }
-    else this.part(bx, by, this.track.theme.d3, 4 + Math.random() * 3, 20, 0.6, true);
+    else this.part(bx, by, tr.surface === 'ice' ? '#e8f6ff' : this.track.theme.d3, 4 + Math.random() * 3, 20, 0.6, true);
   }
 
   part(x, y, col, size, spd, life, grow) {
@@ -1695,7 +1899,7 @@ function drawGarage(g) {
 // ===== Editor de pistas: el jugador dibuja su propia pista =====
 Object.assign(STR.es, {
   myTrack: n => 'Mi pista ' + n,
-  themes: { pasto: 'Pasto', desierto: 'Desierto', canon: 'Cañón', pantano: 'Pantano', nieve: 'Nieve' },
+  themes: { pasto: 'Pasto', desierto: 'Desierto', canon: 'Cañón', pantano: 'Pantano', nieve: 'Nieve', playa: 'Playa', selva: 'Selva', volcan: 'Volcán', luna: 'Luna' },
   editor: {
     menu: '🛠️ Crear pista',
     tools: ['Puntos', 'Salto', 'Barro', 'Agua', 'Baches', 'Salida', 'Puente', 'Túnel'],
@@ -1718,7 +1922,7 @@ Object.assign(STR.es, {
 });
 Object.assign(STR.en, {
   myTrack: n => 'My track ' + n,
-  themes: { pasto: 'Grass', desierto: 'Desert', canon: 'Canyon', pantano: 'Swamp', nieve: 'Snow' },
+  themes: { pasto: 'Grass', desierto: 'Desert', canon: 'Canyon', pantano: 'Swamp', nieve: 'Snow', playa: 'Beach', selva: 'Jungle', volcan: 'Volcano', luna: 'Moon' },
   editor: {
     menu: '🛠️ Build a track',
     tools: ['Points', 'Jump', 'Mud', 'Water', 'Bumps', 'Start', 'Bridge', 'Tunnel'],
@@ -1741,7 +1945,7 @@ Object.assign(STR.en, {
 });
 
 const EDITOR_KEY = 'turbobarro4x4.tracks', TRACK_SLOTS = 3, MAX_FEATS = 14;
-const THEME_KEYS = ['pasto', 'desierto', 'canon', 'pantano', 'nieve'];
+const THEME_KEYS = ['pasto', 'desierto', 'canon', 'pantano', 'nieve', 'playa', 'selva', 'volcan', 'luna'];
 const ED_ICONS = ['✏️', '🚀', '🟫', '💧', '〰️', '🏁', '🌉', '⛰️', '🎨', '📁', '↩️', '🗑️', '▶️', '🚪'];
 
 customTracks = (() => {

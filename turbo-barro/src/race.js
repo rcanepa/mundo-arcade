@@ -199,6 +199,7 @@ class Race {
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
       if (tr.surface === 'mud') this.burst(tr.x, tr.y, 10, '#4a2f17', 70);
+      if (tr.surface === 'ice') this.burst(tr.x, tr.y, 8, '#ffffff', 60);
       tr.lastSurf = tr.surface;
     }
     if (tr.z > 0) return;
@@ -208,7 +209,7 @@ class Race {
     const bx = tr.x - Math.cos(tr.a) * 12, by = tr.y - Math.sin(tr.a) * 12;
     if (tr.surface === 'mud') this.part(bx, by, '#4a2f17', 3, 40, 0.5, false);
     else if (tr.surface === 'water') { this.part(bx, by, '#6fb0ff', 2.5, 70, 0.5, false); this.part(bx, by, '#e6f4ff', 2, 70, 0.4, false); }
-    else this.part(bx, by, this.track.theme.d3, 4 + Math.random() * 3, 20, 0.6, true);
+    else this.part(bx, by, tr.surface === 'ice' ? '#e8f6ff' : this.track.theme.d3, 4 + Math.random() * 3, 20, 0.6, true);
   }
 
   part(x, y, col, size, spd, life, grow) {

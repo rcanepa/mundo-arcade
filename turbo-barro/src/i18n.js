@@ -21,7 +21,7 @@ const STR = {
     title: 'TURBO BARRO', langName: 'Español',
     you: 'TÚ', player: n => 'Jugador ' + n, ai: ['Tornado', 'Coyote', 'Rayo'],
     ord: n => n + '°',
-    tracks: ['Valle Polvoriento', 'Desierto Dorado', 'Cañón Rojo', 'Pantano Loco', 'Montaña Nevada', 'Ocho Loco'],
+    tracks: { valle: 'Valle Polvoriento', playa: 'Playa Brava', desierto: 'Desierto Dorado', selva: 'Selva Salvaje', montana: 'Montaña Nevada', ocho: 'Ocho Loco', canon: 'Cañón Rojo', volcan: 'Volcán Ardiente', pantano: 'Pantano Loco', pico: 'Pico Helado', luna: 'Cráter Lunar' },
     laps: n => n + ' vueltas', lap: (a, b) => `Vuelta ${a}/${b}`, lapBanner: n => 'VUELTA ' + n,
     lastLap: '¡ÚLTIMA VUELTA!', go: '¡YA!', finishTag: '¡META!', won: '¡GANASTE!', placed: n => `¡LLEGASTE ${n}°!`,
     menu: { continue: 'Continuar campeonato', p1: '1 Jugador', p2: '2 Jugadores', options: 'Opciones', back: '← Volver', more: '← Más juegos', lang: '🌐 Idioma: Español' },
@@ -55,7 +55,7 @@ const STR = {
     title: 'TURBO MUD', langName: 'English',
     you: 'YOU', player: n => 'Player ' + n, ai: ['Tornado', 'Coyote', 'Bolt'],
     ord: n => n + (['st', 'nd', 'rd'][n - 1] || 'th'),
-    tracks: ['Dusty Valley', 'Golden Desert', 'Red Canyon', 'Crazy Swamp', 'Snowy Mountain', 'Crazy Eight'],
+    tracks: { valle: 'Dusty Valley', playa: 'Wild Beach', desierto: 'Golden Desert', selva: 'Wild Jungle', montana: 'Snowy Mountain', ocho: 'Crazy Eight', canon: 'Red Canyon', volcan: 'Fiery Volcano', pantano: 'Crazy Swamp', pico: 'Icy Peak', luna: 'Moon Crater' },
     laps: n => n + ' laps', lap: (a, b) => `Lap ${a}/${b}`, lapBanner: n => 'LAP ' + n,
     lastLap: 'FINAL LAP!', go: 'GO!', finishTag: 'FINISH!', won: 'YOU WON!', placed: n => `YOU FINISHED ${STR.en.ord(n).toUpperCase()}!`,
     menu: { continue: 'Continue championship', p1: '1 Player', p2: '2 Players', options: 'Options', back: '← Back', more: '← More games', lang: '🌐 Language: English' },
@@ -89,8 +89,8 @@ const STR = {
 const L = () => STR[LANG];
 
 function trackName(ref) {
-  const def = trackDef(ref), i = TRACK_DEFS.indexOf(def);
-  return i >= 0 ? L().tracks[i] : L().myTrack(def.slot + 1);
+  const def = trackDef(ref);
+  return def.id ? L().tracks[def.id] : L().myTrack(def.slot + 1);
 }
 
 // Nombre que se muestra: el que eligió el jugador, o uno por defecto en el idioma actual

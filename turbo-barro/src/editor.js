@@ -1,7 +1,7 @@
 // ===== Editor de pistas: el jugador dibuja su propia pista =====
 Object.assign(STR.es, {
   myTrack: n => 'Mi pista ' + n,
-  themes: { pasto: 'Pasto', desierto: 'Desierto', canon: 'Cañón', pantano: 'Pantano', nieve: 'Nieve' },
+  themes: { pasto: 'Pasto', desierto: 'Desierto', canon: 'Cañón', pantano: 'Pantano', nieve: 'Nieve', playa: 'Playa', selva: 'Selva', volcan: 'Volcán', luna: 'Luna' },
   editor: {
     menu: '🛠️ Crear pista',
     tools: ['Puntos', 'Salto', 'Barro', 'Agua', 'Baches', 'Salida', 'Puente', 'Túnel'],
@@ -24,7 +24,7 @@ Object.assign(STR.es, {
 });
 Object.assign(STR.en, {
   myTrack: n => 'My track ' + n,
-  themes: { pasto: 'Grass', desierto: 'Desert', canon: 'Canyon', pantano: 'Swamp', nieve: 'Snow' },
+  themes: { pasto: 'Grass', desierto: 'Desert', canon: 'Canyon', pantano: 'Swamp', nieve: 'Snow', playa: 'Beach', selva: 'Jungle', volcan: 'Volcano', luna: 'Moon' },
   editor: {
     menu: '🛠️ Build a track',
     tools: ['Points', 'Jump', 'Mud', 'Water', 'Bumps', 'Start', 'Bridge', 'Tunnel'],
@@ -47,7 +47,7 @@ Object.assign(STR.en, {
 });
 
 const EDITOR_KEY = 'turbobarro4x4.tracks', TRACK_SLOTS = 3, MAX_FEATS = 14;
-const THEME_KEYS = ['pasto', 'desierto', 'canon', 'pantano', 'nieve'];
+const THEME_KEYS = ['pasto', 'desierto', 'canon', 'pantano', 'nieve', 'playa', 'selva', 'volcan', 'luna'];
 const ED_ICONS = ['✏️', '🚀', '🟫', '💧', '〰️', '🏁', '🌉', '⛰️', '🎨', '📁', '↩️', '🗑️', '▶️', '🚪'];
 
 customTracks = (() => {

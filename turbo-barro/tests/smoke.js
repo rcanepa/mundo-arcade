@@ -26,7 +26,8 @@ const fakeCanvas = () => ({
 const memory = {};
 const sandbox = {
   console, Math, JSON, performance, setTimeout, clearTimeout, setInterval: () => 0,
-  Path2D: class { moveTo() {} lineTo() {} closePath() {} rect() {} },
+  // cualquier método de dibujo (lineTo, arc, quadraticCurveTo...) existe y no hace nada
+  Path2D: class { constructor() { return new Proxy(this, { get: (o, k) => (k in o ? o[k] : () => {}) }); } },
   localStorage: { getItem: k => (k in memory ? memory[k] : null), setItem: (k, v) => { memory[k] = String(v); }, removeItem: k => { delete memory[k]; } },
   navigator: { language: 'es-CL', getGamepads: () => [] },
   location: { pathname: '/turbo-barro/index.html', href: '' },

@@ -56,7 +56,7 @@ class Truck {
 
     if (this.z > 0 || this.vz > 0) {
       // en el aire: no se puede doblar ni acelerar
-      this.z += this.vz * dt; this.vz -= 950 * dt;
+      this.z += this.vz * dt; this.vz -= t.gravity * dt;
       if (this.z <= 0) {
         this.z = 0;
         if (this.vz < -120) {
@@ -80,7 +80,7 @@ class Truck {
       if (fwd > maxS) fwd += (maxS - fwd) * Math.min(1, 2.5 * dt);
       if (fwd < -90) fwd = -90;
       fwd *= Math.exp(-drag * dt);
-      lat *= Math.exp(-st.grip * dt); // el agarre de las llantas frena el derrape
+      lat *= Math.exp(-st.grip * (this.surface === 'ice' ? 0.15 : 1) * dt); // el agarre de las llantas frena el derrape
       this.vx = fx * fwd - fy * lat; this.vy = fy * fwd + fx * lat;
     }
     this.x += this.vx * dt; this.y += this.vy * dt;

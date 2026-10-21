@@ -92,7 +92,6 @@ Object.assign(Game, {
     this.podium = { tier, standings, best, next: this.cup.next };
     this.scene = 'podium'; this.lock = 1.5;
     Sound.play('menu'); Sound.sfx.finish();
-    Announcer.event('cup', { r: standings[0] });
     this.menu = new Menu([{ label: () => L().nextCup(cupName(this.podium.next)), action: () => this.nextCup() }]);
   },
 

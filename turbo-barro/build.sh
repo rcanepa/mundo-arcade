@@ -6,7 +6,7 @@ OUT="index.html"
   cat src/shell.html
   echo "<script>"
   echo "'use strict';"
-  for f in i18n audio tracks models truck race announcer garage editor ui cups main; do cat "src/$f.js"; echo; done
+  for f in i18n audio tracks models truck race garage editor ui cups main; do cat "src/$f.js"; echo; done
   echo "</script>"
   echo "</body>"
   echo "</html>"

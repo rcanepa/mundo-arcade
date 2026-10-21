@@ -202,7 +202,9 @@ function getTrack(ref) {
   const def = trackDef(ref);
   let t = trackCache.get(def);
   if (!t) { t = buildTrack(def); trackCache.set(def, t); }
-  if (t.k !== RENDER_K) { Object.assign(t, renderTrack(t, RENDER_K)); t.k = RENDER_K; }
+  // con la ventana en tamaño cero (escondida) se dibuja igual, en baja resolución
+  const k = RENDER_K || 1;
+  if (t.k !== k) { Object.assign(t, renderTrack(t, k)); t.k = k; }
   return t;
 }
 

@@ -475,7 +475,9 @@ function getTrack(ref) {
   const def = trackDef(ref);
   let t = trackCache.get(def);
   if (!t) { t = buildTrack(def); trackCache.set(def, t); }
-  if (t.k !== RENDER_K) { Object.assign(t, renderTrack(t, RENDER_K)); t.k = RENDER_K; }
+  // con la ventana en tamaño cero (escondida) se dibuja igual, en baja resolución
+  const k = RENDER_K || 1;
+  if (t.k !== k) { Object.assign(t, renderTrack(t, k)); t.k = k; }
   return t;
 }
 
@@ -1232,7 +1234,7 @@ class Race {
       this.count -= dt;
       const a = Math.ceil(this.count);
       if (a !== b && a >= 1 && a <= 3) Sound.sfx.beep();
-      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); Announcer.event('go'); }
+      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); }
     } else this.time += dt;
     if (this.goT > 0) this.goT -= dt;
 
@@ -1251,7 +1253,7 @@ class Race {
       }
       if (inp.nitro && !tr.nitroHeld && tr.nitros > 0 && tr.nitroT <= 0) {
         tr.nitros--; tr.nitroT = 1.6;
-        if (tr.human && !this.demo) { Sound.sfx.nitro(); Announcer.event('nitro', tr); }
+        if (tr.human && !this.demo) Sound.sfx.nitro();
       }
       tr.nitroHeld = inp.nitro;
       if (inp.horn && !tr.hornHeld && tr.human && !this.demo) this.honk(tr);
@@ -1259,12 +1261,6 @@ class Race {
       tr.update(dt, inp, this);
       this.checkLap(tr);
       this.emitDust(tr, dt);
-      if (tr.human && !this.demo) {
-        const inTunnel = this.track.tunnelAt[tr.idx] === 1;
-        if (inTunnel && !tr.wasTunnel) Announcer.event('tunnel', tr);
-        if (tr.upper && !tr.wasBridge) Announcer.event('bridge', tr);
-        tr.wasTunnel = inTunnel; tr.wasBridge = tr.upper;
-      }
     }
     this.collide();
     this.updatePickups(dt);
@@ -1276,13 +1272,7 @@ class Race {
     if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
     if (this.shake > 0) this.shake -= dt;
 
-    const rank = this.ranking();
-    rank.forEach((tr, i) => { tr.pos = i + 1; });
-    if (!this.demo && this.state === 'race' && rank[0] !== this.leader) {
-      const prev = this.leader;
-      this.leader = rank[0];
-      if (prev && this.time > 4 && !rank[0].finished && (rank[0].human || prev.human)) Announcer.event('lead', rank[0]);
-    }
+    this.ranking().forEach((tr, i) => { tr.pos = i + 1; });
 
     if (!this.demo && this.state === 'race') {
       if (this.endT === 0 && humans.every(h => h.finished)) this.endT = 3;
@@ -1303,14 +1293,12 @@ class Race {
     const who = Game.players === 2 ? racerName(tr.r) + ': ' : '';
     if (lap >= LAPS) {
       tr.finished = true; this.order.push(tr); tr.place = this.order.length;
-      if (tr.place === 1) Announcer.event('win', tr);
       if (tr.human) {
         this.showBanner(who + (tr.place === 1 ? L().won : L().placed(tr.place)), tr.place === 1 ? '#ffd23f' : '#fff', 3);
         if (tr.place === 1) { Sound.sfx.finish(); this.confetti(tr); } else Sound.sfx.lap();
       }
     } else if (lap >= 1 && tr.human) {
       Sound.sfx.lap();
-      if (lap === LAPS - 1) Announcer.event('lastLap', tr);
       this.showBanner(who + (lap === LAPS - 1 ? L().lastLap : L().lapBanner(lap + 1)), '#fff', 1.4);
     }
   }
@@ -1388,11 +1376,11 @@ class Race {
   fx(type, tr, v) {
     this.curUp = tr.upper;
     const loud = tr.human && !this.demo;
-    if (type === 'jump') { if (loud) { Sound.sfx.jump(); if (v > 190) Announcer.event('jump', tr); } }
+    if (type === 'jump') { if (loud) Sound.sfx.jump(); }
     else if (type === 'land') { if (loud) Sound.sfx.land(); this.burst(tr.x, tr.y, 10, this.track.theme.d3, 60); }
     else if (type === 'bump') { if (loud && Math.random() < 0.5) Sound.sfx.bump(); }
     else if (type === 'wall') {
-      if (loud) { Sound.sfx.crash(); if (v > 150) Announcer.event('crash', tr); }
+      if (loud) Sound.sfx.crash();
       this.burst(tr.x, tr.y, 6, '#fff3a0', 90, 0.3);
       if (loud && v > 120) this.shake = 0.15;
     }
@@ -1402,7 +1390,7 @@ class Race {
     this.curUp = tr.upper;
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
-      if (tr.surface === 'mud') { this.burst(tr.x, tr.y, 10, '#4a2f17', 70); if (tr.human && !this.demo) Announcer.event('mud', tr); }
+      if (tr.surface === 'mud') this.burst(tr.x, tr.y, 10, '#4a2f17', 70);
       tr.lastSurf = tr.surface;
     }
     if (tr.z > 0) return;
@@ -1531,71 +1519,6 @@ class Race {
     });
   }
 }
-
-// ===== Locutor: frases con la voz del computador (funciona sin internet) =====
-Object.assign(STR.es.opt, { ann: 'Locutor' });
-Object.assign(STR.en.opt, { ann: 'Announcer' });
-STR.es.ann = {
-  go: ['¡Arrancan!', '¡Comienza la carrera!', '¡A todo motor!'],
-  lastLap: ['¡Última vuelta!', '¡Queda una vuelta!'],
-  jump: ['¡Qué salto!', '¡Vuela!', '¡Increíble salto!'],
-  lead: n => [`¡${n} pasa adelante!`, `¡${n} toma el primer lugar!`],
-  win: n => [`¡${n} gana la carrera!`, `¡Victoria para ${n}!`],
-  mud: ['¡Qué barro!', '¡Al barro!', '¡Puro barro!'],
-  crash: ['¡Uy, qué golpe!', '¡Cuidado con el muro!'],
-  nitro: ['¡Turbo!', '¡Nitro a fondo!'],
-  tunnel: ['¡Al túnel!', '¡Qué oscuro!'],
-  bridge: ['¡Por el puente!', '¡Arriba del puente!'],
-  cup: n => [`¡${n} gana la ${cupName(Game.podium.tier)}!`, `¡${n} es campeón de la ${cupName(Game.podium.tier)}!`]
-};
-STR.en.ann = {
-  go: ['And they\'re off!', 'Here we go!', 'Full throttle!'],
-  lastLap: ['Final lap!', 'One lap to go!'],
-  jump: ['What a jump!', 'Flying high!', 'Huge air!'],
-  lead: n => [`${n} takes the lead!`, `${n} moves into first!`],
-  win: n => [`${n} wins the race!`, `Victory for ${n}!`],
-  mud: ['Mud everywhere!', 'Into the mud!', 'What a mess!'],
-  crash: ['Ouch, what a crash!', 'Watch that wall!'],
-  nitro: ['Turbo boost!', 'Nitro on!'],
-  tunnel: ['Into the tunnel!', 'So dark in here!'],
-  bridge: ['Over the bridge!', 'Up on the bridge!'],
-  cup: n => [`${n} wins the ${cupName(Game.podium.tier)}!`, `${n} is the ${cupName(Game.podium.tier)} champion!`]
-};
-
-const Announcer = (() => {
-  const synth = window.speechSynthesis;
-  // Las frases importantes interrumpen a las chicas; las chicas no siempre suenan
-  const PRIORITY = { cup: 4, win: 3, lastLap: 2, go: 2, lead: 1 };
-  let voices = [], lastT = -99, lastKey = '', lastPri = 0;
-  const loadVoices = () => { voices = synth.getVoices(); };
-  if (synth) { loadVoices(); synth.addEventListener('voiceschanged', loadVoices); }
-
-  function pickVoice() {
-    const mine = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(LANG));
-    return mine.find(v => v.localService) || mine[0] || null;
-  }
-
-  function event(key, tr) {
-    if (!synth || !Game.announcer) return;
-    const now = performance.now() / 1000, pri = PRIORITY[key] || 0;
-    if (key === lastKey && now - lastT < 4) return;
-    if (synth.speaking && pri <= lastPri) return;
-    if (pri === 0 && (now - lastT < 2.5 || Math.random() < 0.45)) return;
-    let list = L().ann[key];
-    if (typeof list === 'function') list = list(racerName(tr.r));
-    const u = new SpeechSynthesisUtterance(list[Math.floor(Math.random() * list.length)]);
-    const v = pickVoice();
-    if (v) u.voice = v;
-    u.lang = v ? v.lang : (LANG === 'es' ? 'es-ES' : 'en-US');
-    u.rate = 1.12; u.pitch = 1.1;
-    synth.cancel();
-    synth.speak(u);
-    lastT = now; lastKey = key; lastPri = pri;
-  }
-
-  function stop() { if (synth) synth.cancel(); }
-  return { event, stop };
-})();
 
 // ===== Taller: modelo, pintura, decoración y bocina de cada jugador =====
 Object.assign(STR.es, {
@@ -2149,7 +2072,7 @@ const PREFS = readJSON(PREFS_KEY) || {};
 
 const Game = {
   scene: 'title', sub: 'main', players: 1,
-  diff: PREFS.diff || 0, autoGas: !!PREFS.autoGas, announcer: PREFS.announcer !== false,
+  diff: PREFS.diff || 0, autoGas: !!PREFS.autoGas,
   names: Array.isArray(PREFS.names) ? PREFS.names : ['', ''],
   garage: Array.isArray(PREFS.garage) ? PREFS.garage : [defaultGarage(0), defaultGarage(1)],
   racers: [], trackIndex: 0, raceNum: 0, lastOrder: null,
@@ -2200,14 +2123,13 @@ const Game = {
   savePrefs() {
     try {
       localStorage.setItem(PREFS_KEY, JSON.stringify({
-        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage, trophies: this.trophies
+        diff: this.diff, autoGas: this.autoGas, names: this.names, garage: this.garage, trophies: this.trophies
       }));
     } catch (e) { /* sin guardado: se juega igual */ }
   },
 
   toTitle() {
     this.scene = 'title'; this.race = null; this.testing = null;
-    Announcer.stop();
     const demoRacers = PAINTS.slice(0, 4).map((p, i) => ({
       id: i, name: '', color: p.c, dark: p.d, model: MODEL_KEYS[i], human: false, player: -1, nitros: 2,
       skill: 0.9 + Math.random() * 0.1, upg: { motor: 2, acel: 2, llantas: 2, amort: 2 }
@@ -2236,13 +2158,11 @@ const Game = {
     const O = () => L().opt, yn = v => (v ? O().yes : O().no);
     const cd = d => { this.diff = (this.diff + d + 3) % 3; this.savePrefs(); };
     const ag = () => { this.autoGas = !this.autoGas; this.savePrefs(); };
-    const an = () => { this.announcer = !this.announcer; this.savePrefs(); if (!this.announcer) Announcer.stop(); };
     const tl = () => this.toggleLang();
     this.menu = new Menu([
       { label: () => O().diff + ': ' + L().diffs[this.diff], action: () => { cd(1); Sound.sfx.select(); }, left: () => cd(-1), right: () => cd(1) },
       { label: () => O().auto + ': ' + yn(this.autoGas), action: () => { ag(); Sound.sfx.select(); }, left: ag, right: ag },
       { label: () => L().menu.lang, action: tl, left: tl, right: tl },
-      { label: () => '📣 ' + O().ann + ': ' + yn(this.announcer), action: () => { an(); Sound.sfx.select(); }, left: an, right: an },
       { label: () => '✏️ ' + O().name1 + ': ' + (this.names[0] || L().you), action: () => this.editName(0) },
       { label: () => '✏️ ' + O().name2 + ': ' + (this.names[1] || L().player(2)), action: () => this.editName(1) },
       { label: () => L().menu.back, action: () => { this.mainMenu(); Sound.sfx.select(); } }
@@ -2335,7 +2255,6 @@ const Game = {
   },
   endTest() {
     this.testing = null; this.race = null;
-    Announcer.stop();
     Editor.resume();
   },
 
@@ -2672,7 +2591,6 @@ Object.assign(Game, {
     this.podium = { tier, standings, best, next: this.cup.next };
     this.scene = 'podium'; this.lock = 1.5;
     Sound.play('menu'); Sound.sfx.finish();
-    Announcer.event('cup', { r: standings[0] });
     this.menu = new Menu([{ label: () => L().nextCup(cupName(this.podium.next)), action: () => this.nextCup() }]);
   },
 

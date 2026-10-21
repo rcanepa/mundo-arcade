@@ -42,7 +42,7 @@ class Race {
       this.count -= dt;
       const a = Math.ceil(this.count);
       if (a !== b && a >= 1 && a <= 3) Sound.sfx.beep();
-      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); }
+      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); Announcer.event('go'); }
     } else this.time += dt;
     if (this.goT > 0) this.goT -= dt;
 
@@ -61,9 +61,11 @@ class Race {
       }
       if (inp.nitro && !tr.nitroHeld && tr.nitros > 0 && tr.nitroT <= 0) {
         tr.nitros--; tr.nitroT = 1.6;
-        if (tr.human && !this.demo) Sound.sfx.nitro();
+        if (tr.human && !this.demo) { Sound.sfx.nitro(); Announcer.event('nitro', tr); }
       }
       tr.nitroHeld = inp.nitro;
+      if (inp.horn && !tr.hornHeld && tr.human && !this.demo) this.honk(tr);
+      tr.hornHeld = inp.horn;
       tr.update(dt, inp, this);
       this.checkLap(tr);
       this.emitDust(tr, dt);
@@ -78,7 +80,13 @@ class Race {
     if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
     if (this.shake > 0) this.shake -= dt;
 
-    this.ranking().forEach((tr, i) => { tr.pos = i + 1; });
+    const rank = this.ranking();
+    rank.forEach((tr, i) => { tr.pos = i + 1; });
+    if (!this.demo && this.state === 'race' && rank[0] !== this.leader) {
+      const prev = this.leader;
+      this.leader = rank[0];
+      if (prev && this.time > 4 && !rank[0].finished && (rank[0].human || prev.human)) Announcer.event('lead', rank[0]);
+    }
 
     if (!this.demo && this.state === 'race') {
       if (this.endT === 0 && humans.every(h => h.finished)) this.endT = 3;
@@ -99,12 +107,14 @@ class Race {
     const who = Game.players === 2 ? racerName(tr.r) + ': ' : '';
     if (lap >= LAPS) {
       tr.finished = true; this.order.push(tr); tr.place = this.order.length;
+      if (tr.place === 1) Announcer.event('win', tr);
       if (tr.human) {
         this.showBanner(who + (tr.place === 1 ? L().won : L().placed(tr.place)), tr.place === 1 ? '#ffd23f' : '#fff', 3);
         if (tr.place === 1) { Sound.sfx.finish(); this.confetti(tr); } else Sound.sfx.lap();
       }
     } else if (lap >= 1 && tr.human) {
       Sound.sfx.lap();
+      if (lap === LAPS - 1) Announcer.event('lastLap', tr);
       this.showBanner(who + (lap === LAPS - 1 ? L().lastLap : L().lapBanner(lap + 1)), '#fff', 1.4);
     }
   }
@@ -123,13 +133,19 @@ class Race {
       if (Math.abs(a.z - b.z) > 14) continue;
       const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
       if (d2 >= R * R || d2 < 0.01) continue;
-      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, o = (R - d) / 2;
-      a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
+      // el más pesado (tractor, monster) empuja más y se mueve menos
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, o = R - d;
+      const ma = a.stats().mass, mb = b.stats().mass, wa = mb / (ma + mb), wb = ma / (ma + mb);
+      a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
       const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
       if (rv < 0) {
-        const imp = 1.4 * rv / 2;
-        a.vx += nx * imp; a.vy += ny * imp; b.vx -= nx * imp; b.vy -= ny * imp;
-        if (rv < -60 && (a.human || b.human) && !this.demo) Sound.sfx.bump();
+        const J = -1.4 * rv / (1 / ma + 1 / mb);
+        a.vx -= nx * J / ma; a.vy -= ny * J / ma; b.vx += nx * J / mb; b.vy += ny * J / mb;
+        if (rv < -60 && (a.human || b.human) && !this.demo) {
+          Sound.sfx.bump();
+          const other = a.human ? b : a;
+          if (!other.human && Math.random() < 0.3) Sound.horn(other.horn, 2 + (other.r.id % 2));
+        }
       }
     }
   }
@@ -175,11 +191,11 @@ class Race {
 
   fx(type, tr, v) {
     const loud = tr.human && !this.demo;
-    if (type === 'jump') { if (loud) Sound.sfx.jump(); }
+    if (type === 'jump') { if (loud) { Sound.sfx.jump(); if (v > 190) Announcer.event('jump', tr); } }
     else if (type === 'land') { if (loud) Sound.sfx.land(); this.burst(tr.x, tr.y, 10, this.track.theme.d3, 60); }
     else if (type === 'bump') { if (loud && Math.random() < 0.5) Sound.sfx.bump(); }
     else if (type === 'wall') {
-      if (loud) Sound.sfx.crash();
+      if (loud) { Sound.sfx.crash(); if (v > 150) Announcer.event('crash', tr); }
       this.burst(tr.x, tr.y, 6, '#fff3a0', 90, 0.3);
       if (loud && v > 120) this.shake = 0.15;
     }
@@ -188,7 +204,7 @@ class Race {
   emitDust(tr, dt) {
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
-      if (tr.surface === 'mud') this.burst(tr.x, tr.y, 10, '#4a2f17', 70);
+      if (tr.surface === 'mud') { this.burst(tr.x, tr.y, 10, '#4a2f17', 70); if (tr.human && !this.demo) Announcer.event('mud', tr); }
       tr.lastSurf = tr.surface;
     }
     if (tr.z > 0) return;
@@ -213,6 +229,7 @@ class Race {
     const cols = ['#ff4d4d', '#ffd23f', '#4dd2ff', '#7dff7a', '#ff7af5'];
     for (let i = 0; i < 60; i++) this.part(tr.x, tr.y, cols[i % 5], 2.5, 220, 1.4, false);
   }
+  honk(tr) { Sound.horn(tr.horn, tr.player); this.popup(tr.x, tr.y - 8, '♪♪', tr.color); }
   popup(x, y, text, col) { this.popups.push({ x, y, text, col, life: 1.2 }); }
   showBanner(text, col, t) { this.banner = { text, col, t, max: t }; }
 

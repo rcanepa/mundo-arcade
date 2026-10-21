@@ -94,7 +94,7 @@ function buildTrack(def) {
     const d = i * step;
     while (cum[k + 1] < d) k++;
     const a = dense[k], b = dense[(k + 1) % M], f = (d - cum[k]) / ((cum[k + 1] - cum[k]) || 1);
-    raw.push({ x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f });
+    raw.push({ x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, s: (k + f) / SUB });
   }
   const s0 = Math.round(sToD(def.start) / step) % N;
   const pts = raw.slice(s0).concat(raw.slice(0, s0));
@@ -105,7 +105,7 @@ function buildTrack(def) {
   });
   const idxOf = s => (Math.round(sToD(s) / step) - s0 + N * 2) % N;
   const t = { def, name: def.name, theme: THEMES[def.theme], pts, N, hw: def.width / 2, len,
-              jumps: [], bumps: [], puddles: [], canvas: null, k: 0 };
+              jumps: [], bumps: [], puddles: [], canvas: null, k: 0, idxOf };
   for (const f of def.feats) {
     if (f[0] === 'jump') t.jumps.push(idxOf(f[1]));
     else if (f[0] === 'bumps') t.bumps.push({ i0: idxOf(f[1]), i1: idxOf(f[2]) });
@@ -131,11 +131,20 @@ function nearestIdx(t, x, y, guess, win = 14) {
   return best;
 }
 
-const trackCache = [];
-function getTrack(i) {
-  i = wrap({ N: TRACK_DEFS.length }, i);
-  if (!trackCache[i]) trackCache[i] = buildTrack(TRACK_DEFS[i]);
-  const t = trackCache[i];
+// Pistas del juego más las que el jugador creó en el editor
+let customTracks = [];
+const trackList = () => TRACK_DEFS.concat(customTracks.filter(d => d && d.pts.length >= 4));
+const trackCache = new Map();
+// ref puede ser una posición en la lista o directamente la definición de una pista
+function trackDef(ref) {
+  if (typeof ref !== 'number') return ref;
+  const list = trackList();
+  return list[((ref % list.length) + list.length) % list.length];
+}
+function getTrack(ref) {
+  const def = trackDef(ref);
+  let t = trackCache.get(def);
+  if (!t) { t = buildTrack(def); trackCache.set(def, t); }
   if (t.k !== RENDER_K) { t.canvas = renderTrack(t, RENDER_K); t.k = RENDER_K; }
   return t;
 }

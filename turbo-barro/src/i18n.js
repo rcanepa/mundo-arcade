@@ -28,8 +28,8 @@ const STR = {
     opt: { diff: 'Dificultad', auto: 'Acelera solo', name1: 'Jugador 1', name2: 'Jugador 2', yes: 'SÍ', no: 'NO' },
     diffs: ['Fácil', 'Normal', 'Difícil'],
     help: [
-      '1 JUGADOR:   ↑ acelerar   ↓ frenar   ← → doblar   ESPACIO = nitro   (también W A S D)',
-      '2 JUGADORES:   J1 = flechas + ENTER (nitro)      J2 = W A S D + ESPACIO (nitro)',
+      '1 JUGADOR:   ↑ acelerar   ↓ frenar   ← → doblar   ESPACIO = nitro   H = bocina',
+      '2 JUGADORES:   J1 = flechas + ENTER (nitro) + L (bocina)    J2 = W A S D + ESPACIO (nitro) + R (bocina)',
       '🎮 Funciona con control de videojuegos  ·  P = pausa  ·  M = música  ·  F = pantalla completa'
     ],
     pause: 'PAUSA', resume: 'Seguir jugando', restart: 'Reiniciar carrera', quit: 'Salir al menú',
@@ -62,8 +62,8 @@ const STR = {
     opt: { diff: 'Difficulty', auto: 'Auto gas', name1: 'Player 1', name2: 'Player 2', yes: 'YES', no: 'NO' },
     diffs: ['Easy', 'Normal', 'Hard'],
     help: [
-      '1 PLAYER:   ↑ gas   ↓ brake   ← → steer   SPACE = nitro   (or W A S D)',
-      '2 PLAYERS:   P1 = arrows + ENTER (nitro)      P2 = W A S D + SPACE (nitro)',
+      '1 PLAYER:   ↑ gas   ↓ brake   ← → steer   SPACE = nitro   H = horn',
+      '2 PLAYERS:   P1 = arrows + ENTER (nitro) + L (horn)    P2 = W A S D + SPACE (nitro) + R (horn)',
       '🎮 Works with a game controller  ·  P = pause  ·  M = music  ·  F = full screen'
     ],
     pause: 'PAUSED', resume: 'Keep playing', restart: 'Restart race', quit: 'Quit to menu',
@@ -88,7 +88,10 @@ const STR = {
 };
 const L = () => STR[LANG];
 
-const trackName = i => L().tracks[((i % TRACK_DEFS.length) + TRACK_DEFS.length) % TRACK_DEFS.length];
+function trackName(ref) {
+  const def = trackDef(ref), i = TRACK_DEFS.indexOf(def);
+  return i >= 0 ? L().tracks[i] : L().myTrack(def.slot + 1);
+}
 
 // Nombre que se muestra: el que eligió el jugador, o uno por defecto en el idioma actual
 function racerName(r) {

@@ -44,8 +44,8 @@ const STR = {
     opt: { diff: 'Dificultad', auto: 'Acelera solo', name1: 'Jugador 1', name2: 'Jugador 2', yes: 'SÍ', no: 'NO' },
     diffs: ['Fácil', 'Normal', 'Difícil'],
     help: [
-      '1 JUGADOR:   ↑ acelerar   ↓ frenar   ← → doblar   ESPACIO = nitro   (también W A S D)',
-      '2 JUGADORES:   J1 = flechas + ENTER (nitro)      J2 = W A S D + ESPACIO (nitro)',
+      '1 JUGADOR:   ↑ acelerar   ↓ frenar   ← → doblar   ESPACIO = nitro   H = bocina',
+      '2 JUGADORES:   J1 = flechas + ENTER (nitro) + L (bocina)    J2 = W A S D + ESPACIO (nitro) + R (bocina)',
       '🎮 Funciona con control de videojuegos  ·  P = pausa  ·  M = música  ·  F = pantalla completa'
     ],
     pause: 'PAUSA', resume: 'Seguir jugando', restart: 'Reiniciar carrera', quit: 'Salir al menú',
@@ -78,8 +78,8 @@ const STR = {
     opt: { diff: 'Difficulty', auto: 'Auto gas', name1: 'Player 1', name2: 'Player 2', yes: 'YES', no: 'NO' },
     diffs: ['Easy', 'Normal', 'Hard'],
     help: [
-      '1 PLAYER:   ↑ gas   ↓ brake   ← → steer   SPACE = nitro   (or W A S D)',
-      '2 PLAYERS:   P1 = arrows + ENTER (nitro)      P2 = W A S D + SPACE (nitro)',
+      '1 PLAYER:   ↑ gas   ↓ brake   ← → steer   SPACE = nitro   H = horn',
+      '2 PLAYERS:   P1 = arrows + ENTER (nitro) + L (horn)    P2 = W A S D + SPACE (nitro) + R (horn)',
       '🎮 Works with a game controller  ·  P = pause  ·  M = music  ·  F = full screen'
     ],
     pause: 'PAUSED', resume: 'Keep playing', restart: 'Restart race', quit: 'Quit to menu',
@@ -104,7 +104,10 @@ const STR = {
 };
 const L = () => STR[LANG];
 
-const trackName = i => L().tracks[((i % TRACK_DEFS.length) + TRACK_DEFS.length) % TRACK_DEFS.length];
+function trackName(ref) {
+  const def = trackDef(ref), i = TRACK_DEFS.indexOf(def);
+  return i >= 0 ? L().tracks[i] : L().myTrack(def.slot + 1);
+}
 
 // Nombre que se muestra: el que eligió el jugador, o uno por defecto en el idioma actual
 function racerName(r) {
@@ -250,7 +253,22 @@ const Sound = (() => {
     return musicOn;
   }
 
-  return { init, sfx, engine, stopEngines, play, toggleMusic };
+  // Bocinas: cada estilo es una pequeña secuencia de notas; cada jugador suena un poco distinto
+  const HORN_PITCH = [1, 0.84, 1.18, 0.92];
+  function horn(style, who = 0) {
+    if (!ac) return;
+    const p = HORN_PITCH[(who % 4 + 4) % 4], t = ac.currentTime;
+    const v = (f, at, dur, type, vol, slide) => voice(f * p, t + at, dur, type, vol, slide ? slide * p : 0, sfxBus);
+    switch (style) {
+      case 1: v(140, 0, 0.6, 'sawtooth', 0.14); v(176, 0, 0.6, 'sawtooth', 0.12); break;                    // camión
+      case 2: v(600, 0, 0.18, 'triangle', 0.3, 1300); v(1300, 0.18, 0.2, 'triangle', 0.3, 700); break;      // payaso
+      case 3: [523, 659, 784, 1047].forEach((f, i) => v(f, i * 0.11, 0.13, 'square', 0.12)); break;          // melodía
+      case 4: v(330, 0, 0.12, 'sawtooth', 0.2, 220); v(330, 0.16, 0.14, 'sawtooth', 0.2, 200); break;       // pato
+      default: v(392, 0, 0.35, 'square', 0.11); v(494, 0, 0.35, 'square', 0.11);                           // clásica
+    }
+  }
+
+  return { init, sfx, engine, stopEngines, play, toggleMusic, horn };
 })();
 
 // ===== Utilidades =====
@@ -349,7 +367,7 @@ function buildTrack(def) {
     const d = i * step;
     while (cum[k + 1] < d) k++;
     const a = dense[k], b = dense[(k + 1) % M], f = (d - cum[k]) / ((cum[k + 1] - cum[k]) || 1);
-    raw.push({ x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f });
+    raw.push({ x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, s: (k + f) / SUB });
   }
   const s0 = Math.round(sToD(def.start) / step) % N;
   const pts = raw.slice(s0).concat(raw.slice(0, s0));
@@ -360,7 +378,7 @@ function buildTrack(def) {
   });
   const idxOf = s => (Math.round(sToD(s) / step) - s0 + N * 2) % N;
   const t = { def, name: def.name, theme: THEMES[def.theme], pts, N, hw: def.width / 2, len,
-              jumps: [], bumps: [], puddles: [], canvas: null, k: 0 };
+              jumps: [], bumps: [], puddles: [], canvas: null, k: 0, idxOf };
   for (const f of def.feats) {
     if (f[0] === 'jump') t.jumps.push(idxOf(f[1]));
     else if (f[0] === 'bumps') t.bumps.push({ i0: idxOf(f[1]), i1: idxOf(f[2]) });
@@ -386,11 +404,20 @@ function nearestIdx(t, x, y, guess, win = 14) {
   return best;
 }
 
-const trackCache = [];
-function getTrack(i) {
-  i = wrap({ N: TRACK_DEFS.length }, i);
-  if (!trackCache[i]) trackCache[i] = buildTrack(TRACK_DEFS[i]);
-  const t = trackCache[i];
+// Pistas del juego más las que el jugador creó en el editor
+let customTracks = [];
+const trackList = () => TRACK_DEFS.concat(customTracks.filter(d => d && d.pts.length >= 4));
+const trackCache = new Map();
+// ref puede ser una posición en la lista o directamente la definición de una pista
+function trackDef(ref) {
+  if (typeof ref !== 'number') return ref;
+  const list = trackList();
+  return list[((ref % list.length) + list.length) % list.length];
+}
+function getTrack(ref) {
+  const def = trackDef(ref);
+  let t = trackCache.get(def);
+  if (!t) { t = buildTrack(def); trackCache.set(def, t); }
   if (t.k !== RENDER_K) { t.canvas = renderTrack(t, RENDER_K); t.k = RENDER_K; }
   return t;
 }
@@ -579,35 +606,203 @@ const DECOS = {
   }
 };
 
+// ===== Modelos de camioneta, pinturas y decoraciones =====
+const PAINTS = [
+  { c: '#e8312a', d: '#8f1712' }, // rojo
+  { c: '#2f6fe8', d: '#173c8f' }, // azul
+  { c: '#f2c21b', d: '#9c7a05' }, // amarillo
+  { c: '#3cbf4a', d: '#1d6e26' }, // verde
+  { c: '#ff8a1f', d: '#a34d00' }, // naranjo
+  { c: '#9b4dff', d: '#5420a3' }, // morado
+  { c: '#ff6fb5', d: '#a8336d' }, // rosado
+  { c: '#38d6e8', d: '#167f8c' }, // celeste
+  { c: '#3a3a44', d: '#151519' }, // negro
+  { c: '#f4f4f4', d: '#9a9aa6' }  // blanco
+];
+const DECAL_COUNT = 6, HORN_COUNT = 5;
+const MODEL_KEYS = ['pickup', 'monster', 'buggy', 'tractor', 'icecream'];
+// Multiplicadores sobre la camioneta normal. mud = resistencia al barro, bump = amortiguación extra
+const MODELS = {
+  pickup:   { price: 0,   max: 1,    accel: 1,    turn: 1,    grip: 1,   mass: 1,    jump: 1,    mud: 0,     bump: 0 },
+  monster:  { price: 300, max: 0.95, accel: 0.95, turn: 0.95, grip: 1,   mass: 1.4,  jump: 1.35, mud: 0.15,  bump: 2 },
+  buggy:    { price: 250, max: 1.07, accel: 1.12, turn: 1.08, grip: 0.9, mass: 0.75, jump: 1.1,  mud: -0.08, bump: 0 },
+  tractor:  { price: 120, max: 0.86, accel: 0.9,  turn: 0.92, grip: 1.2, mass: 1.8,  jump: 0.7,  mud: 0.3,   bump: 1 },
+  icecream: { price: 150, max: 1,    accel: 0.98, turn: 0.98, grip: 1,   mass: 1.1,  jump: 0.95, mud: 0,     bump: 0 }
+};
+
+// Barras de 1 a 5 para mostrar en el taller: velocidad, aceleración, agarre, peso, salto
+function modelBars(key) {
+  const m = MODELS[key], bar = v => clamp(Math.round(v), 1, 5);
+  return [3 + (m.max - 1) * 25, 3 + (m.accel - 1) * 20, 3 + (m.grip * m.turn - 1) * 12, 3 + (m.mass - 1) * 2.5, 3 + (m.jump - 1) * 6].map(bar);
+}
+
+function wheel(g, x, y, w, h) {
+  g.fillStyle = '#151515'; roundRect(g, x, y, w, h, 1.5); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.12)';
+  for (let i = x + 2; i < x + w - 1; i += 3) g.fillRect(i, y, 1, h);
+}
+
+// Cada modelo se dibuja mirando hacia +x. box = zona de la carrocería para pintura y barro
+const MODEL_DRAW = {
+  pickup: {
+    box: [-12, -6.5, 24, 13],
+    clip(g) { roundRect(g, -12, -6.5, 24, 13, 3.5); },
+    base(g, c, d) {
+      wheel(g, -11, -10, 8, 4); wheel(g, 4, -10, 8, 4); wheel(g, -11, 6, 8, 4); wheel(g, 4, 6, 8, 4);
+      g.fillStyle = d; roundRect(g, -13, -7.5, 26, 15, 4); g.fill();
+      g.fillStyle = c; roundRect(g, -12, -6.5, 24, 13, 3.5); g.fill();
+      g.fillStyle = d; roundRect(g, -11, -5, 8, 10, 1.5); g.fill();
+      g.fillStyle = c; roundRect(g, -3, -6, 10, 12, 2.5); g.fill();
+    },
+    top(g) {
+      g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-2, -5, 8, 2);
+      g.fillStyle = '#9fdcff'; roundRect(g, 4.5, -5, 3, 10, 1); g.fill();
+      g.fillStyle = '#fff3a8'; g.fillRect(11, -5.5, 2, 3); g.fillRect(11, 2.5, 2, 3);
+    }
+  },
+  monster: {
+    box: [-12, -8, 24, 16],
+    clip(g) { roundRect(g, -12, -8, 24, 16, 5); },
+    base(g, c, d) {
+      g.fillStyle = '#333'; g.fillRect(-10, -9, 2, 18); g.fillRect(8, -9, 2, 18);
+      wheel(g, -15, -14, 11, 7); wheel(g, 5, -14, 11, 7); wheel(g, -15, 7, 11, 7); wheel(g, 5, 7, 11, 7);
+      g.fillStyle = d; roundRect(g, -13, -9, 26, 18, 5); g.fill();
+      g.fillStyle = c; roundRect(g, -12, -8, 24, 16, 5); g.fill();
+      g.fillStyle = d; roundRect(g, -3, -7, 11, 14, 3); g.fill();
+      g.fillStyle = c; roundRect(g, -2, -6, 9, 12, 2.5); g.fill();
+    },
+    top(g) {
+      g.strokeStyle = '#222'; g.lineWidth = 1.2; g.strokeRect(-10, -6, 6, 12);
+      g.fillStyle = '#9fdcff'; roundRect(g, 5, -5.5, 2.5, 11, 1); g.fill();
+      g.fillStyle = '#ffd23f'; g.fillRect(-1, -7.6, 6, 1.4);
+      g.fillStyle = '#fff3a8'; g.fillRect(11, -6.5, 2, 3); g.fillRect(11, 3.5, 2, 3);
+    }
+  },
+  buggy: {
+    box: [-11, -4.5, 22, 9],
+    clip(g) { roundRect(g, -11, -4.5, 22, 9, 4); },
+    base(g, c, d) {
+      g.fillStyle = '#444'; g.fillRect(-9, -9, 1.6, 18); g.fillRect(7, -9, 1.6, 18);
+      wheel(g, -13, -12, 8, 5); wheel(g, 4, -12, 8, 5); wheel(g, -13, 7, 8, 5); wheel(g, 4, 7, 8, 5);
+      g.fillStyle = d; roundRect(g, -12, -5.5, 24, 11, 4.5); g.fill();
+      g.fillStyle = c; roundRect(g, -11, -4.5, 22, 9, 4); g.fill();
+    },
+    top(g) {
+      g.fillStyle = '#2a2a2a'; ellipse(g, -2, 0, 3.2, 3);
+      g.strokeStyle = '#1a1a1a'; g.lineWidth = 1.4; g.strokeRect(-6, -4.5, 8, 9);
+      g.beginPath(); g.moveTo(-6, -4.5); g.lineTo(2, 4.5); g.moveTo(-6, 4.5); g.lineTo(2, -4.5); g.stroke();
+      g.fillStyle = '#888'; roundRect(g, -11, -2.5, 4, 5, 1); g.fill();
+      g.fillStyle = '#fff3a8'; g.fillRect(10, -3.5, 1.6, 2.2); g.fillRect(10, 1.3, 1.6, 2.2);
+    }
+  },
+  tractor: {
+    box: [-11, -6.5, 24, 13],
+    clip(g) { g.beginPath(); g.rect(-11, -6.5, 10, 13); g.rect(-2, -4, 15, 8); },
+    base(g, c, d) {
+      wheel(g, -13, -13, 12, 6.5); wheel(g, -13, 6.5, 12, 6.5);
+      wheel(g, 6, -8.5, 6, 3.5); wheel(g, 6, 5, 6, 3.5);
+      g.fillStyle = d; roundRect(g, -3, -5, 17, 10, 2.5); g.fill();
+      g.fillStyle = c; roundRect(g, -2, -4, 15, 8, 2); g.fill();
+      g.fillStyle = d; roundRect(g, -12, -7.5, 12, 15, 2.5); g.fill();
+      g.fillStyle = c; roundRect(g, -11, -6.5, 10, 13, 2); g.fill();
+    },
+    top(g) {
+      g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-10, -5.5, 8, 2);
+      g.fillStyle = '#9fdcff'; g.fillRect(-2.6, -5.5, 1.6, 11);
+      g.fillStyle = '#222'; ellipse(g, 5, -2, 1.8, 1.8);
+      g.fillStyle = '#fff3a8'; g.fillRect(12, -3.5, 1.6, 2.2); g.fillRect(12, 1.3, 1.6, 2.2);
+    }
+  },
+  icecream: {
+    box: [-14, -7.5, 28, 15],
+    clip(g) { roundRect(g, -14, -7.5, 28, 15, 3); },
+    base(g, c) {
+      wheel(g, -12, -10.5, 8, 4); wheel(g, 5, -10.5, 8, 4); wheel(g, -12, 6.5, 8, 4); wheel(g, 5, 6.5, 8, 4);
+      g.fillStyle = '#c9bca8'; roundRect(g, -15, -8.5, 30, 17, 3.5); g.fill();
+      g.fillStyle = '#fff7ea'; roundRect(g, -14, -7.5, 28, 15, 3); g.fill();
+      g.fillStyle = c; g.fillRect(-14, -7.5, 28, 3); g.fillRect(-14, 4.5, 28, 3);
+    },
+    top(g) {
+      g.fillStyle = '#9fdcff'; roundRect(g, 8, -6, 3, 12, 1); g.fill();
+      g.fillStyle = '#e0a458'; tri(g, -9, -3, -9, 3, -1, 0); g.fill();
+      g.fillStyle = '#ff9ccf'; ellipse(g, -9, 0, 4, 4);
+      g.fillStyle = '#fff'; ellipse(g, -10, -1, 1.2, 1.2);
+      g.fillStyle = '#fff3a8'; g.fillRect(13, -6, 1.6, 3); g.fillRect(13, 3, 1.6, 3);
+    }
+  }
+};
+
+function star(g, x, y, r) {
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = i * Math.PI / 5 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r;
+    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  g.closePath(); g.fill();
+}
+
+function drawDecal(g, decal, b) {
+  const [x, y, w, h] = b, cx = x + w / 2, cy = y + h / 2;
+  if (decal === 1) { // rayas
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(x, cy - 2.6, w, 1.6); g.fillRect(x, cy + 1, w, 1.6);
+  } else if (decal === 2) { // llamas que salen del frente
+    const fx = x + w, k = h / 13;
+    const flame = (col, s) => {
+      g.fillStyle = col; g.beginPath(); g.moveTo(fx, cy - 5 * k * s);
+      [[-6, -4], [-4, -2.5], [-11, -1.5], [-7, 0], [-12, 1.5], [-4, 2.5], [-7, 4], [0, 5]]
+        .forEach(([dx, dy]) => g.lineTo(fx + dx * s, cy + dy * k * s));
+      g.closePath(); g.fill();
+    };
+    flame('#ff6a00', 1); flame('#ffd23f', 0.6);
+  } else if (decal === 3) { // estrellas
+    g.fillStyle = '#fff6a8';
+    [[-0.3, -0.25], [0.05, 0.25], [0.32, -0.2]].forEach(([fx, fy]) => star(g, cx + fx * w, cy + fy * h, 2.4));
+  } else if (decal === 4) { // rayo
+    g.fillStyle = '#ffe14a'; g.beginPath();
+    [[-0.45, 0.1], [0.02, -0.38], [-0.02, -0.05], [0.45, -0.12], [-0.02, 0.38], [0.02, 0.06]]
+      .forEach(([fx, fy], i) => (i ? g.lineTo(cx + fx * w, cy + fy * h) : g.moveTo(cx + fx * w, cy + fy * h)));
+    g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 0.6; g.stroke();
+  } else if (decal === 5) { // manchas de vaca
+    g.fillStyle = 'rgba(20,20,20,0.85)';
+    [[-0.32, -0.22, 3, 2.2], [0.05, 0.25, 2.6, 2], [0.28, -0.25, 2, 2.6], [0.4, 0.28, 1.8, 1.4], [-0.1, -0.05, 1.6, 1.4]]
+      .forEach(([fx, fy, rx, ry]) => ellipse(g, cx + fx * w, cy + fy * h, rx, ry));
+  }
+}
+
+const DIRT_SPOTS = [[-0.35, -0.3, 2.2], [-0.1, 0.35, 1.8], [0.2, -0.25, 2.5], [0.4, 0.3, 1.6], [-0.45, 0.25, 1.5],
+                    [0.05, -0.05, 2.8], [0.3, 0.05, 1.5], [-0.2, -0.05, 1.7], [0.45, -0.35, 1.3], [-0.05, 0.2, 1.2]];
+function drawDirt(g, dirt, b) {
+  const [x, y, w, h] = b, n = Math.ceil(DIRT_SPOTS.length * Math.min(1, 0.3 + dirt));
+  g.fillStyle = `rgba(86,56,26,${Math.min(0.9, dirt)})`;
+  for (let i = 0; i < n; i++) {
+    const [fx, fy, r] = DIRT_SPOTS[i];
+    ellipse(g, x + w * (0.5 + fx), y + h * (0.5 + fy), r * 1.3, r);
+  }
+}
+
+// look: cualquier objeto con color, dark, model, decal y opcionalmente dirt y nitroT (una Truck sirve)
+function drawTruck(g, look) {
+  const m = MODEL_DRAW[look.model] || MODEL_DRAW.pickup, b = m.box;
+  if (look.nitroT > 0) {
+    const l = 10 + Math.random() * 10, rx = b[0] - 1;
+    g.fillStyle = '#ff7a00'; tri(g, rx, -4, rx, 4, rx - l, 0); g.fill();
+    g.fillStyle = '#ffe14a'; tri(g, rx, -2, rx, 2, rx - l * 0.6, 0); g.fill();
+  }
+  m.base(g, look.color, look.dark);
+  if (look.decal) { g.save(); m.clip(g); g.clip(); drawDecal(g, look.decal, b); g.restore(); }
+  m.top(g);
+  if (look.dirt > 0.04) { g.save(); m.clip(g); g.clip(); drawDirt(g, look.dirt, b); g.restore(); }
+}
+
 // ===== Camionetas: física, IA y dibujo =====
 const NO_INPUT = { gas: false, brake: false, steer: 0, nitro: false };
-
-function drawTruckBody(g, color, dark, nitro) {
-  if (nitro) {
-    const l = 10 + Math.random() * 10;
-    g.fillStyle = '#ff7a00'; tri(g, -13, -4, -13, 4, -13 - l, 0); g.fill();
-    g.fillStyle = '#ffe14a'; tri(g, -13, -2, -13, 2, -13 - l * 0.6, 0); g.fill();
-  }
-  // ruedas
-  g.fillStyle = '#151515';
-  g.fillRect(-11, -10, 8, 4); g.fillRect(4, -10, 8, 4); g.fillRect(-11, 6, 8, 4); g.fillRect(4, 6, 8, 4);
-  // chasis
-  g.fillStyle = dark; roundRect(g, -13, -7.5, 26, 15, 4); g.fill();
-  g.fillStyle = color; roundRect(g, -12, -6.5, 24, 13, 3.5); g.fill();
-  // caja trasera
-  g.fillStyle = dark; roundRect(g, -11, -5, 8, 10, 1.5); g.fill();
-  // cabina
-  g.fillStyle = color; roundRect(g, -3, -6, 10, 12, 2.5); g.fill();
-  g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-2, -5, 8, 2);
-  // parabrisas y focos
-  g.fillStyle = '#9fdcff'; roundRect(g, 4.5, -5, 3, 10, 1); g.fill();
-  g.fillStyle = '#fff3a8'; g.fillRect(11, -5.5, 2, 3); g.fillRect(11, 2.5, 2, 3);
-}
 
 class Truck {
   constructor(r) {
     this.r = r; // datos que duran todo el campeonato (dinero, mejoras...)
     this.name = r.name; this.color = r.color; this.dark = r.dark;
+    this.model = r.model || 'pickup'; this.decal = r.decal || 0; this.horn = r.horn || 0; this.dirt = 0;
     this.human = r.human; this.player = r.player;
     this.upg = { ...r.upg }; this.skill = r.skill || 1; this.rb = 1;
     this.nitros = r.nitros; this.nitroT = 0; this.nitroHeld = false;
@@ -627,13 +822,13 @@ class Truck {
   get speed() { return Math.hypot(this.vx, this.vy); }
 
   stats() {
-    const u = this.upg, s = this.skill * this.rb;
+    const u = this.upg, s = this.skill * this.rb, m = MODELS[this.model] || MODELS.pickup;
     return {
-      max: (185 + u.motor * 20) * s,
-      accel: (230 + u.acel * 42) * s,
-      turn: 3.0 + u.llantas * 0.22,
-      grip: 5 + u.llantas * 1.4,
-      shock: u.amort
+      max: (185 + u.motor * 20) * s * m.max,
+      accel: (230 + u.acel * 42) * s * m.accel,
+      turn: (3.0 + u.llantas * 0.22) * m.turn,
+      grip: (5 + u.llantas * 1.4) * m.grip,
+      shock: u.amort + m.bump, mud: m.mud, jump: m.jump, mass: m.mass
     };
   }
 
@@ -646,9 +841,13 @@ class Truck {
       }
     }
     let maxS = st.max, drag = 0;
-    if (this.surface === 'mud') { maxS *= 0.42 + st.shock * 0.04 + this.upg.llantas * 0.03; drag = 1.2; }
+    if (this.surface === 'mud') { maxS *= Math.min(1, 0.42 + st.shock * 0.04 + this.upg.llantas * 0.03 + st.mud); drag = 1.2 * (1 - st.mud); }
     if (this.surface === 'water') { maxS *= 0.6 + st.shock * 0.05; drag = 0.6; }
     if (this.nitroT > 0) { this.nitroT -= dt; maxS *= 1.45; }
+    // el barro ensucia la camioneta y el agua la lava
+    if (this.surface === 'mud') this.dirt = Math.min(1, this.dirt + dt * 0.9);
+    else if (this.surface === 'water') this.dirt = Math.max(0, this.dirt - dt * 1.4);
+    else if (this.z <= 0 && this.speed > 120) this.dirt = Math.min(1, this.dirt + dt * 0.006);
 
     if (this.z > 0 || this.vz > 0) {
       // en el aire: no se puede doblar ni acelerar
@@ -656,7 +855,7 @@ class Truck {
       if (this.z <= 0) {
         this.z = 0;
         if (this.vz < -120) {
-          const k = 0.8 + st.shock * 0.035;
+          const k = Math.min(1, 0.8 + st.shock * 0.035);
           this.vx *= k; this.vy *= k;
           race.fx('land', this);
         }
@@ -694,7 +893,7 @@ class Truck {
         const w = wrap(t, j - oldIdx);
         if (w > 0 && w <= d) {
           const f = this.vx * Math.cos(this.a) + this.vy * Math.sin(this.a);
-          if (f > 70) { this.vz = Math.min(360, f * 1.2); this.z = 0.01; race.fx('jump', this); }
+          if (f > 70) { this.vz = Math.min(360, f * 1.2) * st.jump; this.z = 0.01; race.fx('jump', this, f); }
         }
       }
       for (const b of t.bumps) {
@@ -703,7 +902,7 @@ class Truck {
           const sp = this.speed;
           if (sp > 80) {
             this.vz = (40 + sp * 0.35) * (1 - st.shock * 0.1); this.z = 0.01;
-            const k = 0.95 + st.shock * 0.008;
+            const k = Math.min(1, 0.95 + st.shock * 0.008);
             this.vx *= k; this.vy *= k;
             race.fx('bump', this);
           }
@@ -739,7 +938,7 @@ class Truck {
   draw(g, demo) {
     const sc = 1 + this.z / 160, y = this.y - this.z * 0.5;
     g.save(); g.translate(this.x, y); g.rotate(this.a); g.scale(sc, sc);
-    drawTruckBody(g, this.color, this.dark, this.nitroT > 0);
+    drawTruck(g, this);
     g.restore();
     if (this.human && !demo) {
       const ay = y - 20 * sc;
@@ -836,7 +1035,7 @@ class Race {
       this.count -= dt;
       const a = Math.ceil(this.count);
       if (a !== b && a >= 1 && a <= 3) Sound.sfx.beep();
-      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); }
+      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); Announcer.event('go'); }
     } else this.time += dt;
     if (this.goT > 0) this.goT -= dt;
 
@@ -855,9 +1054,11 @@ class Race {
       }
       if (inp.nitro && !tr.nitroHeld && tr.nitros > 0 && tr.nitroT <= 0) {
         tr.nitros--; tr.nitroT = 1.6;
-        if (tr.human && !this.demo) Sound.sfx.nitro();
+        if (tr.human && !this.demo) { Sound.sfx.nitro(); Announcer.event('nitro', tr); }
       }
       tr.nitroHeld = inp.nitro;
+      if (inp.horn && !tr.hornHeld && tr.human && !this.demo) this.honk(tr);
+      tr.hornHeld = inp.horn;
       tr.update(dt, inp, this);
       this.checkLap(tr);
       this.emitDust(tr, dt);
@@ -872,7 +1073,13 @@ class Race {
     if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
     if (this.shake > 0) this.shake -= dt;
 
-    this.ranking().forEach((tr, i) => { tr.pos = i + 1; });
+    const rank = this.ranking();
+    rank.forEach((tr, i) => { tr.pos = i + 1; });
+    if (!this.demo && this.state === 'race' && rank[0] !== this.leader) {
+      const prev = this.leader;
+      this.leader = rank[0];
+      if (prev && this.time > 4 && !rank[0].finished && (rank[0].human || prev.human)) Announcer.event('lead', rank[0]);
+    }
 
     if (!this.demo && this.state === 'race') {
       if (this.endT === 0 && humans.every(h => h.finished)) this.endT = 3;
@@ -893,12 +1100,14 @@ class Race {
     const who = Game.players === 2 ? racerName(tr.r) + ': ' : '';
     if (lap >= LAPS) {
       tr.finished = true; this.order.push(tr); tr.place = this.order.length;
+      if (tr.place === 1) Announcer.event('win', tr);
       if (tr.human) {
         this.showBanner(who + (tr.place === 1 ? L().won : L().placed(tr.place)), tr.place === 1 ? '#ffd23f' : '#fff', 3);
         if (tr.place === 1) { Sound.sfx.finish(); this.confetti(tr); } else Sound.sfx.lap();
       }
     } else if (lap >= 1 && tr.human) {
       Sound.sfx.lap();
+      if (lap === LAPS - 1) Announcer.event('lastLap', tr);
       this.showBanner(who + (lap === LAPS - 1 ? L().lastLap : L().lapBanner(lap + 1)), '#fff', 1.4);
     }
   }
@@ -917,13 +1126,19 @@ class Race {
       if (Math.abs(a.z - b.z) > 14) continue;
       const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
       if (d2 >= R * R || d2 < 0.01) continue;
-      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, o = (R - d) / 2;
-      a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
+      // el más pesado (tractor, monster) empuja más y se mueve menos
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, o = R - d;
+      const ma = a.stats().mass, mb = b.stats().mass, wa = mb / (ma + mb), wb = ma / (ma + mb);
+      a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
       const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
       if (rv < 0) {
-        const imp = 1.4 * rv / 2;
-        a.vx += nx * imp; a.vy += ny * imp; b.vx -= nx * imp; b.vy -= ny * imp;
-        if (rv < -60 && (a.human || b.human) && !this.demo) Sound.sfx.bump();
+        const J = -1.4 * rv / (1 / ma + 1 / mb);
+        a.vx -= nx * J / ma; a.vy -= ny * J / ma; b.vx += nx * J / mb; b.vy += ny * J / mb;
+        if (rv < -60 && (a.human || b.human) && !this.demo) {
+          Sound.sfx.bump();
+          const other = a.human ? b : a;
+          if (!other.human && Math.random() < 0.3) Sound.horn(other.horn, 2 + (other.r.id % 2));
+        }
       }
     }
   }
@@ -969,11 +1184,11 @@ class Race {
 
   fx(type, tr, v) {
     const loud = tr.human && !this.demo;
-    if (type === 'jump') { if (loud) Sound.sfx.jump(); }
+    if (type === 'jump') { if (loud) { Sound.sfx.jump(); if (v > 190) Announcer.event('jump', tr); } }
     else if (type === 'land') { if (loud) Sound.sfx.land(); this.burst(tr.x, tr.y, 10, this.track.theme.d3, 60); }
     else if (type === 'bump') { if (loud && Math.random() < 0.5) Sound.sfx.bump(); }
     else if (type === 'wall') {
-      if (loud) Sound.sfx.crash();
+      if (loud) { Sound.sfx.crash(); if (v > 150) Announcer.event('crash', tr); }
       this.burst(tr.x, tr.y, 6, '#fff3a0', 90, 0.3);
       if (loud && v > 120) this.shake = 0.15;
     }
@@ -982,7 +1197,7 @@ class Race {
   emitDust(tr, dt) {
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
-      if (tr.surface === 'mud') this.burst(tr.x, tr.y, 10, '#4a2f17', 70);
+      if (tr.surface === 'mud') { this.burst(tr.x, tr.y, 10, '#4a2f17', 70); if (tr.human && !this.demo) Announcer.event('mud', tr); }
       tr.lastSurf = tr.surface;
     }
     if (tr.z > 0) return;
@@ -1007,6 +1222,7 @@ class Race {
     const cols = ['#ff4d4d', '#ffd23f', '#4dd2ff', '#7dff7a', '#ff7af5'];
     for (let i = 0; i < 60; i++) this.part(tr.x, tr.y, cols[i % 5], 2.5, 220, 1.4, false);
   }
+  honk(tr) { Sound.horn(tr.horn, tr.player); this.popup(tr.x, tr.y - 8, '♪♪', tr.color); }
   popup(x, y, text, col) { this.popups.push({ x, y, text, col, life: 1.2 }); }
   showBanner(text, col, t) { this.banner = { text, col, t, max: t }; }
 
@@ -1077,17 +1293,507 @@ class Race {
   }
 }
 
+// ===== Locutor: frases con la voz del computador (funciona sin internet) =====
+Object.assign(STR.es.opt, { ann: 'Locutor' });
+Object.assign(STR.en.opt, { ann: 'Announcer' });
+STR.es.ann = {
+  go: ['¡Arrancan!', '¡Comienza la carrera!', '¡A todo motor!'],
+  lastLap: ['¡Última vuelta!', '¡Queda una vuelta!'],
+  jump: ['¡Qué salto!', '¡Vuela!', '¡Increíble salto!'],
+  lead: n => [`¡${n} pasa adelante!`, `¡${n} toma el primer lugar!`],
+  win: n => [`¡${n} gana la carrera!`, `¡Victoria para ${n}!`],
+  mud: ['¡Qué barro!', '¡Al barro!', '¡Puro barro!'],
+  crash: ['¡Uy, qué golpe!', '¡Cuidado con el muro!'],
+  nitro: ['¡Turbo!', '¡Nitro a fondo!']
+};
+STR.en.ann = {
+  go: ['And they\'re off!', 'Here we go!', 'Full throttle!'],
+  lastLap: ['Final lap!', 'One lap to go!'],
+  jump: ['What a jump!', 'Flying high!', 'Huge air!'],
+  lead: n => [`${n} takes the lead!`, `${n} moves into first!`],
+  win: n => [`${n} wins the race!`, `Victory for ${n}!`],
+  mud: ['Mud everywhere!', 'Into the mud!', 'What a mess!'],
+  crash: ['Ouch, what a crash!', 'Watch that wall!'],
+  nitro: ['Turbo boost!', 'Nitro on!']
+};
+
+const Announcer = (() => {
+  const synth = window.speechSynthesis;
+  // Las frases importantes interrumpen a las chicas; las chicas no siempre suenan
+  const PRIORITY = { win: 3, lastLap: 2, go: 2, lead: 1 };
+  let voices = [], lastT = -99, lastKey = '', lastPri = 0;
+  const loadVoices = () => { voices = synth.getVoices(); };
+  if (synth) { loadVoices(); synth.addEventListener('voiceschanged', loadVoices); }
+
+  function pickVoice() {
+    const mine = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(LANG));
+    return mine.find(v => v.localService) || mine[0] || null;
+  }
+
+  function event(key, tr) {
+    if (!synth || !Game.announcer) return;
+    const now = performance.now() / 1000, pri = PRIORITY[key] || 0;
+    if (key === lastKey && now - lastT < 4) return;
+    if (synth.speaking && pri <= lastPri) return;
+    if (pri === 0 && (now - lastT < 2.5 || Math.random() < 0.45)) return;
+    let list = L().ann[key];
+    if (typeof list === 'function') list = list(racerName(tr.r));
+    const u = new SpeechSynthesisUtterance(list[Math.floor(Math.random() * list.length)]);
+    const v = pickVoice();
+    if (v) u.voice = v;
+    u.lang = v ? v.lang : (LANG === 'es' ? 'es-ES' : 'en-US');
+    u.rate = 1.12; u.pitch = 1.1;
+    synth.cancel();
+    synth.speak(u);
+    lastT = now; lastKey = key; lastPri = pri;
+  }
+
+  function stop() { if (synth) synth.cancel(); }
+  return { event, stop };
+})();
+
+// ===== Taller: modelo, pintura, decoración y bocina de cada jugador =====
+Object.assign(STR.es, {
+  garage: 'TALLER', garageMenu: '🎨 Taller',
+  gRows: ['Modelo', 'Color', 'Decoración', 'Bocina'],
+  models: {
+    pickup: ['Camioneta', 'La de siempre: buena en todo'],
+    monster: ['Monster', 'Ruedas gigantes: salta más y no le importan los baches'],
+    buggy: ['Buggy', 'Liviano y muy rápido, pero sufre en el barro'],
+    tractor: ['Tractor', 'Lento pero pesado: empuja a todos y cruza el barro'],
+    icecream: ['Carrito de helados', '¡Reparte helados mientras corre!']
+  },
+  statNames: ['Velocidad', 'Aceleración', 'Agarre', 'Peso', 'Salto'],
+  decals: ['Ninguna', 'Rayas', 'Llamas', 'Estrellas', 'Rayo', 'Vaca'],
+  horns: ['Clásica', 'Camión', 'Payaso', 'Melodía', 'Pato'],
+  owned: '✔ Es tuya', buyModel: p => `🔒 $${p}  ·  ENTER o clic para comprar`, earnModel: p => `🔒 $${p}  ·  cómprala en la tienda, entre carreras`,
+  noMoney: '¡Te falta dinero!', newTruck: '¡Nueva camioneta!', earnHint: 'Gana dinero en el campeonato para comprarla',
+  done: 'Listo', switchPlayer: n => `Cambiar a Jugador ${n}`,
+  garageHelp: '↑ ↓ elegir  ·  ← → cambiar  ·  ENTER comprar o probar bocina  ·  o usa el mouse'
+});
+Object.assign(STR.en, {
+  garage: 'GARAGE', garageMenu: '🎨 Garage',
+  gRows: ['Model', 'Color', 'Decal', 'Horn'],
+  models: {
+    pickup: ['Pickup', 'The classic: good at everything'],
+    monster: ['Monster', 'Giant wheels: jumps higher and ignores bumps'],
+    buggy: ['Buggy', 'Light and very fast, but struggles in mud'],
+    tractor: ['Tractor', 'Slow but heavy: pushes everyone and plows through mud'],
+    icecream: ['Ice cream truck', 'Delivers ice cream while it races!']
+  },
+  statNames: ['Speed', 'Acceleration', 'Grip', 'Weight', 'Jump'],
+  decals: ['None', 'Stripes', 'Flames', 'Stars', 'Lightning', 'Cow'],
+  horns: ['Classic', 'Truck', 'Clown', 'Tune', 'Duck'],
+  owned: '✔ It\'s yours', buyModel: p => `🔒 $${p}  ·  ENTER or click to buy`, earnModel: p => `🔒 $${p}  ·  buy it in the shop, between races`,
+  noMoney: 'Not enough money!', newTruck: 'New truck!', earnHint: 'Win money in the championship to buy it',
+  done: 'Done', switchPlayer: n => `Switch to Player ${n}`,
+  garageHelp: '↑ ↓ choose  ·  ← → change  ·  ENTER buy or test horn  ·  or use the mouse'
+});
+
+const defaultGarage = p => ({ model: 'pickup', owned: ['pickup'], color: p, decal: 0, horn: p === 1 ? 2 : 0 });
+const cycle = (v, d, n) => (v + d + n) % n;
+
+function garageMenu() {
+  const C = Game.garageCtx, gp = () => Game.garage[C.player], save = () => Game.savePrefs();
+  const setView = d => {
+    C.view = cycle(C.view, d, MODEL_KEYS.length);
+    const k = MODEL_KEYS[C.view];
+    if (gp().owned.includes(k)) { gp().model = k; save(); }
+  };
+  const setColor = v => { gp().color = v; save(); };
+  const setDecal = d => { gp().decal = cycle(gp().decal, d, DECAL_COUNT); save(); };
+  const setHorn = d => { gp().horn = cycle(gp().horn, d, HORN_COUNT); save(); Sound.horn(gp().horn, C.player); };
+  const items = [
+    { left: () => setView(-1), right: () => setView(1), action: buyModel },
+    { left: () => setColor(cycle(gp().color, -1, PAINTS.length)), right: () => setColor(cycle(gp().color, 1, PAINTS.length)), set: setColor, action: () => { setColor(cycle(gp().color, 1, PAINTS.length)); Sound.sfx.select(); } },
+    { left: () => setDecal(-1), right: () => setDecal(1), action: () => { setDecal(1); Sound.sfx.select(); } },
+    { left: () => setHorn(-1), right: () => setHorn(1), action: () => Sound.horn(gp().horn, C.player) }
+  ];
+  if (C.ret === 'title') {
+    items.push({ label: () => L().switchPlayer(2 - C.player), action: () => {
+      C.player = 1 - C.player; C.view = MODEL_KEYS.indexOf(gp().model); Sound.sfx.select();
+    } });
+  }
+  items.push({ label: () => L().done, action: () => Game.closeGarage() });
+  return new Menu(items);
+}
+
+function buyModel() {
+  const C = Game.garageCtx, gp = Game.garage[C.player], k = MODEL_KEYS[C.view];
+  if (gp.owned.includes(k)) { gp.model = k; Game.savePrefs(); Sound.sfx.select(); return; }
+  const r = C.ret === 'shop' ? Game.racers.find(x => x.player === C.player) : null, price = MODELS[k].price;
+  if (r && r.money >= price) {
+    r.money -= price; gp.owned.push(k); gp.model = k;
+    Game.savePrefs(); Game.save(); Sound.sfx.buy(); Game.showToast(L().newTruck);
+  } else {
+    Sound.sfx.nope(); Game.showToast(r ? L().noMoney : L().earnHint);
+  }
+}
+
+function workshopBg(g) {
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, '#3b2614'); grd.addColorStop(1, '#140c05');
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#111'; g.fillRect(0, 0, W, 14);
+  g.fillStyle = '#ffc61a';
+  for (let x = -40; x < W + 40; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 20, 0); g.lineTo(x + 8, 14); g.lineTo(x - 12, 14); g.fill(); }
+}
+
+function drawGarage(g) {
+  workshopBg(g);
+  const C = Game.garageCtx, gp = Game.garage[C.player], M = Game.menu, key = MODEL_KEYS[C.view];
+  const owned = gp.owned.includes(key), paint = PAINTS[gp.color];
+  const racer = C.ret === 'shop' ? Game.racers.find(x => x.player === C.player) : null;
+  const emoji = s => { g.font = `${s}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`; };
+
+  // izquierda: camioneta girando en una plataforma
+  bigText(g, L().garage, 200, 62, 44, '#ffd23f');
+  g.font = font(20); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = paint.c;
+  g.fillText(Game.names[C.player] || L().player(C.player + 1), 200, 102);
+  g.fillStyle = 'rgba(0,0,0,0.35)'; ellipse(g, 204, 286, 128, 128);
+  g.fillStyle = '#5a4030'; ellipse(g, 200, 280, 125, 125);
+  g.strokeStyle = '#ffc61a'; g.lineWidth = 4; g.setLineDash([14, 10]);
+  g.beginPath(); g.arc(200, 280, 116, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.save(); g.translate(200, 280); g.rotate(Game.t * 0.7); g.scale(5.4, 5.4);
+  g.globalAlpha = owned ? 1 : 0.5;
+  drawTruck(g, { model: key, color: paint.c, dark: paint.d, decal: gp.decal });
+  g.restore(); g.globalAlpha = 1;
+  if (!owned) { emoji(54); g.textAlign = 'center'; g.fillText('🔒', 200, 280); }
+  if (racer) bigText(g, '$' + racer.money, 200, 452, 40, '#7dff7a');
+
+  // derecha: filas que se cambian con ← →
+  const x = 400, w = 590;
+  M.rects = [];
+  const row = (i, y, h) => {
+    const on = M.sel === i;
+    g.fillStyle = on ? 'rgba(255,210,63,0.22)' : 'rgba(0,0,0,0.45)'; roundRect(g, x, y, w, h, 12); g.fill();
+    g.lineWidth = 3; g.strokeStyle = on ? '#ffd23f' : 'rgba(255,255,255,0.12)'; g.stroke();
+  };
+  const arrows = (i, cy, lx, rx) => {
+    [[lx, 'left', '◀'], [rx, 'right', '▶']].forEach(([ax, side, ch]) => {
+      g.fillStyle = 'rgba(255,255,255,0.14)'; roundRect(g, ax, cy - 19, 38, 38, 10); g.fill();
+      g.fillStyle = '#fff'; g.font = font(16); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, ax + 19, cy + 1);
+      M.rects.push({ x: ax, y: cy - 19, w: 38, h: 38, item: i, side });
+    });
+  };
+  const label = (txt, y) => { g.font = font(13, 700); g.fillStyle = '#c9b48a'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(txt, x + 18, y); };
+
+  // 0: modelo con sus barras
+  row(0, 28, 172); arrows(0, 66, x + 12, x + w - 50);
+  const [mName, mDesc] = L().models[key];
+  label(L().gRows[0], 44);
+  g.textAlign = 'center'; g.font = font(24); g.fillStyle = '#fff'; g.fillText(mName, x + w / 2, 68);
+  g.font = font(13, 600); g.fillStyle = '#ddd'; g.fillText(mDesc, x + w / 2, 96);
+  modelBars(key).forEach((v, k) => {
+    const sx = x + 30 + k * 110;
+    g.textAlign = 'left'; g.font = font(11, 700); g.fillStyle = '#bbb'; g.fillText(L().statNames[k], sx, 122);
+    for (let j = 0; j < 5; j++) { g.fillStyle = j < v ? '#7dff7a' : 'rgba(255,255,255,0.15)'; roundRect(g, sx + j * 18, 133, 15, 9, 2); g.fill(); }
+  });
+  g.textAlign = 'center'; g.font = font(15);
+  g.fillStyle = owned ? '#7dff7a' : racer && racer.money >= MODELS[key].price ? '#ffd23f' : '#ff9c7a';
+  g.fillText(owned ? L().owned : racer ? L().buyModel(MODELS[key].price) : L().earnModel(MODELS[key].price), x + w / 2, 174);
+  M.rects.push({ x, y: 28, w, h: 172, item: 0 });
+
+  // 1: colores, cada muestra se puede clickear
+  row(1, 210, 76); label(L().gRows[1], 230);
+  PAINTS.forEach((p, i) => {
+    const cx = x + 40 + i * 56, cy = 258;
+    g.fillStyle = p.d; ellipse(g, cx, cy, 19, 19);
+    g.fillStyle = p.c; ellipse(g, cx, cy, 16, 16);
+    if (i === gp.color) { g.lineWidth = 4; g.strokeStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 22, 0, Math.PI * 2); g.stroke(); }
+    M.rects.push({ x: cx - 22, y: cy - 22, w: 44, h: 44, item: 1, value: i });
+  });
+  M.rects.push({ x, y: 210, w, h: 76, item: 1 });
+
+  // 2 y 3: decoración y bocina
+  [[2, 296, L().decals[gp.decal]], [3, 368, '🔊 ' + L().horns[gp.horn]]].forEach(([i, y, val]) => {
+    row(i, y, 62); label(L().gRows[i], y + 31); arrows(i, y + 31, x + 170, x + w - 52);
+    g.textAlign = 'center'; g.font = font(20); g.fillStyle = '#fff'; g.fillText(val, x + 380, y + 32);
+    M.rects.push({ x, y, w, h: 62, item: i });
+  });
+
+  // botones de abajo
+  let by = 442;
+  for (let i = 4; i < M.items.length; i++) {
+    const h = i === M.items.length - 1 ? 58 : 46;
+    M.rects.push({ x, y: by, w, h, item: i });
+    button(g, x, by, w, h, M.label(M.items[i]), M.sel === i);
+    by += h + 10;
+  }
+  g.font = font(13, 700); g.fillStyle = '#bbb'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(L().garageHelp, W / 2, 618);
+}
+
+// ===== Editor de pistas: el jugador dibuja su propia pista =====
+Object.assign(STR.es, {
+  myTrack: n => 'Mi pista ' + n,
+  themes: { pasto: 'Pasto', desierto: 'Desierto', canon: 'Cañón', pantano: 'Pantano', nieve: 'Nieve' },
+  editor: {
+    menu: '🛠️ Crear pista',
+    tools: ['Puntos', 'Salto', 'Barro', 'Agua', 'Baches', 'Salida'],
+    slot: n => 'Pista ' + n, undo: 'Deshacer', clear: 'Borrar', test: 'Probar', exit: 'Salir',
+    hints: [
+      'Clic en el pasto = nuevo punto  ·  arrastra los puntos para moverlos  ·  clic derecho = borrar punto',
+      'Clic en la pista = poner un salto  ·  clic sobre uno = quitarlo',
+      'Clic en la pista = poner barro  ·  clic sobre uno = quitarlo',
+      'Clic en la pista = poner agua  ·  clic sobre una = quitarla',
+      'Clic en la pista = poner baches  ·  clic sobre ellos = quitarlos',
+      'Clic en la pista = mover la línea de salida'
+    ],
+    needPoints: n => `Pon ${n} punto${n === 1 ? '' : 's'} más para cerrar la pista`,
+    confirmClear: 'Clic otra vez en Borrar para empezar de cero', backToEditor: 'Volver al editor'
+  }
+});
+Object.assign(STR.en, {
+  myTrack: n => 'My track ' + n,
+  themes: { pasto: 'Grass', desierto: 'Desert', canon: 'Canyon', pantano: 'Swamp', nieve: 'Snow' },
+  editor: {
+    menu: '🛠️ Build a track',
+    tools: ['Points', 'Jump', 'Mud', 'Water', 'Bumps', 'Start'],
+    slot: n => 'Track ' + n, undo: 'Undo', clear: 'Clear', test: 'Test', exit: 'Exit',
+    hints: [
+      'Click the grass = new point  ·  drag points to move them  ·  right click = delete point',
+      'Click the track = add a jump  ·  click one = remove it',
+      'Click the track = add mud  ·  click it = remove it',
+      'Click the track = add water  ·  click it = remove it',
+      'Click the track = add bumps  ·  click them = remove them',
+      'Click the track = move the start line'
+    ],
+    needPoints: n => `Add ${n} more point${n === 1 ? '' : 's'} to close the track`,
+    confirmClear: 'Click Clear again to start from scratch', backToEditor: 'Back to editor'
+  }
+});
+
+const EDITOR_KEY = 'turbobarro4x4.tracks', TRACK_SLOTS = 3, MAX_FEATS = 14;
+const THEME_KEYS = ['pasto', 'desierto', 'canon', 'pantano', 'nieve'];
+const ED_ICONS = ['✏️', '🚀', '🟫', '💧', '〰️', '🏁', '🎨', '📁', '↩️', '🗑️', '▶️', '🚪'];
+
+customTracks = (() => {
+  try { const a = JSON.parse(localStorage.getItem(EDITOR_KEY)); return Array.isArray(a) ? a.slice(0, TRACK_SLOTS) : []; }
+  catch (e) { return []; }
+})();
+
+const Editor = {
+  slot: 0, def: null, track: null, tool: 0, drag: -1, hover: -1, hoverBtn: -1, undoStack: [], clearArm: 0,
+
+  // pista inicial: un óvalo para que haya algo con qué jugar
+  newDef(slot) {
+    const pts = [];
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 - Math.PI;
+      pts.push([Math.round(512 + Math.cos(a) * 330), Math.round(345 + Math.sin(a) * 200)]);
+    }
+    return { slot, theme: THEME_KEYS[slot % THEME_KEYS.length], width: 76, start: 0.5, seed: 101 + slot * 7, pts, feats: [['jump', 2.5], ['mud', 6.5, 0, 28]] };
+  },
+
+  open(slot) {
+    this.slot = slot;
+    const saved = customTracks[slot];
+    this.def = saved ? JSON.parse(JSON.stringify(saved)) : this.newDef(slot);
+    this.def.slot = slot;
+    this.undoStack = []; this.tool = 0; this.drag = -1; this.hover = -1;
+    this.rebuild();
+    if (!saved) this.save();
+    this.resume();
+  },
+  resume() { Game.scene = 'editor'; Game.menu = null; Sound.stopEngines(); Sound.play('menu'); },
+  exit() { this.save(); Game.toTitle(); },
+
+  rebuild() { this.track = this.def.pts.length >= 4 ? buildTrack(this.def) : null; },
+  save() {
+    const old = customTracks[this.slot];
+    if (old) trackCache.delete(old);
+    customTracks[this.slot] = JSON.parse(JSON.stringify(this.def));
+    try { localStorage.setItem(EDITOR_KEY, JSON.stringify(customTracks)); } catch (e) { /* sin guardado */ }
+  },
+  snapshot() {
+    this.undoStack.push(JSON.stringify(this.def));
+    if (this.undoStack.length > 40) this.undoStack.shift();
+  },
+  change(fn) { this.snapshot(); fn(); this.rebuild(); this.save(); },
+  undo() {
+    if (!this.undoStack.length) { Sound.sfx.nope(); return; }
+    this.def = JSON.parse(this.undoStack.pop());
+    this.rebuild(); this.save(); Sound.sfx.select();
+  },
+
+  clampPt(x, y) { return [Math.round(clamp(x, 55, W - 55)), Math.round(clamp(y, HUD_H + 50, H - 50))]; },
+  pointAt(x, y) { return this.def.pts.findIndex(p => Math.hypot(p[0] - x, p[1] - y) < 14); },
+
+  // Insertar un punto parte un tramo en dos: las cosas puestas en la pista se corren para quedar en su lugar
+  insertPoint(x, y) {
+    const P = this.def.pts, n = P.length, np = this.clampPt(x, y);
+    if (n < 3) { P.push(np); return; }
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < n; i++) {
+      const [ax, ay] = P[i], [bx, by] = P[(i + 1) % n], dx = bx - ax, dy = by - ay;
+      const u = clamp(((np[0] - ax) * dx + (np[1] - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+      const d = Math.hypot(ax + dx * u - np[0], ay + dy * u - np[1]);
+      if (d < bd) { bd = d; best = i; }
+    }
+    const remap = a => (a >= best + 1 ? a + 1 : a >= best ? best + 2 * (a - best) : a);
+    P.splice(best + 1, 0, np);
+    this.def.start = remap(this.def.start);
+    this.def.feats.forEach(f => { f[1] = remap(f[1]); if (f[0] === 'bumps') f[2] = remap(f[2]); });
+  },
+
+  // Borrar un punto junta dos tramos: lo que estaba en ellos se quita
+  removePoint(k) {
+    const P = this.def.pts, n = P.length, prev = (k - 1 + n) % n;
+    const remap = a => { const s = Math.floor(a); return s === k || s === prev ? null : (s > k ? a - 1 : a); };
+    P.splice(k, 1);
+    const st = remap(this.def.start);
+    this.def.start = st === null ? (k === 0 ? Math.max(0, n - 2) : prev) + 0.5 : st;
+    this.def.feats = this.def.feats.filter(f => {
+      const a = remap(f[1]), b = f[0] === 'bumps' ? remap(f[2]) : 0;
+      if (a === null || b === null) return false;
+      f[1] = a; if (f[0] === 'bumps') f[2] = b;
+      return true;
+    });
+  },
+
+  nearestOnTrack(x, y) {
+    const t = this.track;
+    let best = 0, bd = Infinity;
+    t.pts.forEach((p, i) => { const d = (p.x - x) ** 2 + (p.y - y) ** 2; if (d < bd) { bd = d; best = i; } });
+    const p = t.pts[best];
+    return { i: best, d: Math.sqrt(bd), off: (x - p.x) * p.nx + (y - p.y) * p.ny, s: Math.round(p.s * 1000) / 1000 };
+  },
+
+  featureAt(x, y) {
+    const t = this.track, hit = this.nearestOnTrack(x, y), onTrack = hit.d < t.hw + 6;
+    const dist = (a, b) => Math.min(wrap(t, a - b), wrap(t, b - a));
+    return this.def.feats.findIndex(f => {
+      if (f[0] === 'jump') return onTrack && dist(t.idxOf(f[1]), hit.i) <= 3;
+      if (f[0] === 'bumps') return onTrack && inRange(t, hit.i, t.idxOf(f[1]), t.idxOf(f[2]));
+      const p = t.pts[t.idxOf(f[1])];
+      return Math.hypot(p.x + p.nx * f[2] * t.hw - x, p.y + p.ny * f[2] * t.hw - y) < f[3] + 4;
+    });
+  },
+
+  button(i) {
+    const now = performance.now() / 1000;
+    if (i <= 5) { this.tool = i; Sound.sfx.select(); return; }
+    if (i === 6) { this.change(() => { this.def.theme = THEME_KEYS[cycle(THEME_KEYS.indexOf(this.def.theme), 1, THEME_KEYS.length)]; }); Sound.sfx.select(); }
+    else if (i === 7) { this.save(); this.open((this.slot + 1) % TRACK_SLOTS); Sound.sfx.select(); }
+    else if (i === 8) this.undo();
+    else if (i === 9) {
+      if (now < this.clearArm) { this.change(() => { this.def.pts = []; this.def.feats = []; this.def.start = 0.5; }); this.clearArm = 0; this.tool = 0; }
+      else { this.clearArm = now + 2.5; Game.showToast(L().editor.confirmClear); }
+    } else if (i === 10) {
+      if (!this.track) { Sound.sfx.nope(); Game.showToast(L().editor.needPoints(4 - this.def.pts.length)); return; }
+      this.save(); Game.testTrack(customTracks[this.slot]);
+    } else if (i === 11) this.exit();
+  },
+
+  pointer(type, x, y, button) {
+    if (type === 'move') {
+      this.hoverBtn = y < HUD_H ? Math.floor(x / (W / 12)) : -1;
+      if (this.drag >= 0) { this.def.pts[this.drag] = this.clampPt(x, y); this.rebuild(); }
+      else this.hover = this.tool === 0 ? this.pointAt(x, y) : -1;
+      return;
+    }
+    if (type === 'up') { if (this.drag >= 0) { this.drag = -1; this.save(); } return; }
+    if (y < HUD_H) { if (button === 0) this.button(Math.floor(x / (W / 12))); return; }
+    if (this.tool === 0) {
+      const hit = this.pointAt(x, y);
+      if (button === 2) { if (hit >= 0) { this.change(() => this.removePoint(hit)); this.hover = -1; Sound.sfx.select(); } return; }
+      if (hit >= 0) { this.snapshot(); this.drag = hit; return; }
+      if (button !== 0 || this.def.pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 30)) return;
+      this.change(() => this.insertPoint(x, y)); Sound.sfx.select();
+      return;
+    }
+    if (!this.track) return;
+    const t = this.track, hit = this.nearestOnTrack(x, y);
+    if (hit.d > t.hw + 8) return;
+    if (this.tool === 5) { this.change(() => { this.def.start = hit.s; }); Sound.sfx.select(); return; }
+    const fi = this.featureAt(x, y);
+    if (fi >= 0) { this.change(() => this.def.feats.splice(fi, 1)); Sound.sfx.select(); return; }
+    if (button !== 0 || this.def.feats.length >= MAX_FEATS) return;
+    const off = Math.round(clamp(hit.off / t.hw, -0.5, 0.5) * 100) / 100;
+    const f = [null, ['jump', hit.s], ['mud', hit.s, off, 28], ['water', hit.s, off, 26],
+               ['bumps', hit.s, Math.round(t.pts[wrap(t, hit.i + 18)].s * 1000) / 1000]][this.tool];
+    this.change(() => this.def.feats.push(f)); Sound.sfx.buy();
+  },
+
+  // Teclas propias del editor; devuelve true si la usó
+  key(e) {
+    if (e.code === 'Escape') { this.exit(); return true; }
+    if (e.code === 'KeyZ') { this.undo(); return true; }
+    if ((e.code === 'Backspace' || e.code === 'Delete') && this.tool === 0 && this.hover >= 0) {
+      const k = this.hover; this.change(() => this.removePoint(k)); this.hover = -1; return true;
+    }
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 6 && !e.repeat) { this.tool = n - 1; Sound.sfx.select(); return true; }
+    return false;
+  },
+
+  draw(g) {
+    const th = THEMES[this.def.theme], t = this.track, P = this.def.pts, E = L().editor;
+    g.fillStyle = th.ground; g.fillRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(0,0,0,0.07)'; g.lineWidth = 1; g.beginPath();
+    for (let x = 0; x <= W; x += 32) { g.moveTo(x, 0); g.lineTo(x, H); }
+    for (let y = 0; y <= H; y += 32) { g.moveTo(0, y); g.lineTo(W, y); }
+    g.stroke();
+    if (t) {
+      const path = trackPath(t);
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      g.strokeStyle = th.wall; g.lineWidth = t.def.width + 16; g.stroke(path);
+      g.setLineDash([9, 9]); g.strokeStyle = th.wall2; g.stroke(path); g.setLineDash([]);
+      g.strokeStyle = th.dirt; g.lineWidth = t.def.width; g.stroke(path);
+      const rnd = mulberry32(5);
+      for (const pd of t.puddles) drawPuddle(g, pd, rnd);
+      for (const b of t.bumps) { const cnt = wrap(t, b.i1 - b.i0); for (let s = 0; s <= cnt; s += 3) drawBumpRow(g, t, wrap(t, b.i0 + s), s / 3); }
+      for (const j of t.jumps) drawJump(g, t, j);
+      drawStartLine(g, t);
+      g.fillStyle = 'rgba(255,255,255,0.5)';
+      for (let i = 14; i < t.N; i += 30) {
+        const p = t.pts[i];
+        g.save(); g.translate(p.x, p.y); g.rotate(Math.atan2(p.ty, p.tx)); tri(g, -6, -6, -6, 6, 7, 0); g.fill(); g.restore();
+      }
+    } else if (P.length) {
+      g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 4; g.setLineDash([10, 8]);
+      g.beginPath(); P.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); g.setLineDash([]);
+    }
+    // puntos de control numerados
+    g.globalAlpha = this.tool === 0 ? 1 : 0.45;
+    P.forEach(([x, y], i) => {
+      const on = i === this.hover || i === this.drag;
+      g.fillStyle = on ? '#ffd23f' : '#fff'; ellipse(g, x, y, 11, 11);
+      g.lineWidth = 3; g.strokeStyle = '#2a1405'; g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.stroke();
+      g.font = font(11); g.fillStyle = '#2a1405'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(i + 1, x, y + 1);
+    });
+    g.globalAlpha = 1;
+    if (P.length < 4) bigText(g, E.needPoints(4 - P.length), W / 2, H / 2, 26, '#fff');
+
+    // barra de herramientas
+    g.fillStyle = 'rgba(15,10,5,0.92)'; g.fillRect(0, 0, W, HUD_H);
+    const labels = [...E.tools, L().themes[this.def.theme], E.slot(this.slot + 1), E.undo, E.clear, E.test, E.exit], bw = W / 12;
+    labels.forEach((lab, i) => {
+      const x = i * bw, on = i === this.tool;
+      g.fillStyle = on ? '#ffd23f' : i === 10 ? '#2fa84a' : i === this.hoverBtn ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)';
+      roundRect(g, x + 3, 4, bw - 6, HUD_H - 8, 8); g.fill();
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      // los emojis toman la transparencia del color de relleno: van con color opaco
+      g.fillStyle = '#fff';
+      g.font = '15px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'; g.fillText(ED_ICONS[i], x + bw / 2, 16);
+      g.font = font(10, 800); g.fillStyle = on ? '#3a1d00' : '#fff'; g.fillText(lab, x + bw / 2, 35);
+    });
+    g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(6 * bw - 1, 8, 2, HUD_H - 16);
+    // ayuda de la herramienta elegida
+    const hint = E.hints[this.tool];
+    g.font = font(13, 700);
+    const hw = g.measureText(hint).width / 2 + 16;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; roundRect(g, W / 2 - hw, H - 34, hw * 2, 26, 13); g.fill();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(hint, W / 2, H - 21);
+  }
+};
+
 // ===== Juego: menús, opciones, tienda, resultados y campeonato =====
 const DIFFS = [
   { skill: 0.8, rbMin: 0.78, rbMax: 1.04, aiUp: 0.35 },
   { skill: 0.9, rbMin: 0.86, rbMax: 1.08, aiUp: 0.6 },
   { skill: 1.0, rbMin: 0.94, rbMax: 1.12, aiUp: 0.85 }
-];
-const COLORS = [
-  { color: '#e8312a', dark: '#8f1712' },
-  { color: '#2f6fe8', dark: '#173c8f' },
-  { color: '#f2c21b', dark: '#9c7a05' },
-  { color: '#3cbf4a', dark: '#1d6e26' }
 ];
 const SHOP = [
   { key: 'motor', icon: '🔥' },
@@ -1101,6 +1807,8 @@ const SAVE_KEY = 'turbobarro4x4', PREFS_KEY = 'turbobarro4x4.prefs';
 const upgCost = lvl => 60 + lvl * 45;
 // Dentro del sitio de juegos se muestra "Más juegos"; en la copia descargada no
 const IN_SITE = /\/turbo-barro\/(index\.html)?$/.test(location.pathname);
+const LANG_CHIP = { x: W - 118, y: 10, w: 106, h: 32 };
+const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
 function button(g, x, y, w, h, text, on) {
   g.fillStyle = on ? '#ffd23f' : 'rgba(20,12,5,0.8)';
@@ -1114,6 +1822,7 @@ function button(g, x, y, w, h, text, on) {
   }
 }
 
+// Las zonas clickeables (rects) pueden apuntar a una fila (item), a sus flechas (side) o a un valor (value)
 class Menu {
   constructor(items) { this.items = items; this.sel = 0; this.rects = []; }
   label(it) { return typeof it.label === 'function' ? it.label() : it.label; }
@@ -1125,9 +1834,23 @@ class Menu {
     else if (a === 'right' && it.right) { it.right(); Sound.sfx.select(); }
     else if (a === 'ok') it.action();
   }
-  hit(x, y) { return this.rects.findIndex(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h); }
-  click(x, y) { const i = this.hit(x, y); if (i >= 0) { this.sel = i; this.items[i].action(); } }
-  hover(x, y) { const i = this.hit(x, y); if (i >= 0 && i !== this.sel) { this.sel = i; Sound.sfx.select(); } }
+  hit(x, y) {
+    const r = this.rects.find(q => inRect(q, x, y));
+    return r ? { r, i: r.item ?? this.rects.indexOf(r) } : null;
+  }
+  click(x, y) {
+    const h = this.hit(x, y);
+    if (!h) return;
+    const it = this.items[h.i];
+    this.sel = h.i;
+    if (h.r.side) { it[h.r.side](); Sound.sfx.select(); }
+    else if (h.r.value !== undefined) { it.set(h.r.value); Sound.sfx.select(); }
+    else it.action();
+  }
+  hover(x, y) {
+    const h = this.hit(x, y);
+    if (h && h.i !== this.sel) { this.sel = h.i; Sound.sfx.select(); }
+  }
   draw(g, x, y, w, h, gap) {
     this.rects = this.items.map((it, i) => ({ x, y: y + i * (h + gap), w, h }));
     this.items.forEach((it, i) => {
@@ -1148,9 +1871,11 @@ const PREFS = readJSON(PREFS_KEY) || {};
 
 const Game = {
   scene: 'title', sub: 'main', players: 1,
-  diff: PREFS.diff || 0, autoGas: !!PREFS.autoGas, names: Array.isArray(PREFS.names) ? PREFS.names : ['', ''],
+  diff: PREFS.diff || 0, autoGas: !!PREFS.autoGas, announcer: PREFS.announcer !== false,
+  names: Array.isArray(PREFS.names) ? PREFS.names : ['', ''],
+  garage: Array.isArray(PREFS.garage) ? PREFS.garage : [defaultGarage(0), defaultGarage(1)],
   racers: [], trackIndex: 0, raceNum: 0, lastOrder: null,
-  race: null, demo: null, menu: null, results: null, shopTurn: 0,
+  race: null, demo: null, menu: null, results: null, shopTurn: 0, garageCtx: null, testing: null,
   t: 0, lock: 0, toast: null, editing: null, editBtn: null,
 
   press(a) {
@@ -1160,6 +1885,7 @@ const Game = {
       return;
     }
     if (this.lock > 0) return;
+    if (this.scene === 'editor') { if (a === 'pause' || a === 'back') Editor.exit(); return; }
     if (this.scene === 'race') {
       if (a === 'pause' || a === 'back') this.togglePause();
       else if (this.race.paused) this.menu.press(a);
@@ -1167,32 +1893,44 @@ const Game = {
     }
     if (a === 'pause' || a === 'back') {
       if (this.scene === 'title' && this.sub === 'options') this.mainMenu();
+      else if (this.scene === 'garage') this.closeGarage();
       return;
     }
     if (this.menu) this.menu.press(a);
   },
   menuActive() { return this.scene !== 'race' || (this.race && this.race.paused); },
+  pointer(type, x, y, button) {
+    if (this.scene === 'editor' && !this.editing) { Editor.pointer(type, x, y, button); return; }
+    if (type === 'down' && button === 0) this.click(x, y);
+    else if (type === 'move') this.hover(x, y);
+  },
   click(x, y) {
     if (this.editing) {
-      const b = this.editBtn;
-      if (b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) this.endEdit(true);
+      if (this.editBtn && inRect(this.editBtn, x, y)) this.endEdit(true);
       return;
     }
-    if (this.lock <= 0 && this.menuActive() && this.menu) this.menu.click(x, y);
+    if (this.lock > 0) return;
+    if (this.scene === 'title' && inRect(LANG_CHIP, x, y)) { this.toggleLang(); return; }
+    if (this.menuActive() && this.menu) this.menu.click(x, y);
   },
   hover(x, y) { if (!this.editing && this.menuActive() && this.menu) this.menu.hover(x, y); },
-  showToast(text) { this.toast = { text, t: 1.5 }; },
+  showToast(text) { this.toast = { text, t: 1.8 }; },
+  toggleLang() { setLang(LANG === 'es' ? 'en' : 'es'); Sound.sfx.select(); },
 
   savePrefs() {
-    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ diff: this.diff, autoGas: this.autoGas, names: this.names })); }
-    catch (e) { /* sin guardado: se juega igual */ }
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({
+        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage
+      }));
+    } catch (e) { /* sin guardado: se juega igual */ }
   },
 
   toTitle() {
-    this.scene = 'title'; this.race = null;
-    const demoRacers = COLORS.map((c, i) => ({
-      id: i, name: '', ...c, human: false, player: -1, nitros: 2, skill: 0.9 + Math.random() * 0.1,
-      upg: { motor: 2, acel: 2, llantas: 2, amort: 2 }
+    this.scene = 'title'; this.race = null; this.testing = null;
+    Announcer.stop();
+    const demoRacers = PAINTS.slice(0, 4).map((p, i) => ({
+      id: i, name: '', color: p.c, dark: p.d, model: MODEL_KEYS[i], human: false, player: -1, nitros: 2,
+      skill: 0.9 + Math.random() * 0.1, upg: { motor: 2, acel: 2, llantas: 2, amort: 2 }
     }));
     this.demo = new Race(Math.floor(Math.random() * TRACK_DEFS.length), demoRacers, true);
     Sound.stopEngines(); Sound.play('menu');
@@ -1205,21 +1943,25 @@ const Game = {
     if (saved) items.push({ label: () => L().menu.continue, action: () => this.continueSave(saved) });
     items.push({ label: () => L().menu.p1, action: () => this.newSeason(1) });
     items.push({ label: () => L().menu.p2, action: () => this.newSeason(2) });
-    const tl = () => setLang(LANG === 'es' ? 'en' : 'es');
-    items.push({ label: () => L().menu.lang, action: () => { tl(); Sound.sfx.select(); }, left: tl, right: tl });
-    items.push({ label: () => L().menu.options, action: () => { this.optionsMenu(); Sound.sfx.select(); } });
+    items.push({ label: () => L().garageMenu, action: () => this.openGarage(0, 'title') });
+    items.push({ label: () => L().editor.menu, action: () => Editor.open(0) });
+    items.push({ label: () => '⚙️ ' + L().menu.options, action: () => { this.optionsMenu(); Sound.sfx.select(); } });
     if (IN_SITE) items.push({ label: () => L().menu.more, action: () => { location.href = '../index.html'; } });
     this.menu = new Menu(items);
   },
 
   optionsMenu() {
     this.sub = 'options';
-    const O = () => L().opt;
+    const O = () => L().opt, yn = v => (v ? O().yes : O().no);
     const cd = d => { this.diff = (this.diff + d + 3) % 3; this.savePrefs(); };
     const ag = () => { this.autoGas = !this.autoGas; this.savePrefs(); };
+    const an = () => { this.announcer = !this.announcer; this.savePrefs(); if (!this.announcer) Announcer.stop(); };
+    const tl = () => this.toggleLang();
     this.menu = new Menu([
       { label: () => O().diff + ': ' + L().diffs[this.diff], action: () => { cd(1); Sound.sfx.select(); }, left: () => cd(-1), right: () => cd(1) },
-      { label: () => O().auto + ': ' + (this.autoGas ? O().yes : O().no), action: () => { ag(); Sound.sfx.select(); }, left: ag, right: ag },
+      { label: () => O().auto + ': ' + yn(this.autoGas), action: () => { ag(); Sound.sfx.select(); }, left: ag, right: ag },
+      { label: () => L().menu.lang, action: tl, left: tl, right: tl },
+      { label: () => '📣 ' + O().ann + ': ' + yn(this.announcer), action: () => { an(); Sound.sfx.select(); }, left: an, right: an },
       { label: () => '✏️ ' + O().name1 + ': ' + (this.names[0] || L().you), action: () => this.editName(0) },
       { label: () => '✏️ ' + O().name2 + ': ' + (this.names[1] || L().player(2)), action: () => this.editName(1) },
       { label: () => L().menu.back, action: () => { this.mainMenu(); Sound.sfx.select(); } }
@@ -1244,22 +1986,54 @@ const Game = {
     this.editing = null; this.lock = 0.15;
   },
 
-  newSeason(players) {
-    this.players = players; this.trackIndex = 0; this.raceNum = 0; this.lastOrder = null;
-    this.racers = COLORS.map((c, i) => {
+  openGarage(player, ret) {
+    this.garageCtx = { player, ret, view: MODEL_KEYS.indexOf(this.garage[player].model) };
+    this.scene = 'garage'; this.lock = 0.2;
+    this.menu = garageMenu();
+    Sound.sfx.select();
+  },
+  closeGarage() {
+    if (this.garageCtx.ret === 'shop') { this.openShop(this.garageCtx.player); this.menu.sel = 5; }
+    else { this.scene = 'title'; this.mainMenu(); this.menu.sel = this.menu.items.findIndex(it => it.label() === L().garageMenu); }
+  },
+
+  makeRacers(players) {
+    return PAINTS.slice(0, 4).map((p, i) => {
       const human = i < players;
       return {
-        id: i, ...c, human, player: human ? i : -1, ai: human ? undefined : i - players,
+        id: i, color: p.c, dark: p.d, human, player: human ? i : -1, ai: human ? undefined : i - players,
         name: human ? '' : STR.es.ai[i - players],
         upg: { motor: 0, acel: 0, llantas: 0, amort: 0 }, nitros: human ? 3 : 2, money: 0, points: 0, skill: 1
       };
     });
+  },
+
+  // Los humanos usan lo que eligieron en el taller; los rivales toman colores que nadie usa
+  applyLooks(racers) {
+    const used = [];
+    for (const r of racers) if (r.human) {
+      const gp = this.garage[r.player], p = PAINTS[gp.color];
+      Object.assign(r, { color: p.c, dark: p.d, model: gp.model, decal: gp.decal, horn: gp.horn });
+      used.push(gp.color);
+    }
+    const free = [2, 3, 4, 5, 7, 6, 0, 1, 8, 9].filter(i => !used.includes(i));
+    let k = 0;
+    for (const r of racers) if (!r.human) {
+      const p = PAINTS[free[k++]];
+      Object.assign(r, { color: p.c, dark: p.d, model: 'pickup', decal: 0, horn: r.id % HORN_COUNT });
+    }
+  },
+
+  newSeason(players) {
+    this.players = players; this.trackIndex = 0; this.raceNum = 0; this.lastOrder = null;
+    this.racers = this.makeRacers(players);
     this.startRace();
   },
 
   startRace() {
     const D = DIFFS[this.diff];
     for (const r of this.racers) if (!r.human) { r.skill = D.skill + Math.min(0.1, this.raceNum * 0.012); r.nitros = 2; }
+    this.applyLooks(this.racers);
     // el que llegó último sale adelante
     const grid = this.lastOrder ? [...this.lastOrder].reverse() : [...this.racers].sort((a, b) => b.human - a.human);
     this.race = new Race(this.trackIndex, grid);
@@ -1267,23 +2041,43 @@ const Game = {
     Sound.play('race');
   },
 
+  // Carrera de prueba en una pista del editor: no da dinero ni puntos
+  testTrack(def) {
+    this.testing = def; this.players = 1;
+    const racers = this.makeRacers(1);
+    this.applyLooks(racers);
+    for (const r of racers) if (!r.human) r.skill = DIFFS[this.diff].skill;
+    this.race = new Race(def, racers);
+    this.scene = 'race'; this.menu = null;
+    Sound.play('race');
+  },
+  endTest() {
+    this.testing = null; this.race = null;
+    Announcer.stop();
+    Editor.resume();
+  },
+
   togglePause() {
     const r = this.race;
     if (!r) return;
     r.paused = !r.paused;
-    if (r.paused) {
-      this.menu = new Menu([
-        { label: () => L().resume, action: () => this.togglePause() },
-        { label: () => L().restart, action: () => this.startRace() },
-        { label: () => L().quit, action: () => { this.save(); this.toTitle(); } }
-      ]);
-    } else this.menu = null;
+    if (!r.paused) { this.menu = null; return; }
+    const items = [{ label: () => L().resume, action: () => this.togglePause() }];
+    if (this.testing) {
+      items.push({ label: () => L().restart, action: () => this.testTrack(this.testing) });
+      items.push({ label: () => L().editor.backToEditor, action: () => this.endTest() });
+    } else {
+      items.push({ label: () => L().restart, action: () => this.startRace() });
+      items.push({ label: () => L().quit, action: () => { this.save(); this.toTitle(); } });
+    }
+    this.menu = new Menu(items);
   },
   autoPause() {
     if (this.scene === 'race' && this.race && !this.race.paused) this.togglePause();
   },
 
   raceOver(race) {
+    if (this.testing) { this.endTest(); return; }
     const rows = race.order.map((tr, i) => {
       const r = tr.r;
       r.money += PRIZES[i] + tr.earned; r.points += POINTS[i];
@@ -1302,7 +2096,7 @@ const Game = {
     this.raceNum++;
     const best = rows.find(x => x.r.human);
     this.results = { rows, trackIndex: race.trackIndex, best: best ? best.place : 4 };
-    this.trackIndex = (this.trackIndex + 1) % TRACK_DEFS.length;
+    this.trackIndex = (this.trackIndex + 1) % trackList().length;
     this.scene = 'results'; this.lock = 1.2;
     Sound.play('menu');
     this.menu = new Menu([{ label: () => L().next, action: () => this.openShop(0) }]);
@@ -1312,8 +2106,10 @@ const Game = {
   openShop(turn) {
     if (turn >= this.players) return this.startRace();
     this.shopTurn = turn; this.scene = 'shop'; this.lock = 0.3;
+    this.applyLooks(this.racers);
     const r = this.racers.find(x => x.player === turn);
     const items = SHOP.map(s => ({ action: () => this.buy(r, s) }));
+    items.push({ label: () => L().garageMenu, action: () => this.openGarage(turn, 'shop') });
     items.push({ label: () => (turn + 1 < this.players ? L().ready2 : L().race), action: () => this.openShop(turn + 1) });
     this.menu = new Menu(items);
   },
@@ -1351,7 +2147,7 @@ const Game = {
 function drawTitle(g) {
   Game.demo.draw(g);
   g.fillStyle = 'rgba(10,6,2,0.5)'; g.fillRect(0, 0, W, H);
-  g.save(); g.translate(W / 2, 100); g.rotate(-0.04 + Math.sin(Game.t * 2) * 0.015);
+  g.save(); g.translate(W / 2, 96); g.rotate(-0.04 + Math.sin(Game.t * 2) * 0.015);
   const grd = g.createLinearGradient(0, -40, 0, 40);
   grd.addColorStop(0, '#fff27a'); grd.addColorStop(1, '#ff8a00');
   bigText(g, L().title, 0, 0, 86, grd);
@@ -1361,21 +2157,30 @@ function drawTitle(g) {
   g.lineWidth = 4; g.strokeStyle = '#fff'; g.stroke();
   bigText(g, '4x4', bx + 55, 54, 36, '#fff', '#5a0d08');
   g.restore();
-  Game.menu.draw(g, W / 2 - 170, 196, 340, 46, 10);
-  g.fillStyle = 'rgba(0,0,0,0.7)'; roundRect(g, 82, 546, 860, 82, 12); g.fill();
-  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(14, 700);
-  const help = L().help;
-  g.fillStyle = '#fff'; g.fillText(help[0], W / 2, 565); g.fillText(help[1], W / 2, 587);
-  g.fillStyle = '#ffd23f'; g.fillText(help[2], W / 2, 609);
+  // botón de idioma en la esquina
+  const c = LANG_CHIP;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; roundRect(g, c.x, c.y, c.w, c.h, 16); g.fill();
+  g.font = font(14); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('🌐 ' + (LANG === 'es' ? 'ES → EN' : 'EN → ES'), c.x + c.w / 2, c.y + c.h / 2 + 1);
+  if (Game.sub === 'options') {
+    Game.menu.draw(g, W / 2 - 190, 186, 380, 46, 10);
+  } else {
+    Game.menu.draw(g, W / 2 - 170, 186, 340, 42, 8);
+    g.fillStyle = 'rgba(0,0,0,0.7)'; roundRect(g, 62, 546, 900, 82, 12); g.fill();
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(14, 700);
+    const help = L().help;
+    g.fillStyle = '#fff'; g.fillText(help[0], W / 2, 565); g.fillText(help[1], W / 2, 587);
+    g.fillStyle = '#ffd23f'; g.fillText(help[2], W / 2, 609);
+  }
   if (Game.editing) drawNameEditor(g);
 }
 
 function drawNameEditor(g) {
-  const ed = Game.editing, cx = W / 2;
+  const ed = Game.editing, cx = W / 2, gp = Game.garage[ed.player], p = PAINTS[gp.color];
   g.fillStyle = 'rgba(0,0,0,0.75)'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#2a1a0c'; roundRect(g, cx - 270, 160, 540, 300, 20); g.fill();
-  g.lineWidth = 5; g.strokeStyle = COLORS[ed.player].color; g.stroke();
-  g.save(); g.translate(cx - 205, 213); g.scale(2, 2); drawTruckBody(g, COLORS[ed.player].color, COLORS[ed.player].dark, false); g.restore();
+  g.lineWidth = 5; g.strokeStyle = p.c; g.stroke();
+  g.save(); g.translate(cx - 205, 213); g.scale(2, 2); drawTruck(g, { model: gp.model, color: p.c, dark: p.d, decal: gp.decal }); g.restore();
   bigText(g, L().nameTitle(ed.player + 1), cx + 30, 213, 30, '#ffd23f');
   g.fillStyle = '#fff'; roundRect(g, cx - 210, 250, 420, 66, 12); g.fill();
   g.font = font(32); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#2a1405';
@@ -1404,7 +2209,7 @@ function drawResults(g) {
     roundRect(g, x0, y, w, rh, 10); g.fill();
     g.fillStyle = medal[i]; ellipse(g, x0 + 36, cy, 22, 22);
     bigText(g, String(row.place), x0 + 36, cy + 1, 24, '#fff');
-    g.save(); g.translate(x0 + 100, cy); g.scale(1.6, 1.6); drawTruckBody(g, r.color, r.dark, false); g.restore();
+    g.save(); g.translate(x0 + 100, cy); g.scale(1.6, 1.6); drawTruck(g, r); g.restore();
     g.textAlign = 'left'; g.font = font(22); g.fillStyle = '#fff'; g.fillText(racerName(r), x0 + 140, cy);
     g.textAlign = 'center'; g.font = font(18, 700);
     g.fillStyle = '#7dff7a'; g.fillText('+$' + row.prize, colX[0], cy);
@@ -1417,32 +2222,31 @@ function drawResults(g) {
 }
 
 function drawShop(g) {
-  const grd = g.createLinearGradient(0, 0, 0, H);
-  grd.addColorStop(0, '#3b2614'); grd.addColorStop(1, '#140c05');
-  g.fillStyle = grd; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#111'; g.fillRect(0, 0, W, 14);
-  g.fillStyle = '#ffc61a';
-  for (let x = -40; x < W + 40; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 20, 0); g.lineTo(x + 8, 14); g.lineTo(x - 12, 14); g.fill(); }
+  workshopBg(g);
   const r = Game.racers.find(x => x.player === Game.shopTurn), M = Game.menu;
   bigText(g, L().shop, 200, 62, 44, '#ffd23f');
   g.font = font(20); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = r.color;
   g.fillText(Game.names[r.player] || (Game.players === 1 ? L().yourTruck : L().player(r.player + 1)), 200, 102);
-  bigText(g, '$' + r.money, 200, 148, 42, '#7dff7a');
-  g.fillStyle = 'rgba(0,0,0,0.35)'; ellipse(g, 204, 276, 98, 98);
-  g.fillStyle = '#5a4030'; ellipse(g, 200, 270, 95, 95);
-  g.strokeStyle = '#ffc61a'; g.lineWidth = 4; g.setLineDash([14, 10]); g.beginPath(); g.arc(200, 270, 88, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
-  g.save(); g.translate(200, 270); g.rotate(Game.t * 0.8); g.scale(4.2, 4.2); drawTruckBody(g, r.color, r.dark, false); g.restore();
-  const nt = getTrack(Game.trackIndex);
-  g.font = font(15, 700); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(L().nextTrack + trackName(Game.trackIndex), 200, 425);
-  g.fillStyle = '#000'; g.fillRect(57, 442, 286, 181);
-  g.drawImage(nt.canvas, 60, 445, 280, 175);
+  bigText(g, '$' + r.money, 200, 146, 42, '#7dff7a');
+  g.fillStyle = 'rgba(0,0,0,0.35)'; ellipse(g, 204, 262, 88, 88);
+  g.fillStyle = '#5a4030'; ellipse(g, 200, 256, 85, 85);
+  g.strokeStyle = '#ffc61a'; g.lineWidth = 4; g.setLineDash([14, 10]); g.beginPath(); g.arc(200, 256, 78, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.save(); g.translate(200, 256); g.rotate(Game.t * 0.8); g.scale(3.8, 3.8); drawTruck(g, r); g.restore();
 
   const x = 400, w = 590, h = 78, gap = 10, y0 = 34;
   M.rects = [];
+  // botón del taller bajo la camioneta
+  M.rects[5] = { x: 70, y: 362, w: 260, h: 48 };
+  button(g, 70, 362, 260, 48, M.label(M.items[5]), M.sel === 5);
+  const nt = getTrack(Game.trackIndex);
+  g.font = font(14, 700); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(L().nextTrack + trackName(Game.trackIndex), 200, 440);
+  g.fillStyle = '#000'; g.fillRect(77, 457, 246, 156);
+  g.drawImage(nt.canvas, 80, 460, 240, 150);
+
   SHOP.forEach((s, i) => {
     const y = y0 + i * (h + gap), on = M.sel === i, [name, desc] = L().shopItems[i];
-    M.rects.push({ x, y, w, h });
+    M.rects[i] = { x, y, w, h };
     g.fillStyle = on ? 'rgba(255,210,63,0.22)' : 'rgba(0,0,0,0.45)'; roundRect(g, x, y, w, h, 12); g.fill();
     g.lineWidth = 3; g.strokeStyle = on ? '#ffd23f' : 'rgba(255,255,255,0.12)'; g.stroke();
     g.font = '34px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
@@ -1468,8 +2272,8 @@ function drawShop(g) {
     g.fillText(cost === 0 ? L().max : '$' + cost, bx + 56, by + 22);
   });
   const by = y0 + 5 * (h + gap) + 6;
-  M.rects.push({ x, y: by, w, h: 64 });
-  button(g, x, by, w, 64, M.label(M.items[5]), M.sel === 5);
+  M.rects[6] = { x, y: by, w, h: 64 };
+  button(g, x, by, w, 64, M.label(M.items[6]), M.sel === 6);
   g.font = font(13, 700); g.fillStyle = '#bbb'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(L().shopHelp, x + w / 2, 575);
   g.fillText(L().shopInfo(Game.raceNum + 1, r.points), x + w / 2, 600);
@@ -1485,8 +2289,8 @@ function drawPause(g) {
 
 // ===== Entrada: teclado y controles de videojuego =====
 const KEYS = {
-  p1: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], nitro: ['Enter', 'NumpadEnter', 'ShiftRight', 'Slash', 'Period', 'Numpad0'] },
-  p2: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], nitro: ['Space', 'KeyQ', 'KeyE', 'ShiftLeft'] }
+  p1: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], nitro: ['Enter', 'NumpadEnter', 'ShiftRight', 'Slash', 'Period', 'Numpad0'], horn: ['KeyL', 'Numpad1'] },
+  p2: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], nitro: ['Space', 'KeyQ', 'KeyE', 'ShiftLeft'], horn: ['KeyH', 'KeyR'] }
 };
 const MENU_KEYS = {
   ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left',
@@ -1504,7 +2308,7 @@ const Input = {
     return {
       gas: b(0) || b(7) || b(12), brake: b(1) || b(6) || b(13),
       steer: Math.abs(ax) > 0.25 ? ax : (b(15) ? 1 : 0) - (b(14) ? 1 : 0),
-      nitro: b(2) || b(3) || b(4) || b(5),
+      nitro: b(2) || b(4) || b(5), horn: b(3) || b(10),
       up: b(12) || ay < -0.6, down: b(13) || ay > 0.6, left: b(14) || ax < -0.6, right: b(15) || ax > 0.6,
       ok: b(0), pause: b(9)
     };
@@ -1512,17 +2316,17 @@ const Input = {
   get(player, auto) {
     const maps = Game.players === 2 ? [player === 0 ? KEYS.p1 : KEYS.p2] : [KEYS.p1, KEYS.p2];
     const on = name => maps.some(m => m[name].some(c => this.down.has(c)));
-    let gas = on('up'), brake = on('down'), nitro = on('nitro');
+    let gas = on('up'), brake = on('down'), nitro = on('nitro'), horn = on('horn');
     let steer = (on('right') ? 1 : 0) - (on('left') ? 1 : 0);
     const pads = this.pads(), mine = Game.players === 2 ? [pads[player]] : pads;
     for (const p of mine) {
       if (!p) continue;
       const s = this.padState(p);
-      gas = gas || s.gas; brake = brake || s.brake; nitro = nitro || s.nitro;
+      gas = gas || s.gas; brake = brake || s.brake; nitro = nitro || s.nitro; horn = horn || s.horn;
       if (s.steer) steer = s.steer;
     }
     if (auto && !brake) gas = true;
-    return { gas, brake, steer: clamp(steer, -1, 1), nitro };
+    return { gas, brake, steer: clamp(steer, -1, 1), nitro, horn };
   },
   poll() {
     this.pads().forEach((p, i) => {
@@ -1559,6 +2363,7 @@ addEventListener('keydown', e => {
   Sound.init();
   // escribiendo un nombre: las teclas son letras, no controles
   if (Game.editing) { e.preventDefault(); Game.editKey(e); return; }
+  if (Game.scene === 'editor' && Editor.key(e)) { e.preventDefault(); return; }
   if (BLOCK_KEYS.has(e.code)) e.preventDefault();
   Input.down.add(e.code);
   if (e.repeat || e.metaKey || e.ctrlKey) return;
@@ -1575,8 +2380,10 @@ const toGame = e => {
   const r = canvas.getBoundingClientRect();
   return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
 };
-canvas.addEventListener('mousedown', e => { Sound.init(); Game.click(...toGame(e)); });
-canvas.addEventListener('mousemove', e => Game.hover(...toGame(e)));
+canvas.addEventListener('mousedown', e => { Sound.init(); Game.pointer('down', ...toGame(e), e.button); });
+canvas.addEventListener('mousemove', e => Game.pointer('move', ...toGame(e), e.button));
+addEventListener('mouseup', e => Game.pointer('up', ...toGame(e), e.button));
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ===== Bucle principal =====
 const STEP = 1 / 60;
@@ -1604,6 +2411,8 @@ function draw() {
   else if (Game.scene === 'race') { Game.race.draw(ctx); if (Game.race.paused) drawPause(ctx); }
   else if (Game.scene === 'results') drawResults(ctx);
   else if (Game.scene === 'shop') drawShop(ctx);
+  else if (Game.scene === 'garage') drawGarage(ctx);
+  else if (Game.scene === 'editor') Editor.draw(ctx);
   if (Game.toast) {
     ctx.globalAlpha = Math.min(1, Game.toast.t * 3);
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; roundRect(ctx, W / 2 - 130, H - 70, 260, 44, 22); ctx.fill();

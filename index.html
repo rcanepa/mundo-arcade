@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mundo Arcade</title>
+<meta name="description" content="Juegos gratis para jugar en el navegador, sin descargas ni anuncios. Free browser games, no downloads, no ads.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="index.html"><span class="brand-icon">🕹️</span><span class="brand-name" id="brand"></span></a>
+  <p class="tag" id="tag"></p>
+  <div class="lang" role="group" aria-label="Idioma / Language">
+    <button type="button" data-lang="es">ES</button>
+    <button type="button" data-lang="en">EN</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="featured" id="featured"></section>
+  <section>
+    <h2 id="all-title"></h2>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<footer class="wrap foot" id="foot"></footer>
+
+<script src="catalog.js"></script>
+<script>
+// Textos del sitio. La clave del idioma la comparten todos los juegos.
+const LANG_KEY = 'arcade.lang';
+const UI = {
+  es: {
+    brand: 'MUNDO <b>ARCADE</b>', title: 'Mundo Arcade',
+    tag: 'Juegos gratis para jugar en el computador. Sin descargas, sin anuncios.',
+    isNew: '¡NUEVO!', play: '▶ Jugar ahora', download: '⬇ Descargar para jugar sin internet',
+    all: 'Todos los juegos', soonTitle: 'Próximamente…', soonText: '¡Nuevos juegos en camino!',
+    foot: n => `Hecho en casa con ❤️ · ${n} ${n === 1 ? 'juego' : 'juegos'}`, cover: t => 'Imagen de ' + t
+  },
+  en: {
+    brand: 'ARCADE <b>WORLD</b>', title: 'Arcade World',
+    tag: 'Free games to play on your computer. No downloads, no ads.',
+    isNew: 'NEW!', play: '▶ Play now', download: '⬇ Download to play offline',
+    all: 'All games', soonTitle: 'Coming soon…', soonText: 'New games on the way!',
+    foot: n => `Homemade with ❤️ · ${n} ${n === 1 ? 'game' : 'games'}`, cover: t => t + ' screenshot'
+  }
+};
+
+function readLang() {
+  try { const s = localStorage.getItem(LANG_KEY); if (s === 'es' || s === 'en') return s; } catch (e) {}
+  return (navigator.language || 'es').toLowerCase().startsWith('es') ? 'es' : 'en';
+}
+let lang = readLang();
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Se enlaza a index.html para que también funcione abriendo la carpeta sin servidor
+const playHref = g => `${g.slug}/index.html`;
+const badges = t => `<ul class="badges">${[['👥', t.players], ['🎮', t.controls], ['⭐', t.age]]
+  .map(([icon, text]) => `<li><span aria-hidden="true">${icon}</span>${esc(text)}</li>`).join('')}</ul>`;
+
+function render() {
+  const u = UI[lang];
+  document.documentElement.lang = lang;
+  document.title = u.title;
+  document.getElementById('brand').innerHTML = u.brand;
+  document.getElementById('tag').textContent = u.tag;
+  document.getElementById('all-title').textContent = u.all;
+  document.getElementById('foot').textContent = u.foot(GAMES.length);
+  document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+
+  const feat = [...GAMES].sort((a, b) => b.added.localeCompare(a.added))[0], ft = feat[lang];
+  document.getElementById('featured').innerHTML = `
+    <a class="feat-cover" href="${playHref(feat)}" style="--accent:${feat.color}">
+      <img src="${esc(feat.cover)}" alt="${esc(u.cover(ft.title))}"><span class="new">${u.isNew}</span>
+    </a>
+    <div class="feat-info">
+      <h1>${esc(ft.title)}</h1>
+      <p class="lead">${esc(ft.tagline)}</p>
+      <p>${esc(ft.description)}</p>
+      ${badges(ft)}
+      <div class="actions">
+        <a class="btn play" href="${playHref(feat)}">${u.play}</a>
+        ${feat.download ? `<a class="btn ghost" href="${playHref(feat)}" download="${esc(feat.download)}">${u.download}</a>` : ''}
+      </div>
+    </div>`;
+
+  document.getElementById('grid').innerHTML = GAMES.map(g => {
+    const t = g[lang];
+    return `<a class="card" href="${playHref(g)}" style="--accent:${g.color}">
+      <img src="${esc(g.cover)}" alt="${esc(u.cover(t.title))}" loading="lazy">
+      <div class="card-body"><h3>${esc(t.title)}</h3><p>${esc(t.tagline)}</p>${badges(t)}</div>
+    </a>`;
+  }).join('') + `<div class="card soon"><div class="soon-art">?</div>
+      <div class="card-body"><h3>${u.soonTitle}</h3><p>${u.soonText}</p></div></div>`;
+}
+
+document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => {
+  lang = b.dataset.lang;
+  try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+  render();
+}));
+render();
+</script>
+</body>
+</html>

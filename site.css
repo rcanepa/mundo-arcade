@@ -1,0 +1,127 @@
+:root {
+  --bg: #120a24;
+  --panel: #24154a;
+  --panel-2: #2e1c5c;
+  --text: #ffffff;
+  --text-soft: #e6defa;
+  --muted: #b9a9e0;
+  --line: rgba(255, 255, 255, 0.14);
+  --chip: rgba(255, 255, 255, 0.09);
+  --yellow: #ffd23f;
+  --yellow-shadow: #b8890a;
+  --pink: #ff5c8a;
+  --radius: 18px;
+  --font-display: "Arial Black", "Arial Rounded MT Bold", Impact, system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--bg); }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(1100px 520px at 50% -180px, #3d2185 0%, transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--bg);
+}
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+/* Encabezado */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding-top: 26px; padding-bottom: 6px; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.brand-icon { font-size: 40px; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.35)); }
+.brand-name { font-family: var(--font-display); font-size: 30px; letter-spacing: 1px; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.6); }
+.brand-name b { color: var(--yellow); }
+.tag { flex: 1; margin: 0; color: var(--muted); font-size: 15px; min-width: 220px; }
+
+.lang { display: flex; padding: 4px; gap: 4px; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; }
+.lang button {
+  border: 0; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  font: 800 14px var(--font-body); color: var(--muted); background: transparent;
+}
+.lang button[aria-pressed="true"] { background: var(--yellow); color: #3a1d00; }
+
+/* Juego destacado */
+.featured {
+  display: grid; grid-template-columns: 1.35fr 1fr; gap: 28px; align-items: center;
+  margin: 22px 0 40px; padding: 22px;
+  background: linear-gradient(135deg, var(--panel-2), var(--panel));
+  border: 2px solid var(--line); border-radius: 26px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+.feat-cover {
+  position: relative; display: block; overflow: hidden;
+  border: 4px solid var(--accent, var(--yellow)); border-radius: var(--radius);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4);
+  transform: rotate(-1deg); transition: transform 0.2s;
+}
+.feat-cover:hover { transform: rotate(0deg) scale(1.02); }
+.feat-cover img, .card img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #000; }
+.new {
+  position: absolute; top: 12px; left: 12px; padding: 6px 12px; border-radius: 999px;
+  font-family: var(--font-display); font-size: 14px; color: #fff; background: var(--pink);
+  transform: rotate(-6deg); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+}
+.feat-info h1 {
+  margin: 0 0 6px; font-family: var(--font-display); font-size: clamp(30px, 4vw, 44px); line-height: 1.05;
+  color: var(--yellow); text-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+.lead { margin: 0 0 10px; font-size: 18px; font-weight: 800; }
+.feat-info p { color: var(--text-soft); line-height: 1.5; }
+
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; padding: 0; list-style: none; }
+.badges li { padding: 5px 12px; border-radius: 999px; background: var(--chip); font-size: 13px; font-weight: 700; }
+.badges li span { margin-right: 6px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 22px; border-radius: 14px; text-decoration: none;
+  font-family: var(--font-display); font-size: 18px;
+  transition: transform 0.1s, box-shadow 0.1s, background 0.1s;
+}
+.btn.play { color: #3a1d00; background: var(--yellow); box-shadow: 0 6px 0 var(--yellow-shadow); }
+.btn.play:hover { transform: translateY(-2px); box-shadow: 0 8px 0 var(--yellow-shadow); }
+.btn.play:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--yellow-shadow); }
+.btn.ghost {
+  color: var(--text); background: var(--chip); border: 2px solid var(--line);
+  font: 800 14px var(--font-body);
+}
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* Lista de juegos */
+h2 { margin: 0 0 16px; font-family: var(--font-display); font-size: 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+.card {
+  display: flex; flex-direction: column; overflow: hidden; color: var(--text); text-decoration: none;
+  background: var(--panel); border: 3px solid transparent; border-radius: var(--radius);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4); transition: transform 0.15s, border-color 0.15s;
+}
+a.card:hover, a.card:focus-visible { transform: translateY(-4px); border-color: var(--accent, var(--yellow)); outline: none; }
+.card-body { padding: 14px 16px 4px; }
+.card h3 { margin: 0 0 4px; font-family: var(--font-display); font-size: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; }
+.card .badges li { font-size: 12px; }
+.soon { background: transparent; border: 3px dashed var(--line); box-shadow: none; opacity: 0.75; }
+.soon-art {
+  display: grid; place-items: center; aspect-ratio: 16 / 10;
+  font-family: var(--font-display); font-size: 64px; color: rgba(255, 255, 255, 0.25);
+  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 14px, transparent 14px 28px);
+}
+
+.foot { padding-top: 44px; padding-bottom: 30px; color: var(--muted); font-size: 13px; text-align: center; }
+
+:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .featured { grid-template-columns: 1fr; gap: 18px; padding: 14px; }
+  .brand-name { font-size: 24px; }
+  .btn { width: 100%; }
+}

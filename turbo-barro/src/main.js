@@ -1,7 +1,7 @@
 // ===== Entrada: teclado y controles de videojuego =====
 const KEYS = {
-  p1: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], nitro: ['Enter', 'NumpadEnter', 'ShiftRight', 'Slash', 'Period', 'Numpad0'] },
-  p2: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], nitro: ['Space', 'KeyQ', 'KeyE', 'ShiftLeft'] }
+  p1: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], nitro: ['Enter', 'NumpadEnter', 'ShiftRight', 'Slash', 'Period', 'Numpad0'], horn: ['KeyL', 'Numpad1'] },
+  p2: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], nitro: ['Space', 'KeyQ', 'KeyE', 'ShiftLeft'], horn: ['KeyH', 'KeyR'] }
 };
 const MENU_KEYS = {
   ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left',
@@ -19,7 +19,7 @@ const Input = {
     return {
       gas: b(0) || b(7) || b(12), brake: b(1) || b(6) || b(13),
       steer: Math.abs(ax) > 0.25 ? ax : (b(15) ? 1 : 0) - (b(14) ? 1 : 0),
-      nitro: b(2) || b(3) || b(4) || b(5),
+      nitro: b(2) || b(4) || b(5), horn: b(3) || b(10),
       up: b(12) || ay < -0.6, down: b(13) || ay > 0.6, left: b(14) || ax < -0.6, right: b(15) || ax > 0.6,
       ok: b(0), pause: b(9)
     };
@@ -27,17 +27,17 @@ const Input = {
   get(player, auto) {
     const maps = Game.players === 2 ? [player === 0 ? KEYS.p1 : KEYS.p2] : [KEYS.p1, KEYS.p2];
     const on = name => maps.some(m => m[name].some(c => this.down.has(c)));
-    let gas = on('up'), brake = on('down'), nitro = on('nitro');
+    let gas = on('up'), brake = on('down'), nitro = on('nitro'), horn = on('horn');
     let steer = (on('right') ? 1 : 0) - (on('left') ? 1 : 0);
     const pads = this.pads(), mine = Game.players === 2 ? [pads[player]] : pads;
     for (const p of mine) {
       if (!p) continue;
       const s = this.padState(p);
-      gas = gas || s.gas; brake = brake || s.brake; nitro = nitro || s.nitro;
+      gas = gas || s.gas; brake = brake || s.brake; nitro = nitro || s.nitro; horn = horn || s.horn;
       if (s.steer) steer = s.steer;
     }
     if (auto && !brake) gas = true;
-    return { gas, brake, steer: clamp(steer, -1, 1), nitro };
+    return { gas, brake, steer: clamp(steer, -1, 1), nitro, horn };
   },
   poll() {
     this.pads().forEach((p, i) => {
@@ -74,6 +74,7 @@ addEventListener('keydown', e => {
   Sound.init();
   // escribiendo un nombre: las teclas son letras, no controles
   if (Game.editing) { e.preventDefault(); Game.editKey(e); return; }
+  if (Game.scene === 'editor' && Editor.key(e)) { e.preventDefault(); return; }
   if (BLOCK_KEYS.has(e.code)) e.preventDefault();
   Input.down.add(e.code);
   if (e.repeat || e.metaKey || e.ctrlKey) return;
@@ -90,8 +91,10 @@ const toGame = e => {
   const r = canvas.getBoundingClientRect();
   return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
 };
-canvas.addEventListener('mousedown', e => { Sound.init(); Game.click(...toGame(e)); });
-canvas.addEventListener('mousemove', e => Game.hover(...toGame(e)));
+canvas.addEventListener('mousedown', e => { Sound.init(); Game.pointer('down', ...toGame(e), e.button); });
+canvas.addEventListener('mousemove', e => Game.pointer('move', ...toGame(e), e.button));
+addEventListener('mouseup', e => Game.pointer('up', ...toGame(e), e.button));
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ===== Bucle principal =====
 const STEP = 1 / 60;
@@ -119,6 +122,10 @@ function draw() {
   else if (Game.scene === 'race') { Game.race.draw(ctx); if (Game.race.paused) drawPause(ctx); }
   else if (Game.scene === 'results') drawResults(ctx);
   else if (Game.scene === 'shop') drawShop(ctx);
+  else if (Game.scene === 'garage') drawGarage(ctx);
+  else if (Game.scene === 'editor') Editor.draw(ctx);
+  else if (Game.scene === 'podium') drawPodium(ctx);
+  else if (Game.scene === 'trophies') drawTrophies(ctx);
   if (Game.toast) {
     ctx.globalAlpha = Math.min(1, Game.toast.t * 3);
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; roundRect(ctx, W / 2 - 130, H - 70, 260, 44, 22); ctx.fill();

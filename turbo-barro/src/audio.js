@@ -134,5 +134,20 @@ const Sound = (() => {
     return musicOn;
   }
 
-  return { init, sfx, engine, stopEngines, play, toggleMusic };
+  // Bocinas: cada estilo es una pequeña secuencia de notas; cada jugador suena un poco distinto
+  const HORN_PITCH = [1, 0.84, 1.18, 0.92];
+  function horn(style, who = 0) {
+    if (!ac) return;
+    const p = HORN_PITCH[(who % 4 + 4) % 4], t = ac.currentTime;
+    const v = (f, at, dur, type, vol, slide) => voice(f * p, t + at, dur, type, vol, slide ? slide * p : 0, sfxBus);
+    switch (style) {
+      case 1: v(140, 0, 0.6, 'sawtooth', 0.14); v(176, 0, 0.6, 'sawtooth', 0.12); break;                    // camión
+      case 2: v(600, 0, 0.18, 'triangle', 0.3, 1300); v(1300, 0.18, 0.2, 'triangle', 0.3, 700); break;      // payaso
+      case 3: [523, 659, 784, 1047].forEach((f, i) => v(f, i * 0.11, 0.13, 'square', 0.12)); break;          // melodía
+      case 4: v(330, 0, 0.12, 'sawtooth', 0.2, 220); v(330, 0.16, 0.14, 'sawtooth', 0.2, 200); break;       // pato
+      default: v(392, 0, 0.35, 'square', 0.11); v(494, 0, 0.35, 'square', 0.11);                           // clásica
+    }
+  }
+
+  return { init, sfx, engine, stopEngines, play, toggleMusic, horn };
 })();

@@ -35,6 +35,8 @@ Edita los archivos de `turbo-barro/src/` y vuelve a armar el juego:
 ./turbo-barro/build.sh
 ```
 
+El mismo comando corre las pruebas automáticas (`turbo-barro/tests/smoke.js`). Juegan carreras sin abrir el navegador y revisan que las pistas, el campeonato, las copas, el taller y el editor sigan funcionando. Si algo se rompió, lo dicen.
+
 ## Agregar un juego nuevo
 
 1. Crea una carpeta con el nombre del juego (por ejemplo `space-blaster/`) con su `index.html` y un `cover.jpg` de 800×500.

@@ -124,6 +124,8 @@ function draw() {
   else if (Game.scene === 'shop') drawShop(ctx);
   else if (Game.scene === 'garage') drawGarage(ctx);
   else if (Game.scene === 'editor') Editor.draw(ctx);
+  else if (Game.scene === 'podium') drawPodium(ctx);
+  else if (Game.scene === 'trophies') drawTrophies(ctx);
   if (Game.toast) {
     ctx.globalAlpha = Math.min(1, Game.toast.t * 3);
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; roundRect(ctx, W / 2 - 130, H - 70, 260, 44, 22); ctx.fill();

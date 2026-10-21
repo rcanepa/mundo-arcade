@@ -11,7 +11,8 @@ STR.es.ann = {
   crash: ['¡Uy, qué golpe!', '¡Cuidado con el muro!'],
   nitro: ['¡Turbo!', '¡Nitro a fondo!'],
   tunnel: ['¡Al túnel!', '¡Qué oscuro!'],
-  bridge: ['¡Por el puente!', '¡Arriba del puente!']
+  bridge: ['¡Por el puente!', '¡Arriba del puente!'],
+  cup: n => [`¡${n} gana la ${cupName(Game.podium.tier)}!`, `¡${n} es campeón de la ${cupName(Game.podium.tier)}!`]
 };
 STR.en.ann = {
   go: ['And they\'re off!', 'Here we go!', 'Full throttle!'],
@@ -23,13 +24,14 @@ STR.en.ann = {
   crash: ['Ouch, what a crash!', 'Watch that wall!'],
   nitro: ['Turbo boost!', 'Nitro on!'],
   tunnel: ['Into the tunnel!', 'So dark in here!'],
-  bridge: ['Over the bridge!', 'Up on the bridge!']
+  bridge: ['Over the bridge!', 'Up on the bridge!'],
+  cup: n => [`${n} wins the ${cupName(Game.podium.tier)}!`, `${n} is the ${cupName(Game.podium.tier)} champion!`]
 };
 
 const Announcer = (() => {
   const synth = window.speechSynthesis;
   // Las frases importantes interrumpen a las chicas; las chicas no siempre suenan
-  const PRIORITY = { win: 3, lastLap: 2, go: 2, lead: 1 };
+  const PRIORITY = { cup: 4, win: 3, lastLap: 2, go: 2, lead: 1 };
   let voices = [], lastT = -99, lastKey = '', lastPri = 0;
   const loadVoices = () => { voices = synth.getVoices(); };
   if (synth) { loadVoices(); synth.addEventListener('voiceschanged', loadVoices); }

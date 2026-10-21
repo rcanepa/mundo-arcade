@@ -1494,6 +1494,7 @@ class Race {
     if (this.state === 'countdown') {
       const n = Math.ceil(this.count), f = this.count - Math.floor(this.count);
       bigText(g, trackName(this.trackIndex), W / 2, H / 2 - 110, 44, '#fff');
+      if (Game.cup && !Game.testing) bigText(g, Game.cupLabel(), W / 2, H / 2 - 155, 22, '#ffd23f');
       if (n <= 3) bigText(g, String(n), W / 2, H / 2, 110 * (0.8 + f * 0.5), '#ffd23f');
       else bigText(g, L().laps(LAPS), W / 2, H / 2, 40, '#ffd23f');
     } else if (this.goT > 0) {
@@ -1544,7 +1545,8 @@ STR.es.ann = {
   crash: ['¡Uy, qué golpe!', '¡Cuidado con el muro!'],
   nitro: ['¡Turbo!', '¡Nitro a fondo!'],
   tunnel: ['¡Al túnel!', '¡Qué oscuro!'],
-  bridge: ['¡Por el puente!', '¡Arriba del puente!']
+  bridge: ['¡Por el puente!', '¡Arriba del puente!'],
+  cup: n => [`¡${n} gana la ${cupName(Game.podium.tier)}!`, `¡${n} es campeón de la ${cupName(Game.podium.tier)}!`]
 };
 STR.en.ann = {
   go: ['And they\'re off!', 'Here we go!', 'Full throttle!'],
@@ -1556,13 +1558,14 @@ STR.en.ann = {
   crash: ['Ouch, what a crash!', 'Watch that wall!'],
   nitro: ['Turbo boost!', 'Nitro on!'],
   tunnel: ['Into the tunnel!', 'So dark in here!'],
-  bridge: ['Over the bridge!', 'Up on the bridge!']
+  bridge: ['Over the bridge!', 'Up on the bridge!'],
+  cup: n => [`${n} wins the ${cupName(Game.podium.tier)}!`, `${n} is the ${cupName(Game.podium.tier)} champion!`]
 };
 
 const Announcer = (() => {
   const synth = window.speechSynthesis;
   // Las frases importantes interrumpen a las chicas; las chicas no siempre suenan
-  const PRIORITY = { win: 3, lastLap: 2, go: 2, lead: 1 };
+  const PRIORITY = { cup: 4, win: 3, lastLap: 2, go: 2, lead: 1 };
   let voices = [], lastT = -99, lastKey = '', lastPri = 0;
   const loadVoices = () => { voices = synth.getVoices(); };
   if (synth) { loadVoices(); synth.addEventListener('voiceschanged', loadVoices); }
@@ -2151,6 +2154,7 @@ const Game = {
   garage: Array.isArray(PREFS.garage) ? PREFS.garage : [defaultGarage(0), defaultGarage(1)],
   racers: [], trackIndex: 0, raceNum: 0, lastOrder: null,
   race: null, demo: null, menu: null, results: null, shopTurn: 0, garageCtx: null, testing: null,
+  trophies: Array.isArray(PREFS.trophies) ? PREFS.trophies : [], cup: null, podium: null,
   t: 0, lock: 0, toast: null, editing: null, editBtn: null,
 
   press(a) {
@@ -2169,6 +2173,7 @@ const Game = {
     if (a === 'pause' || a === 'back') {
       if (this.scene === 'title' && this.sub === 'options') this.mainMenu();
       else if (this.scene === 'garage') this.closeGarage();
+      else if (this.scene === 'trophies') { this.scene = 'title'; this.mainMenu(); }
       return;
     }
     if (this.menu) this.menu.press(a);
@@ -2195,7 +2200,7 @@ const Game = {
   savePrefs() {
     try {
       localStorage.setItem(PREFS_KEY, JSON.stringify({
-        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage
+        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage, trophies: this.trophies
       }));
     } catch (e) { /* sin guardado: se juega igual */ }
   },
@@ -2220,6 +2225,7 @@ const Game = {
     items.push({ label: () => L().menu.p2, action: () => this.newSeason(2) });
     items.push({ label: () => L().garageMenu, action: () => this.openGarage(0, 'title') });
     items.push({ label: () => L().editor.menu, action: () => Editor.open(0) });
+    items.push({ label: () => L().trophyMenu, action: () => this.openTrophies() });
     items.push({ label: () => '⚙️ ' + L().menu.options, action: () => { this.optionsMenu(); Sound.sfx.select(); } });
     if (IN_SITE) items.push({ label: () => L().menu.more, action: () => { location.href = '../index.html'; } });
     this.menu = new Menu(items);
@@ -2301,13 +2307,14 @@ const Game = {
 
   newSeason(players) {
     this.players = players; this.trackIndex = 0; this.raceNum = 0; this.lastOrder = null;
+    this.cup = { tier: 0, race: 0 };
     this.racers = this.makeRacers(players);
     this.startRace();
   },
 
   startRace() {
     const D = DIFFS[this.diff];
-    for (const r of this.racers) if (!r.human) { r.skill = D.skill + Math.min(0.1, this.raceNum * 0.012); r.nitros = 2; }
+    for (const r of this.racers) if (!r.human) { r.skill = D.skill + Math.min(0.15, this.cup.tier * 0.03) + this.cup.race * 0.005; r.nitros = 2; }
     this.applyLooks(this.racers);
     // el que llegó último sale adelante
     const grid = this.lastOrder ? [...this.lastOrder].reverse() : [...this.racers].sort((a, b) => b.human - a.human);
@@ -2355,11 +2362,13 @@ const Game = {
     if (this.testing) { this.endTest(); return; }
     const rows = race.order.map((tr, i) => {
       const r = tr.r;
-      r.money += PRIZES[i] + tr.earned; r.points += POINTS[i];
+      // cada copa más alta da premios más grandes
+      const prize = Math.round(PRIZES[i] * (1 + this.cup.tier * 0.25));
+      r.money += prize + tr.earned; r.points += POINTS[i];
       if (r.human) r.nitros = tr.nitros;
       const earned = tr.earned;
       tr.earned = 0; // ya está sumado al dinero; así el marcador de fondo no lo cuenta dos veces
-      return { r, place: i + 1, prize: PRIZES[i], earned, pts: POINTS[i] };
+      return { r, place: i + 1, prize, earned, pts: POINTS[i] };
     });
     this.lastOrder = race.order.map(tr => tr.r);
     const D = DIFFS[this.diff];
@@ -2370,11 +2379,13 @@ const Game = {
     }
     this.raceNum++;
     const best = rows.find(x => x.r.human);
-    this.results = { rows, trackIndex: race.trackIndex, best: best ? best.place : 4 };
+    this.results = { rows, trackIndex: race.trackIndex, best: best ? best.place : 4, cupLabel: this.cupLabel() };
+    this.cup.race++;
     this.trackIndex = (this.trackIndex + 1) % trackList().length;
     this.scene = 'results'; this.lock = 1.2;
     Sound.play('menu');
-    this.menu = new Menu([{ label: () => L().next, action: () => this.openShop(0) }]);
+    const cupDone = this.cup.race >= CUP_RACES;
+    this.menu = new Menu([{ label: () => (cupDone ? L().podiumBtn : L().next), action: () => (cupDone ? this.openPodium() : this.openShop(0)) }]);
     this.save();
   },
 
@@ -2405,7 +2416,7 @@ const Game = {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         v: 1, players: this.players, diff: this.diff, autoGas: this.autoGas,
-        trackIndex: this.trackIndex, raceNum: this.raceNum, racers: this.racers,
+        trackIndex: this.trackIndex, raceNum: this.raceNum, racers: this.racers, cup: this.cup,
         lastOrder: this.lastOrder ? this.lastOrder.map(r => r.id) : null
       }));
     } catch (e) { /* sin guardado: se juega igual */ }
@@ -2414,7 +2425,8 @@ const Game = {
   continueSave(s) {
     Object.assign(this, { players: s.players, diff: s.diff, autoGas: s.autoGas, trackIndex: s.trackIndex, raceNum: s.raceNum, racers: s.racers });
     this.lastOrder = s.lastOrder ? s.lastOrder.map(id => this.racers[id]) : null;
-    this.openShop(0);
+    this.cup = s.cup || { tier: 0, race: 0 };
+    if (this.cup.race >= CUP_RACES) this.openPodium(); else this.openShop(0);
   }
 };
 
@@ -2440,7 +2452,7 @@ function drawTitle(g) {
   if (Game.sub === 'options') {
     Game.menu.draw(g, W / 2 - 190, 186, 380, 46, 10);
   } else {
-    Game.menu.draw(g, W / 2 - 170, 186, 340, 42, 8);
+    Game.menu.draw(g, W / 2 - 170, 184, 340, 38, 7);
     g.fillStyle = 'rgba(0,0,0,0.7)'; roundRect(g, 62, 546, 900, 82, 12); g.fill();
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(14, 700);
     const help = L().help;
@@ -2473,7 +2485,7 @@ function drawResults(g) {
   const R = Game.results;
   bigText(g, L().results, W / 2, 60, 46, '#ffd23f');
   g.font = font(17, 700); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(trackName(R.trackIndex), W / 2, 100);
+  g.fillText(trackName(R.trackIndex) + (R.cupLabel ? '  ·  ' + R.cupLabel : ''), W / 2, 100);
   const x0 = 120, w = W - 240, rh = 62, colX = [560, 660, 770, 860];
   g.font = font(13, 700); g.fillStyle = '#bbb';
   L().cols.forEach((txt, i) => g.fillText(txt, colX[i], 132));
@@ -2553,7 +2565,7 @@ function drawShop(g) {
   button(g, x, by, w, 64, M.label(M.items[6]), M.sel === 6);
   g.font = font(13, 700); g.fillStyle = '#bbb'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(L().shopHelp, x + w / 2, 575);
-  g.fillText(L().shopInfo(Game.raceNum + 1, r.points), x + w / 2, 600);
+  g.fillText(L().shopCup(Game.cupLabel(), r.points), x + w / 2, 600);
 }
 
 function drawPause(g) {
@@ -2562,6 +2574,178 @@ function drawPause(g) {
   Game.menu.draw(g, W / 2 - 170, 240, 340, 54, 14);
   g.font = font(14, 700); g.fillStyle = '#ddd'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(L().pauseHint, W / 2, 480);
+}
+
+// ===== Copas: 4 carreras, premiación con podio y trofeos para la vitrina =====
+Object.assign(STR.es, {
+  trophyMenu: '🏆 Trofeos', trophyTitle: 'VITRINA DE TROFEOS',
+  trophyCount: n => (n === 1 ? '1 trofeo' : `${n} trofeos`), trophyEmpty: '¡Termina una copa para ganar tu primer trofeo!',
+  cups: ['Bronce', 'Plata', 'Oro', 'Diamante', 'Arcoíris'], legend: n => 'Leyenda ' + n, cupName: c => 'Copa ' + c,
+  raceOf: (n, t) => `carrera ${n} de ${t}`,
+  podiumBtn: 'Ver premiación 🏆', cupDone: '¡Copa terminada!',
+  cupMsg: (p, c) => (p === 1 ? `¡Ganaste la ${c}!` : p <= 3 ? `¡Llegaste ${p}° en la ${c}!` : '¡Buen intento! Te llevas una medalla'),
+  nextCup: c => `Siguiente: ${c} →`, sameCup: 'Sube al podio (1°, 2° o 3°) para pasar a la siguiente copa',
+  shopCup: (label, p) => `${label}  ·  Puntos de la copa: ${p}`
+});
+Object.assign(STR.en, {
+  trophyMenu: '🏆 Trophies', trophyTitle: 'TROPHY CASE',
+  trophyCount: n => (n === 1 ? '1 trophy' : `${n} trophies`), trophyEmpty: 'Finish a cup to win your first trophy!',
+  cups: ['Bronze', 'Silver', 'Gold', 'Diamond', 'Rainbow'], legend: n => 'Legend ' + n, cupName: c => c + ' Cup',
+  raceOf: (n, t) => `race ${n} of ${t}`,
+  podiumBtn: 'See awards 🏆', cupDone: 'Cup complete!',
+  cupMsg: (p, c) => (p === 1 ? `You won the ${c}!` : p <= 3 ? `You finished ${STR.en.ord(p)} in the ${c}!` : 'Nice try! You earned a medal'),
+  nextCup: c => `Next: ${c} →`, sameCup: 'Reach the podium (1st, 2nd or 3rd) to move up to the next cup',
+  shopCup: (label, p) => `${label}  ·  Cup points: ${p}`
+});
+
+const CUP_RACES = 4;
+// Bronce, plata, oro, diamante, arcoíris y desde ahí "Leyenda 1, 2, 3..." para siempre
+const TIERS = [
+  { c: '#d08a4a', d: '#7a4a1c' },
+  { c: '#dfe1ea', d: '#8a8c99' },
+  { c: '#ffd23f', d: '#a07a00' },
+  { c: '#9cf0ff', d: '#2a8fb0' },
+  { c: null, d: '#7a3fb0' },
+  { c: '#ff6fa5', d: '#a3244f' }
+];
+const tierLook = t => TIERS[Math.min(t, TIERS.length - 1)];
+const cupName = t => L().cupName(t < 5 ? L().cups[t] : L().legend(t - 4));
+const CONFETTI = ['#ff4d4d', '#ffd23f', '#4dd2ff', '#7dff7a', '#ff7af5'];
+
+// Trofeo con la base en y + 32 (escala 1). Del 4° lugar para abajo es una medalla.
+function drawTrophy(g, x, y, s, tier, place) {
+  const T = tierLook(tier);
+  let fill = T.c;
+  g.save(); g.translate(x, y); g.scale(s, s);
+  if (!fill) {
+    fill = g.createLinearGradient(-16, -26, 16, 4);
+    ['#ff4d4d', '#ffb13b', '#ffe14a', '#4dd26e', '#4da6ff', '#9b6bff'].forEach((c, i, a) => fill.addColorStop(i / (a.length - 1), c));
+  }
+  if (place > 3) {
+    g.fillStyle = '#2f6fe8'; tri(g, -9, -18, 9, -18, 0, 6); g.fill();
+    g.fillStyle = '#e8312a'; tri(g, -4, -18, 4, -18, 0, 0); g.fill();
+    g.fillStyle = T.d; ellipse(g, 0, 16, 14, 14);
+    g.fillStyle = fill; ellipse(g, 0, 16, 11.5, 11.5);
+    g.fillStyle = 'rgba(255,255,255,0.6)'; star(g, 0, 16, 6);
+  } else {
+    g.fillStyle = '#5a3a1c'; roundRect(g, -16, 22, 32, 10, 2); g.fill();
+    g.fillStyle = '#7a5230'; roundRect(g, -12, 16, 24, 7, 2); g.fill();
+    g.fillStyle = T.d; g.fillRect(-3, 3, 6, 14);
+    g.strokeStyle = T.d; g.lineWidth = 3.5;
+    g.beginPath(); g.arc(-16, -16, 7, Math.PI * 0.5, Math.PI * 1.5); g.stroke();
+    g.beginPath(); g.arc(16, -16, 7, -Math.PI * 0.5, Math.PI * 0.5); g.stroke();
+    const bowl = r => {
+      g.beginPath(); g.moveTo(-r, -28 + (18 - r)); g.lineTo(r, -28 + (18 - r));
+      g.quadraticCurveTo(r, 6 - (18 - r), 0, 6 - (18 - r)); g.quadraticCurveTo(-r, 6 - (18 - r), -r, -28 + (18 - r)); g.fill();
+    };
+    g.fillStyle = T.d; bowl(18);
+    g.fillStyle = fill; bowl(15.5);
+    g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(-10, -22, 3.5, 15);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (tier >= 5) { g.font = font(9); g.fillStyle = '#fff'; g.fillText('★' + (tier - 4), 2, -12); }
+    g.font = font(8); g.fillStyle = '#ffe9b0'; g.fillText(L().ord(place), 0, 27.5);
+  }
+  g.restore();
+}
+
+Object.assign(Game, {
+  cupLabel() {
+    return cupName(this.cup.tier) + '  ·  ' + L().raceOf(Math.min(this.cup.race + 1, CUP_RACES), CUP_RACES);
+  },
+
+  // Premiación: tabla de la copa, trofeos para los jugadores y cuál es la siguiente copa
+  openPodium() {
+    const order = this.lastOrder || this.racers;
+    const standings = [...this.racers].sort((a, b) => b.points - a.points || order.indexOf(a) - order.indexOf(b));
+    const humans = standings.filter(r => r.human), tier = this.cup.tier;
+    const best = Math.min(...humans.map(r => standings.indexOf(r) + 1));
+    if (!this.cup.awarded) {
+      // se marca para no dar el trofeo dos veces si se vuelve a abrir desde "Continuar campeonato"
+      const day = new Date().toISOString().slice(0, 10);
+      for (const r of humans) this.trophies.push({ tier, place: standings.indexOf(r) + 1, name: racerName(r), color: r.color, day });
+      this.cup.awarded = true;
+      this.cup.next = best <= 3 ? tier + 1 : tier;
+      this.savePrefs(); this.save();
+    }
+    this.podium = { tier, standings, best, next: this.cup.next };
+    this.scene = 'podium'; this.lock = 1.5;
+    Sound.play('menu'); Sound.sfx.finish();
+    Announcer.event('cup', { r: standings[0] });
+    this.menu = new Menu([{ label: () => L().nextCup(cupName(this.podium.next)), action: () => this.nextCup() }]);
+  },
+
+  nextCup() {
+    this.cup = { tier: this.podium.next, race: 0 };
+    for (const r of this.racers) r.points = 0;
+    this.save();
+    this.openShop(0);
+  },
+
+  openTrophies() {
+    this.scene = 'trophies';
+    this.menu = new Menu([{ label: () => L().menu.back, action: () => { this.scene = 'title'; this.mainMenu(); } }]);
+    Sound.sfx.select();
+  }
+});
+
+function drawPodium(g) {
+  const P = Game.podium, t = Game.t;
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, '#1b1036'); grd.addColorStop(1, '#3b1f0f');
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  // focos del estadio
+  for (const x of [170, W - 170]) {
+    const spot = g.createRadialGradient(x, 0, 10, x, 0, 520);
+    spot.addColorStop(0, 'rgba(255,240,180,0.22)'); spot.addColorStop(1, 'rgba(255,240,180,0)');
+    g.fillStyle = spot; g.fillRect(0, 0, W, H);
+  }
+  // confeti que cae (sale del tiempo, no necesita guardar nada)
+  for (let i = 0; i < 90; i++) {
+    const x = (i * 97.3 + t * (25 + (i % 5) * 14)) % W, y = (i * 53.7 + t * (55 + (i % 7) * 18)) % H;
+    g.save(); g.translate(x, y); g.rotate(t * (1 + (i % 3)) + i);
+    g.fillStyle = CONFETTI[i % 5]; g.fillRect(-4, -2, 8, 4); g.restore();
+  }
+  bigText(g, cupName(P.tier).toUpperCase(), W / 2, 50, 42, tierLook(P.tier).c || '#ffd23f');
+  g.font = font(18, 700); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(L().cupDone, W / 2, 90);
+  drawTrophy(g, W / 2, 168 + Math.sin(t * 2) * 4, 1.9, P.tier, P.best);
+
+  // podio: 2° a la izquierda, 1° al centro y 3° a la derecha
+  const base = 520;
+  [[1, W / 2 - 175, 380], [0, W / 2, 330], [2, W / 2 + 175, 410]].forEach(([i, cx, top]) => {
+    const r = P.standings[i];
+    g.fillStyle = ['#e8b400', '#b8b8c4', '#c07a3a'][i]; roundRect(g, cx - 82, top, 164, base - top, 8); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(cx - 82, top + 14, 164, 3);
+    bigText(g, String(i + 1), cx, top + 44, 38, '#fff');
+    g.font = font(15); g.fillStyle = '#2a1405'; g.textAlign = 'center'; g.fillText(racerName(r), cx, top + 76);
+    g.font = font(12, 700); g.fillText(r.points + ' pts', cx, top + 94);
+    g.save(); g.translate(cx, top - 36); g.rotate(-Math.PI / 2); g.scale(2.6, 2.6); drawTruck(g, r); g.restore();
+  });
+  bigText(g, L().cupMsg(P.best, cupName(P.tier)), W / 2, 545, 24, '#fff');
+  if (P.next === P.tier) { g.font = font(13, 700); g.fillStyle = '#ffd23f'; g.fillText(L().sameCup, W / 2, 570); }
+  Game.menu.draw(g, W / 2 - 210, 584, 420, 48, 0);
+}
+
+function drawTrophies(g) {
+  workshopBg(g);
+  bigText(g, L().trophyTitle, W / 2, 62, 42, '#ffd23f');
+  const all = Game.trophies, list = all.slice(-18).reverse();
+  g.font = font(15, 700); g.fillStyle = '#ddd'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(all.length ? L().trophyCount(all.length) : '', W / 2, 102);
+  // tres repisas de seis, lo más nuevo primero
+  for (let row = 0; row < 3; row++) {
+    const y = 230 + row * 140;
+    g.fillStyle = '#6b4423'; g.fillRect(90, y, W - 180, 12);
+    g.fillStyle = '#4a2f17'; g.fillRect(90, y + 12, W - 180, 6);
+  }
+  list.forEach((tp, i) => {
+    const x = 175 + (i % 6) * 135, y = 230 + Math.floor(i / 6) * 140;
+    drawTrophy(g, x, y - 34, 1.05, tp.tier, tp.place);
+    g.font = font(11, 700); g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(cupName(tp.tier), x, y + 32);
+    g.fillStyle = tp.color || '#ddd'; g.fillText(tp.name, x, y + 48);
+  });
+  if (!all.length) bigText(g, L().trophyEmpty, W / 2, 300, 26, '#fff');
+  Game.menu.draw(g, W / 2 - 150, 578, 300, 48, 0);
 }
 
 // ===== Entrada: teclado y controles de videojuego =====
@@ -2690,6 +2874,8 @@ function draw() {
   else if (Game.scene === 'shop') drawShop(ctx);
   else if (Game.scene === 'garage') drawGarage(ctx);
   else if (Game.scene === 'editor') Editor.draw(ctx);
+  else if (Game.scene === 'podium') drawPodium(ctx);
+  else if (Game.scene === 'trophies') drawTrophies(ctx);
   if (Game.toast) {
     ctx.globalAlpha = Math.min(1, Game.toast.t * 3);
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; roundRect(ctx, W / 2 - 130, H - 70, 260, 44, 22); ctx.fill();

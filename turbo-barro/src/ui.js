@@ -85,6 +85,7 @@ const Game = {
   garage: Array.isArray(PREFS.garage) ? PREFS.garage : [defaultGarage(0), defaultGarage(1)],
   racers: [], trackIndex: 0, raceNum: 0, lastOrder: null,
   race: null, demo: null, menu: null, results: null, shopTurn: 0, garageCtx: null, testing: null,
+  trophies: Array.isArray(PREFS.trophies) ? PREFS.trophies : [], cup: null, podium: null,
   t: 0, lock: 0, toast: null, editing: null, editBtn: null,
 
   press(a) {
@@ -103,6 +104,7 @@ const Game = {
     if (a === 'pause' || a === 'back') {
       if (this.scene === 'title' && this.sub === 'options') this.mainMenu();
       else if (this.scene === 'garage') this.closeGarage();
+      else if (this.scene === 'trophies') { this.scene = 'title'; this.mainMenu(); }
       return;
     }
     if (this.menu) this.menu.press(a);
@@ -129,7 +131,7 @@ const Game = {
   savePrefs() {
     try {
       localStorage.setItem(PREFS_KEY, JSON.stringify({
-        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage
+        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage, trophies: this.trophies
       }));
     } catch (e) { /* sin guardado: se juega igual */ }
   },
@@ -154,6 +156,7 @@ const Game = {
     items.push({ label: () => L().menu.p2, action: () => this.newSeason(2) });
     items.push({ label: () => L().garageMenu, action: () => this.openGarage(0, 'title') });
     items.push({ label: () => L().editor.menu, action: () => Editor.open(0) });
+    items.push({ label: () => L().trophyMenu, action: () => this.openTrophies() });
     items.push({ label: () => '⚙️ ' + L().menu.options, action: () => { this.optionsMenu(); Sound.sfx.select(); } });
     if (IN_SITE) items.push({ label: () => L().menu.more, action: () => { location.href = '../index.html'; } });
     this.menu = new Menu(items);
@@ -235,13 +238,14 @@ const Game = {
 
   newSeason(players) {
     this.players = players; this.trackIndex = 0; this.raceNum = 0; this.lastOrder = null;
+    this.cup = { tier: 0, race: 0 };
     this.racers = this.makeRacers(players);
     this.startRace();
   },
 
   startRace() {
     const D = DIFFS[this.diff];
-    for (const r of this.racers) if (!r.human) { r.skill = D.skill + Math.min(0.1, this.raceNum * 0.012); r.nitros = 2; }
+    for (const r of this.racers) if (!r.human) { r.skill = D.skill + Math.min(0.15, this.cup.tier * 0.03) + this.cup.race * 0.005; r.nitros = 2; }
     this.applyLooks(this.racers);
     // el que llegó último sale adelante
     const grid = this.lastOrder ? [...this.lastOrder].reverse() : [...this.racers].sort((a, b) => b.human - a.human);
@@ -289,11 +293,13 @@ const Game = {
     if (this.testing) { this.endTest(); return; }
     const rows = race.order.map((tr, i) => {
       const r = tr.r;
-      r.money += PRIZES[i] + tr.earned; r.points += POINTS[i];
+      // cada copa más alta da premios más grandes
+      const prize = Math.round(PRIZES[i] * (1 + this.cup.tier * 0.25));
+      r.money += prize + tr.earned; r.points += POINTS[i];
       if (r.human) r.nitros = tr.nitros;
       const earned = tr.earned;
       tr.earned = 0; // ya está sumado al dinero; así el marcador de fondo no lo cuenta dos veces
-      return { r, place: i + 1, prize: PRIZES[i], earned, pts: POINTS[i] };
+      return { r, place: i + 1, prize, earned, pts: POINTS[i] };
     });
     this.lastOrder = race.order.map(tr => tr.r);
     const D = DIFFS[this.diff];
@@ -304,11 +310,13 @@ const Game = {
     }
     this.raceNum++;
     const best = rows.find(x => x.r.human);
-    this.results = { rows, trackIndex: race.trackIndex, best: best ? best.place : 4 };
+    this.results = { rows, trackIndex: race.trackIndex, best: best ? best.place : 4, cupLabel: this.cupLabel() };
+    this.cup.race++;
     this.trackIndex = (this.trackIndex + 1) % trackList().length;
     this.scene = 'results'; this.lock = 1.2;
     Sound.play('menu');
-    this.menu = new Menu([{ label: () => L().next, action: () => this.openShop(0) }]);
+    const cupDone = this.cup.race >= CUP_RACES;
+    this.menu = new Menu([{ label: () => (cupDone ? L().podiumBtn : L().next), action: () => (cupDone ? this.openPodium() : this.openShop(0)) }]);
     this.save();
   },
 
@@ -339,7 +347,7 @@ const Game = {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         v: 1, players: this.players, diff: this.diff, autoGas: this.autoGas,
-        trackIndex: this.trackIndex, raceNum: this.raceNum, racers: this.racers,
+        trackIndex: this.trackIndex, raceNum: this.raceNum, racers: this.racers, cup: this.cup,
         lastOrder: this.lastOrder ? this.lastOrder.map(r => r.id) : null
       }));
     } catch (e) { /* sin guardado: se juega igual */ }
@@ -348,7 +356,8 @@ const Game = {
   continueSave(s) {
     Object.assign(this, { players: s.players, diff: s.diff, autoGas: s.autoGas, trackIndex: s.trackIndex, raceNum: s.raceNum, racers: s.racers });
     this.lastOrder = s.lastOrder ? s.lastOrder.map(id => this.racers[id]) : null;
-    this.openShop(0);
+    this.cup = s.cup || { tier: 0, race: 0 };
+    if (this.cup.race >= CUP_RACES) this.openPodium(); else this.openShop(0);
   }
 };
 
@@ -374,7 +383,7 @@ function drawTitle(g) {
   if (Game.sub === 'options') {
     Game.menu.draw(g, W / 2 - 190, 186, 380, 46, 10);
   } else {
-    Game.menu.draw(g, W / 2 - 170, 186, 340, 42, 8);
+    Game.menu.draw(g, W / 2 - 170, 184, 340, 38, 7);
     g.fillStyle = 'rgba(0,0,0,0.7)'; roundRect(g, 62, 546, 900, 82, 12); g.fill();
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(14, 700);
     const help = L().help;
@@ -407,7 +416,7 @@ function drawResults(g) {
   const R = Game.results;
   bigText(g, L().results, W / 2, 60, 46, '#ffd23f');
   g.font = font(17, 700); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(trackName(R.trackIndex), W / 2, 100);
+  g.fillText(trackName(R.trackIndex) + (R.cupLabel ? '  ·  ' + R.cupLabel : ''), W / 2, 100);
   const x0 = 120, w = W - 240, rh = 62, colX = [560, 660, 770, 860];
   g.font = font(13, 700); g.fillStyle = '#bbb';
   L().cols.forEach((txt, i) => g.fillText(txt, colX[i], 132));
@@ -487,7 +496,7 @@ function drawShop(g) {
   button(g, x, by, w, 64, M.label(M.items[6]), M.sel === 6);
   g.font = font(13, 700); g.fillStyle = '#bbb'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(L().shopHelp, x + w / 2, 575);
-  g.fillText(L().shopInfo(Game.raceNum + 1, r.points), x + w / 2, 600);
+  g.fillText(L().shopCup(Game.cupLabel(), r.points), x + w / 2, 600);
 }
 
 function drawPause(g) {

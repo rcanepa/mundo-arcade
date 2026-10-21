@@ -42,6 +42,7 @@ const get = name => vm.runInContext(name, sandbox);
 const Game = get('Game'), Race = get('Race'), Editor = get('Editor'), Input = get('Input'), STR = get('STR');
 const TRACK_DEFS = get('TRACK_DEFS'), PAINTS = get('PAINTS'), MODEL_KEYS = get('MODEL_KEYS');
 const update = get('update'), aiInput = get('aiInput'), trackList = get('trackList'), buyModel = get('buyModel');
+const CUP_RACES = get('CUP_RACES'), cupName = get('cupName');
 get('Announcer').event = () => {};
 
 // --- utilidades ---
@@ -112,6 +113,40 @@ check('taller: comprar el tractor descuenta $120 y queda como propio', () => {
   buyModel();
   assert(Game.garage[0].owned.includes('tractor'), 'el tractor no quedó comprado');
   assert(Game.racers[0].money === 380, `quedó $${Game.racers[0].money} en vez de $380`);
+});
+
+check('copas: después de 4 carreras viene la premiación y el trofeo queda guardado', () => {
+  Game.trophies.length = 0;
+  Game.newSeason(1);
+  for (let k = 0; k < 4; k++) {
+    driveRace();
+    assert(Game.scene === 'results', `la carrera ${k + 1} de la copa no terminó`);
+    Game.lock = 0; Game.press('ok');
+    if (k < 3) { assert(Game.scene === 'shop', `tras la carrera ${k + 1} se esperaba la tienda`); Game.openShop(Game.players); }
+  }
+  assert(Game.scene === 'podium', `tras 4 carreras se esperaba la premiación y quedó "${Game.scene}"`);
+  assert(Game.trophies.length === 1, `se esperaba 1 trofeo y hay ${Game.trophies.length}`);
+  assert(JSON.parse(memory['turbobarro4x4.prefs']).trophies.length === 1, 'el trofeo no quedó guardado');
+  const next = Game.podium.next;
+  Game.lock = 0; Game.press('ok');
+  assert(Game.scene === 'shop', 'después de la premiación se esperaba la tienda');
+  assert(Game.cup.tier === next && Game.cup.race === 0, 'la copa siguiente no empezó bien');
+  assert(Game.racers.every(r => r.points === 0), 'los puntos no se reiniciaron para la copa nueva');
+});
+
+check('copas: sin podio se repite la copa, con una medalla de recuerdo', () => {
+  Game.newSeason(1);
+  Game.cup = { tier: 2, race: CUP_RACES };
+  Game.racers.forEach((r, i) => { r.points = r.human ? 0 : 10 + i; });
+  Game.openPodium();
+  assert(Game.podium.best === 4, `el jugador quedó ${Game.podium.best}° en vez de 4°`);
+  assert(Game.podium.next === 2, 'debería repetir la Copa Oro');
+  assert(Game.trophies[Game.trophies.length - 1].place === 4, 'no se guardó la medalla');
+});
+
+check('copas: después del Arcoíris vienen copas Leyenda sin fin', () => {
+  assert(cupName(4).includes('Arcoíris'), cupName(4));
+  assert(cupName(9).includes('5'), cupName(9));
 });
 
 check('editor: al dibujar desde cero los puntos siguen el orden de los clics', () => {

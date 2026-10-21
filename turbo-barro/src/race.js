@@ -304,6 +304,7 @@ class Race {
     if (this.state === 'countdown') {
       const n = Math.ceil(this.count), f = this.count - Math.floor(this.count);
       bigText(g, trackName(this.trackIndex), W / 2, H / 2 - 110, 44, '#fff');
+      if (Game.cup && !Game.testing) bigText(g, Game.cupLabel(), W / 2, H / 2 - 155, 22, '#ffd23f');
       if (n <= 3) bigText(g, String(n), W / 2, H / 2, 110 * (0.8 + f * 0.5), '#ffd23f');
       else bigText(g, L().laps(LAPS), W / 2, H / 2, 40, '#ffd23f');
     } else if (this.goT > 0) {

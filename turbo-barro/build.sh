@@ -12,3 +12,8 @@ OUT="index.html"
   echo "</html>"
 } > "$OUT"
 echo "Listo: $OUT"
+
+# Pruebas automáticas (si hay Node instalado): revisan que el juego siga funcionando
+if command -v node >/dev/null 2>&1; then
+  node tests/smoke.js || { echo "Las pruebas fallaron: revisa los mensajes de arriba"; exit 1; }
+fi

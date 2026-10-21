@@ -17,7 +17,9 @@ Object.assign(STR.es, {
       'Clic en la pista = poner un túnel  ·  clic sobre uno = quitarlo'
     ],
     needPoints: n => `Pon ${n} punto${n === 1 ? '' : 's'} más para cerrar la pista`,
-    confirmClear: 'Clic otra vez en Borrar para empezar de cero', backToEditor: 'Volver al editor', autoBridge: '🌉 ¡Puente automático en el cruce!'
+    confirmClear: 'Clic otra vez en Borrar para empezar de cero', backToEditor: 'Volver al editor', autoBridge: '🌉 ¡Puente automático en el cruce!',
+    drawHint: 'Dibujando: cada clic agrega el siguiente punto  ·  clic en el punto 1 para cerrar la pista',
+    closed: '¡Pista cerrada! Ahora cada clic dobla la pista hacia donde apuntes'
   }
 });
 Object.assign(STR.en, {
@@ -38,7 +40,9 @@ Object.assign(STR.en, {
       'Click the track = add a tunnel  ·  click one = remove it'
     ],
     needPoints: n => `Add ${n} more point${n === 1 ? '' : 's'} to close the track`,
-    confirmClear: 'Click Clear again to start from scratch', backToEditor: 'Back to editor', autoBridge: '🌉 Automatic bridge at the crossing!'
+    confirmClear: 'Click Clear again to start from scratch', backToEditor: 'Back to editor', autoBridge: '🌉 Automatic bridge at the crossing!',
+    drawHint: 'Drawing: each click adds the next point  ·  click point 1 to close the track',
+    closed: 'Track closed! Now each click bends the track toward where you point'
   }
 });
 
@@ -54,7 +58,7 @@ customTracks = (() => {
 const isRange = f => f[0] === 'bumps' || f[0] === 'bridge' || f[0] === 'tunnel';
 
 const Editor = {
-  slot: 0, def: null, track: null, tool: 0, drag: -1, hover: -1, hoverBtn: -1, undoStack: [], clearArm: 0,
+  slot: 0, def: null, track: null, tool: 0, drag: -1, hover: -1, hoverBtn: -1, undoStack: [], clearArm: 0, drawing: false, mouse: null,
 
   // pista inicial: un óvalo para que haya algo con qué jugar
   newDef(slot) {
@@ -72,6 +76,7 @@ const Editor = {
     this.def = saved ? JSON.parse(JSON.stringify(saved)) : this.newDef(slot);
     this.def.slot = slot;
     this.undoStack = []; this.tool = 0; this.drag = -1; this.hover = -1;
+    this.drawing = this.def.pts.length < 3;
     this.ready = false;
     this.rebuild();
     this.ready = true;
@@ -107,11 +112,12 @@ const Editor = {
   pointAt(x, y) { return this.def.pts.findIndex(p => Math.hypot(p[0] - x, p[1] - y) < 14); },
 
   // Insertar un punto parte un tramo en dos: las cosas puestas en la pista se corren para quedar en su lugar
-  insertPoint(x, y) {
+  insertPoint(x, y, append = false) {
     const P = this.def.pts, n = P.length, np = this.clampPt(x, y);
     if (n < 3) { P.push(np); return; }
-    let best = 0, bd = Infinity;
-    for (let i = 0; i < n; i++) {
+    // al dibujar, el punto va al final (antes de volver al punto 1); si no, parte el tramo más cercano
+    let best = n - 1, bd = Infinity;
+    for (let i = 0; i < n && !append; i++) {
       const [ax, ay] = P[i], [bx, by] = P[(i + 1) % n], dx = bx - ax, dy = by - ay;
       const u = clamp(((np[0] - ax) * dx + (np[1] - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
       const d = Math.hypot(ax + dx * u - np[0], ay + dy * u - np[1]);
@@ -164,7 +170,7 @@ const Editor = {
     else if (i === 9) { this.save(); this.open((this.slot + 1) % TRACK_SLOTS); Sound.sfx.select(); }
     else if (i === 10) this.undo();
     else if (i === 11) {
-      if (now < this.clearArm) { this.change(() => { this.def.pts = []; this.def.feats = []; this.def.start = 0.5; }); this.clearArm = 0; this.tool = 0; }
+      if (now < this.clearArm) { this.change(() => { this.def.pts = []; this.def.feats = []; this.def.start = 0.5; }); this.clearArm = 0; this.tool = 0; this.drawing = true; }
       else { this.clearArm = now + 2.5; Game.showToast(L().editor.confirmClear); }
     } else if (i === 12) {
       if (!this.track) { Sound.sfx.nope(); Game.showToast(L().editor.needPoints(4 - this.def.pts.length)); return; }
@@ -174,6 +180,7 @@ const Editor = {
 
   pointer(type, x, y, button) {
     if (type === 'move') {
+      this.mouse = [x, y];
       this.hoverBtn = y < HUD_H ? Math.floor(x / (W / 14)) : -1;
       if (this.drag >= 0) { this.def.pts[this.drag] = this.clampPt(x, y); this.rebuild(); }
       else this.hover = this.tool === 0 ? this.pointAt(x, y) : -1;
@@ -184,9 +191,10 @@ const Editor = {
     if (this.tool === 0) {
       const hit = this.pointAt(x, y);
       if (button === 2) { if (hit >= 0) { this.change(() => this.removePoint(hit)); this.hover = -1; Sound.sfx.select(); } return; }
+      if (hit === 0 && this.drawing && this.def.pts.length >= 4) { this.drawing = false; Game.showToast(L().editor.closed); Sound.sfx.buy(); return; }
       if (hit >= 0) { this.snapshot(); this.drag = hit; return; }
       if (button !== 0 || this.def.pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 30)) return;
-      this.change(() => this.insertPoint(x, y)); Sound.sfx.select();
+      this.change(() => this.insertPoint(x, y, this.drawing)); Sound.sfx.select();
       return;
     }
     if (!this.track) return;
@@ -253,6 +261,16 @@ const Editor = {
       g.font = font(11); g.fillStyle = '#2a1405'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(i + 1, x, y + 1);
     });
     g.globalAlpha = 1;
+    // mientras se dibuja: línea hacia el mouse y el punto 1 brillando para cerrar
+    if (this.drawing && this.tool === 0 && P.length && this.mouse && this.mouse[1] > HUD_H) {
+      const [lx, ly] = P[P.length - 1];
+      g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 3; g.setLineDash([8, 8]);
+      g.beginPath(); g.moveTo(lx, ly); g.lineTo(this.mouse[0], this.mouse[1]); g.stroke(); g.setLineDash([]);
+      if (P.length >= 4) {
+        g.strokeStyle = '#ffd23f'; g.lineWidth = 3;
+        g.beginPath(); g.arc(P[0][0], P[0][1], 16 + Math.sin(Game.t * 6) * 3, 0, Math.PI * 2); g.stroke();
+      }
+    }
     if (P.length < 4) bigText(g, E.needPoints(4 - P.length), W / 2, H / 2, 26, '#fff');
 
     // barra de herramientas
@@ -270,7 +288,7 @@ const Editor = {
     });
     g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(8 * bw - 1, 8, 2, HUD_H - 16);
     // ayuda de la herramienta elegida
-    const hint = E.hints[this.tool];
+    const hint = this.drawing && this.tool === 0 ? E.drawHint : E.hints[this.tool];
     g.font = font(13, 700);
     const hw = g.measureText(hint).width / 2 + 16;
     g.fillStyle = 'rgba(0,0,0,0.6)'; roundRect(g, W / 2 - hw, H - 34, hw * 2, 26, 13); g.fill();

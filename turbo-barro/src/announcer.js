@@ -9,7 +9,9 @@ STR.es.ann = {
   win: n => [`¡${n} gana la carrera!`, `¡Victoria para ${n}!`],
   mud: ['¡Qué barro!', '¡Al barro!', '¡Puro barro!'],
   crash: ['¡Uy, qué golpe!', '¡Cuidado con el muro!'],
-  nitro: ['¡Turbo!', '¡Nitro a fondo!']
+  nitro: ['¡Turbo!', '¡Nitro a fondo!'],
+  tunnel: ['¡Al túnel!', '¡Qué oscuro!'],
+  bridge: ['¡Por el puente!', '¡Arriba del puente!']
 };
 STR.en.ann = {
   go: ['And they\'re off!', 'Here we go!', 'Full throttle!'],
@@ -19,7 +21,9 @@ STR.en.ann = {
   win: n => [`${n} wins the race!`, `Victory for ${n}!`],
   mud: ['Mud everywhere!', 'Into the mud!', 'What a mess!'],
   crash: ['Ouch, what a crash!', 'Watch that wall!'],
-  nitro: ['Turbo boost!', 'Nitro on!']
+  nitro: ['Turbo boost!', 'Nitro on!'],
+  tunnel: ['Into the tunnel!', 'So dark in here!'],
+  bridge: ['Over the bridge!', 'Up on the bridge!']
 };
 
 const Announcer = (() => {

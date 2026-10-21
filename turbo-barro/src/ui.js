@@ -452,6 +452,8 @@ function drawShop(g) {
   g.fillText(L().nextTrack + trackName(Game.trackIndex), 200, 440);
   g.fillStyle = '#000'; g.fillRect(77, 457, 246, 156);
   g.drawImage(nt.canvas, 80, 460, 240, 150);
+  if (nt.over) g.drawImage(nt.over, 80, 460, 240, 150);
+  if (nt.cover) g.drawImage(nt.cover, 80, 460, 240, 150);
 
   SHOP.forEach((s, i) => {
     const y = y0 + i * (h + gap), on = M.sel === i, [name, desc] = L().shopItems[i];

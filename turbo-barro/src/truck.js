@@ -13,6 +13,7 @@ class Truck {
     this.idx = 0; this.prog = 0; this.lapDone = -1; this.finished = false; this.place = 0; this.pos = 0;
     this.earned = 0; this.stuckT = 0; this.revT = 0; this.revSteer = 1; this.lane = 0; this.laneT = 0;
     this.surface = 'dirt'; this.lastSurf = 'dirt'; this.fxT = 0; this.lastBump = -1;
+    this.gh = 0; this.upper = false; // altura del suelo (puentes) y si va por arriba
   }
 
   spawn(t, off, lat) {
@@ -23,6 +24,7 @@ class Truck {
   }
 
   get speed() { return Math.hypot(this.vx, this.vy); }
+  get elev() { return this.gh + this.z; }
 
   stats() {
     const u = this.upg, s = this.skill * this.rb, m = MODELS[this.model] || MODELS.pickup;
@@ -38,7 +40,7 @@ class Truck {
   update(dt, inp, race) {
     const t = race.track, st = this.stats();
     this.surface = 'dirt';
-    if (this.z <= 0) {
+    if (this.z <= 0 && this.gh < 4) {
       for (const pd of t.puddles) {
         if ((this.x - pd.x) ** 2 + (this.y - pd.y) ** 2 < pd.r * pd.r) { this.surface = pd.type; break; }
       }
@@ -86,6 +88,8 @@ class Truck {
     // avance por la pista
     const oldIdx = this.idx;
     this.idx = nearestIdx(t, this.x, this.y, oldIdx);
+    this.gh += (t.height[this.idx] - this.gh) * Math.min(1, dt * 12);
+    this.upper = t.bridgeAt[this.idx] === 1;
     let d = this.idx - oldIdx;
     if (d > t.N / 2) d -= t.N;
     if (d < -t.N / 2) d += t.N;
@@ -139,7 +143,7 @@ class Truck {
   }
 
   draw(g, demo) {
-    const sc = 1 + this.z / 160, y = this.y - this.z * 0.5;
+    const sc = 1 + (this.z + this.gh) / 160, y = this.y - this.z * 0.5;
     g.save(); g.translate(this.x, y); g.rotate(this.a); g.scale(sc, sc);
     drawTruck(g, this);
     g.restore();

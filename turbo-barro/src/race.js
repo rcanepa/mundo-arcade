@@ -69,6 +69,12 @@ class Race {
       tr.update(dt, inp, this);
       this.checkLap(tr);
       this.emitDust(tr, dt);
+      if (tr.human && !this.demo) {
+        const inTunnel = this.track.tunnelAt[tr.idx] === 1;
+        if (inTunnel && !tr.wasTunnel) Announcer.event('tunnel', tr);
+        if (tr.upper && !tr.wasBridge) Announcer.event('bridge', tr);
+        tr.wasTunnel = inTunnel; tr.wasBridge = tr.upper;
+      }
     }
     this.collide();
     this.updatePickups(dt);
@@ -130,7 +136,7 @@ class Race {
     const T = this.trucks, R = 20;
     for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
       const a = T[i], b = T[j];
-      if (Math.abs(a.z - b.z) > 14) continue;
+      if (a.upper !== b.upper || Math.abs(a.elev - b.elev) > 14) continue;
       const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
       if (d2 >= R * R || d2 < 0.01) continue;
       // el más pesado (tractor, monster) empuja más y se mueve menos
@@ -154,7 +160,7 @@ class Race {
     const t = this.track;
     for (let tries = 0; tries < 12; tries++) {
       const i = Math.floor(Math.random() * t.N);
-      if (i < 15 || i > t.N - 15) continue;
+      if (i < 15 || i > t.N - 15 || t.bridgeAt[i] || t.tunnelAt[i]) continue;
       const p = t.pts[i], off = (Math.random() * 2 - 1) * 0.55 * t.hw;
       const x = p.x + p.nx * off, y = p.y + p.ny * off;
       if (t.puddles.some(pd => (pd.x - x) ** 2 + (pd.y - y) ** 2 < (pd.r + 10) ** 2)) continue;
@@ -174,7 +180,7 @@ class Race {
     for (const pk of this.pickups) {
       pk.life -= dt;
       for (const tr of this.trucks) {
-        if (pk.life <= 0 || tr.z > 18 || (tr.x - pk.x) ** 2 + (tr.y - pk.y) ** 2 > 18 * 18) continue;
+        if (pk.life <= 0 || tr.elev > 18 || (tr.x - pk.x) ** 2 + (tr.y - pk.y) ** 2 > 18 * 18) continue;
         pk.life = 0;
         const loud = tr.human && !this.demo;
         if (pk.type === 'nitro') {
@@ -190,6 +196,7 @@ class Race {
   }
 
   fx(type, tr, v) {
+    this.curUp = tr.upper;
     const loud = tr.human && !this.demo;
     if (type === 'jump') { if (loud) { Sound.sfx.jump(); if (v > 190) Announcer.event('jump', tr); } }
     else if (type === 'land') { if (loud) Sound.sfx.land(); this.burst(tr.x, tr.y, 10, this.track.theme.d3, 60); }
@@ -202,6 +209,7 @@ class Race {
   }
 
   emitDust(tr, dt) {
+    this.curUp = tr.upper;
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
       if (tr.surface === 'mud') { this.burst(tr.x, tr.y, 10, '#4a2f17', 70); if (tr.human && !this.demo) Announcer.event('mud', tr); }
@@ -220,14 +228,44 @@ class Race {
   part(x, y, col, size, spd, life, grow) {
     if (this.parts.length > 450) return;
     const a = Math.random() * Math.PI * 2, s = Math.random() * spd;
-    this.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, col, size, life, max: life, grow });
+    this.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, col, size, life, max: life, grow, up: !!this.curUp });
   }
   burst(x, y, n, col, spd, life = 0.5) {
     for (let i = 0; i < n; i++) this.part(x, y, col, 2 + Math.random() * 3, spd, life, false);
   }
   confetti(tr) {
     const cols = ['#ff4d4d', '#ffd23f', '#4dd2ff', '#7dff7a', '#ff7af5'];
+    this.curUp = tr.upper;
     for (let i = 0; i < 60; i++) this.part(tr.x, tr.y, cols[i % 5], 2.5, 220, 1.4, false);
+  }
+  drawParts(g, up) {
+    for (const p of this.parts) {
+      if (p.up !== up) continue;
+      const f = Math.max(0, p.life / p.max), s = p.grow ? p.size * (2 - f) : p.size;
+      g.globalAlpha = f * 0.8; g.fillStyle = p.col; ellipse(g, p.x, p.y, s, s);
+    }
+    g.globalAlpha = 1;
+  }
+  nearBridge(tr) {
+    const t = this.track, r2 = (t.hw + 34) ** 2;
+    return t.bridgeIdx.some(i => (t.pts[i].x - tr.x) ** 2 + (t.pts[i].y - tr.y) ** 2 < r2);
+  }
+  // Dibuja una capa (puente o túnel) con un agujero suave donde están los jugadores tapados
+  drawLayer(g, layer, holes) {
+    if (!holes.length) { g.drawImage(layer, 0, 0, W, H); return; }
+    const tmp = this.tmp || (this.tmp = document.createElement('canvas'));
+    if (tmp.width !== layer.width || tmp.height !== layer.height) { tmp.width = layer.width; tmp.height = layer.height; }
+    const tg = tmp.getContext('2d'), k = layer.width / W;
+    tg.globalCompositeOperation = 'source-over';
+    tg.clearRect(0, 0, tmp.width, tmp.height);
+    tg.drawImage(layer, 0, 0);
+    tg.globalCompositeOperation = 'destination-out';
+    for (const tr of holes) {
+      const x = tr.x * k, y = tr.y * k, r = 54 * k, grd = tg.createRadialGradient(x, y, r * 0.35, x, y, r);
+      grd.addColorStop(0, 'rgba(0,0,0,0.78)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      tg.fillStyle = grd; tg.beginPath(); tg.arc(x, y, r, 0, Math.PI * 2); tg.fill();
+    }
+    g.drawImage(tmp, 0, 0, W, H);
   }
   honk(tr) { Sound.horn(tr.horn, tr.player); this.popup(tr.x, tr.y - 8, '♪♪', tr.color); }
   popup(x, y, text, col) { this.popups.push({ x, y, text, col, life: 1.2 }); }
@@ -243,15 +281,18 @@ class Race {
       if (pk.life < 2 && Math.floor(pk.life * 8) % 2) continue;
       drawPickup(g, pk, Math.sin(now * 4 + pk.bob) * 2);
     }
-    for (const p of this.parts) {
-      const f = Math.max(0, p.life / p.max);
-      g.globalAlpha = f * 0.8; g.fillStyle = p.col;
-      ellipse(g, p.x, p.y, p.grow ? p.size * (2 - f) : p.size, p.grow ? p.size * (2 - f) : p.size);
-    }
-    g.globalAlpha = 1;
-    const list = [...this.trucks].sort((a, b) => (a.z > 0) - (b.z > 0) || a.y - b.y);
-    for (const tr of list) tr.drawShadow(g);
-    for (const tr of list) tr.draw(g, this.demo);
+    // Por capas: lo de abajo, el puente, lo de arriba y los túneles.
+    // El puente y el cerro se aclaran alrededor del jugador que pasa por debajo o por dentro.
+    const byY = (a, b) => (a.z > 0) - (b.z > 0) || a.y - b.y;
+    const lower = this.trucks.filter(tr => !tr.upper).sort(byY), upper = this.trucks.filter(tr => tr.upper).sort(byY);
+    this.drawParts(g, false);
+    for (const tr of lower) tr.drawShadow(g);
+    for (const tr of lower) tr.draw(g, this.demo);
+    if (t.over) this.drawLayer(g, t.over, lower.filter(tr => tr.human && this.nearBridge(tr)));
+    this.drawParts(g, true);
+    for (const tr of upper) tr.drawShadow(g);
+    for (const tr of upper) tr.draw(g, this.demo);
+    if (t.cover) this.drawLayer(g, t.cover, this.trucks.filter(tr => tr.human && t.tunnelAt[tr.idx]));
     for (const p of this.popups) {
       g.globalAlpha = Math.min(1, p.life * 2);
       bigText(g, p.text, p.x, p.y - 14, 16, p.col);

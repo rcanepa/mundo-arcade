@@ -116,24 +116,62 @@ function buildTrack(def) {
     if (f[0] === 'jump') t.jumps.push(idxOf(f[1]));
     else if (f[0] === 'bumps') t.bumps.push({ i0: idxOf(f[1]), i1: idxOf(f[2]) });
     else if (f[0] === 'bridge' || f[0] === 'tunnel') {
-      const i0 = idxOf(f[1]), len = (idxOf(f[2]) - i0 + N) % N, bridge = f[0] === 'bridge';
-      (bridge ? t.bridges : t.tunnels).push({ i0, i1: (i0 + len) % N });
-      // el puente sube con una rampa suave, se mantiene arriba y baja con otra rampa
-      const ramp = Math.max(4, Math.min(16, Math.floor(len / 3)));
-      for (let s = 0; s <= len; s++) {
-        const i = (i0 + s) % N;
-        if (!bridge) { t.tunnelAt[i] = 1; continue; }
-        const e = Math.min(1, Math.min(s, len - s) / ramp);
-        t.bridgeAt[i] = 1; t.height[i] = BRIDGE_H * e * e * (3 - 2 * e);
-      }
+      const i0 = idxOf(f[1]);
+      markRange(t, i0, (idxOf(f[2]) - i0 + N) % N, f[0] === 'bridge');
     } else {
       const p = pts[idxOf(f[1])];
       t.puddles.push({ type: f[0], x: p.x + p.nx * f[2] * t.hw, y: p.y + p.ny * f[2] * t.hw, r: f[3] });
     }
   }
+  if (def.slot !== undefined) addAutoBridges(t);
   t.bridgeIdx = [];
   for (let i = 0; i < N; i += 2) if (t.bridgeAt[i]) t.bridgeIdx.push(i);
   return t;
+}
+
+// Marca un tramo como puente (sube con una rampa suave, sigue arriba y baja) o como túnel
+function markRange(t, i0, len, bridge) {
+  const N = t.N, ramp = Math.max(4, Math.min(16, Math.floor(len / 3)));
+  (bridge ? t.bridges : t.tunnels).push({ i0, i1: (i0 + len) % N });
+  for (let s = 0; s <= len; s++) {
+    const i = (i0 + s) % N;
+    if (!bridge) { t.tunnelAt[i] = 1; continue; }
+    const e = Math.min(1, Math.min(s, len - s) / ramp);
+    t.bridgeAt[i] = 1; t.height[i] = Math.max(t.height[i], BRIDGE_H * e * e * (3 - 2 * e));
+  }
+}
+
+// En las pistas del editor, donde la pista se cruza consigo misma se pone un puente solo.
+// El largo depende del ángulo: un cruce en diagonal necesita un puente más largo.
+function addAutoBridges(t) {
+  const P = t.pts, N = t.N, found = [];
+  const side = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const cross = (a, b, c, d) => side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+  for (let i = 0; i < N; i++) {
+    const a = P[i], b = P[(i + 1) % N];
+    for (let j = i + 20; j <= i + N - 20; j++) {
+      const c = P[j % N];
+      if (Math.abs(c.x - a.x) > 20 || Math.abs(c.y - a.y) > 20) continue;
+      if (cross(a, b, c, P[(j + 1) % N]) && !found.some(f => Math.abs(f[0] - i) < 15 && Math.abs(f[1] - j % N) < 15)) found.push([i, j % N]);
+    }
+  }
+  let made = 0;
+  for (const [i, j] of found) {
+    if (t.bridgeAt[i] || t.bridgeAt[j]) continue; // ya tiene un puente puesto a mano
+    const sin = Math.abs(P[i].tx * P[j].ty - P[i].ty * P[j].tx);
+    const flat = Math.ceil((t.def.width + 24) / Math.max(0.35, sin) / 8) + 2, half = Math.ceil(flat / 2) + 14;
+    // pasa por arriba el segundo paso de la vuelta, salvo que el puente toque la partida, otro puente o un túnel
+    for (const c of [j, i]) {
+      const i0 = (c - half + N) % N;
+      let ok = true;
+      for (let s = 0; s <= half * 2 && ok; s++) {
+        const k = (i0 + s) % N;
+        if (k < 3 || k > N - 10 || t.bridgeAt[k] || t.tunnelAt[k]) ok = false;
+      }
+      if (ok) { markRange(t, i0, half * 2, true); made++; break; }
+    }
+  }
+  t.autoBridges = made;
 }
 
 const wrap = (t, i) => ((i % t.N) + t.N) % t.N;
@@ -256,7 +294,14 @@ function renderTrack(t, k) {
 
 // Puentes: sombra en el suelo, pilares, tablones y barandas
 function renderBridges(t, k) {
-  const [c, g] = makeLayer(k), w = t.def.width, hw = t.hw, on = i => t.bridgeAt[i], N = t.N;
+  const [c, g] = makeLayer(k);
+  drawBridges(g, t);
+  return c;
+}
+
+function drawBridges(g, t) {
+  const w = t.def.width, hw = t.hw, on = i => t.bridgeAt[i], N = t.N;
+  g.save(); g.lineJoin = 'round';
   // la sombra se corre más donde el puente está más alto
   g.lineCap = 'butt';
   g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = w + 14; g.stroke(trackPath(t, 0, on, 1));
@@ -296,12 +341,19 @@ function renderBridges(t, k) {
     const p = t.pts[i];
     for (const side of [-1, 1]) ellipse(g, p.x + p.nx * side * (hw + 4), p.y + p.ny * side * (hw + 4), 2.6, 2.6);
   }
-  return c;
+  g.restore();
 }
 
 // Túneles: un cerro tapa la pista, con bocas de piedra en las puntas
 function renderTunnels(t, k) {
-  const [c, g] = makeLayer(k), w = t.def.width, hw = t.hw, cov = t.theme.cover, rnd = mulberry32(t.def.seed + 99);
+  const [c, g] = makeLayer(k);
+  drawTunnels(g, t);
+  return c;
+}
+
+function drawTunnels(g, t) {
+  const w = t.def.width, hw = t.hw, cov = t.theme.cover, rnd = mulberry32(t.def.seed + 99);
+  g.save(); g.lineJoin = 'round';
   const on = i => t.tunnelAt[i], path = trackPath(t, 0, on);
   // lomos a los costados para que el borde se vea como un cerro y no como una tabla
   const lumps = [];
@@ -343,7 +395,7 @@ function renderTunnels(t, k) {
       g.restore();
     }
   }
-  return c;
+  g.restore();
 }
 
 function drawPuddle(g, pd, rnd) {

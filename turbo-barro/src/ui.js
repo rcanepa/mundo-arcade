@@ -80,7 +80,7 @@ const PREFS = readJSON(PREFS_KEY) || {};
 
 const Game = {
   scene: 'title', sub: 'main', players: 1,
-  diff: PREFS.diff || 0, autoGas: !!PREFS.autoGas, announcer: PREFS.announcer !== false,
+  diff: PREFS.diff || 0, autoGas: !!PREFS.autoGas,
   names: Array.isArray(PREFS.names) ? PREFS.names : ['', ''],
   garage: Array.isArray(PREFS.garage) ? PREFS.garage : [defaultGarage(0), defaultGarage(1)],
   racers: [], trackIndex: 0, raceNum: 0, lastOrder: null,
@@ -131,14 +131,13 @@ const Game = {
   savePrefs() {
     try {
       localStorage.setItem(PREFS_KEY, JSON.stringify({
-        diff: this.diff, autoGas: this.autoGas, announcer: this.announcer, names: this.names, garage: this.garage, trophies: this.trophies
+        diff: this.diff, autoGas: this.autoGas, names: this.names, garage: this.garage, trophies: this.trophies
       }));
     } catch (e) { /* sin guardado: se juega igual */ }
   },
 
   toTitle() {
     this.scene = 'title'; this.race = null; this.testing = null;
-    Announcer.stop();
     const demoRacers = PAINTS.slice(0, 4).map((p, i) => ({
       id: i, name: '', color: p.c, dark: p.d, model: MODEL_KEYS[i], human: false, player: -1, nitros: 2,
       skill: 0.9 + Math.random() * 0.1, upg: { motor: 2, acel: 2, llantas: 2, amort: 2 }
@@ -167,13 +166,11 @@ const Game = {
     const O = () => L().opt, yn = v => (v ? O().yes : O().no);
     const cd = d => { this.diff = (this.diff + d + 3) % 3; this.savePrefs(); };
     const ag = () => { this.autoGas = !this.autoGas; this.savePrefs(); };
-    const an = () => { this.announcer = !this.announcer; this.savePrefs(); if (!this.announcer) Announcer.stop(); };
     const tl = () => this.toggleLang();
     this.menu = new Menu([
       { label: () => O().diff + ': ' + L().diffs[this.diff], action: () => { cd(1); Sound.sfx.select(); }, left: () => cd(-1), right: () => cd(1) },
       { label: () => O().auto + ': ' + yn(this.autoGas), action: () => { ag(); Sound.sfx.select(); }, left: ag, right: ag },
       { label: () => L().menu.lang, action: tl, left: tl, right: tl },
-      { label: () => '📣 ' + O().ann + ': ' + yn(this.announcer), action: () => { an(); Sound.sfx.select(); }, left: an, right: an },
       { label: () => '✏️ ' + O().name1 + ': ' + (this.names[0] || L().you), action: () => this.editName(0) },
       { label: () => '✏️ ' + O().name2 + ': ' + (this.names[1] || L().player(2)), action: () => this.editName(1) },
       { label: () => L().menu.back, action: () => { this.mainMenu(); Sound.sfx.select(); } }
@@ -266,7 +263,6 @@ const Game = {
   },
   endTest() {
     this.testing = null; this.race = null;
-    Announcer.stop();
     Editor.resume();
   },
 

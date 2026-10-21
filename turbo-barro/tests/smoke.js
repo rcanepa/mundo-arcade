@@ -43,7 +43,6 @@ const Game = get('Game'), Race = get('Race'), Editor = get('Editor'), Input = ge
 const TRACK_DEFS = get('TRACK_DEFS'), PAINTS = get('PAINTS'), MODEL_KEYS = get('MODEL_KEYS');
 const update = get('update'), aiInput = get('aiInput'), trackList = get('trackList'), buyModel = get('buyModel');
 const CUP_RACES = get('CUP_RACES'), cupName = get('cupName');
-get('Announcer').event = () => {};
 
 // --- utilidades ---
 let failed = 0;

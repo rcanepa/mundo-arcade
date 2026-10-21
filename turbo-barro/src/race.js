@@ -42,7 +42,7 @@ class Race {
       this.count -= dt;
       const a = Math.ceil(this.count);
       if (a !== b && a >= 1 && a <= 3) Sound.sfx.beep();
-      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); Announcer.event('go'); }
+      if (this.count <= 0) { this.state = 'race'; this.goT = 1.2; Sound.sfx.go(); }
     } else this.time += dt;
     if (this.goT > 0) this.goT -= dt;
 
@@ -61,7 +61,7 @@ class Race {
       }
       if (inp.nitro && !tr.nitroHeld && tr.nitros > 0 && tr.nitroT <= 0) {
         tr.nitros--; tr.nitroT = 1.6;
-        if (tr.human && !this.demo) { Sound.sfx.nitro(); Announcer.event('nitro', tr); }
+        if (tr.human && !this.demo) Sound.sfx.nitro();
       }
       tr.nitroHeld = inp.nitro;
       if (inp.horn && !tr.hornHeld && tr.human && !this.demo) this.honk(tr);
@@ -69,12 +69,6 @@ class Race {
       tr.update(dt, inp, this);
       this.checkLap(tr);
       this.emitDust(tr, dt);
-      if (tr.human && !this.demo) {
-        const inTunnel = this.track.tunnelAt[tr.idx] === 1;
-        if (inTunnel && !tr.wasTunnel) Announcer.event('tunnel', tr);
-        if (tr.upper && !tr.wasBridge) Announcer.event('bridge', tr);
-        tr.wasTunnel = inTunnel; tr.wasBridge = tr.upper;
-      }
     }
     this.collide();
     this.updatePickups(dt);
@@ -86,13 +80,7 @@ class Race {
     if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
     if (this.shake > 0) this.shake -= dt;
 
-    const rank = this.ranking();
-    rank.forEach((tr, i) => { tr.pos = i + 1; });
-    if (!this.demo && this.state === 'race' && rank[0] !== this.leader) {
-      const prev = this.leader;
-      this.leader = rank[0];
-      if (prev && this.time > 4 && !rank[0].finished && (rank[0].human || prev.human)) Announcer.event('lead', rank[0]);
-    }
+    this.ranking().forEach((tr, i) => { tr.pos = i + 1; });
 
     if (!this.demo && this.state === 'race') {
       if (this.endT === 0 && humans.every(h => h.finished)) this.endT = 3;
@@ -113,14 +101,12 @@ class Race {
     const who = Game.players === 2 ? racerName(tr.r) + ': ' : '';
     if (lap >= LAPS) {
       tr.finished = true; this.order.push(tr); tr.place = this.order.length;
-      if (tr.place === 1) Announcer.event('win', tr);
       if (tr.human) {
         this.showBanner(who + (tr.place === 1 ? L().won : L().placed(tr.place)), tr.place === 1 ? '#ffd23f' : '#fff', 3);
         if (tr.place === 1) { Sound.sfx.finish(); this.confetti(tr); } else Sound.sfx.lap();
       }
     } else if (lap >= 1 && tr.human) {
       Sound.sfx.lap();
-      if (lap === LAPS - 1) Announcer.event('lastLap', tr);
       this.showBanner(who + (lap === LAPS - 1 ? L().lastLap : L().lapBanner(lap + 1)), '#fff', 1.4);
     }
   }
@@ -198,11 +184,11 @@ class Race {
   fx(type, tr, v) {
     this.curUp = tr.upper;
     const loud = tr.human && !this.demo;
-    if (type === 'jump') { if (loud) { Sound.sfx.jump(); if (v > 190) Announcer.event('jump', tr); } }
+    if (type === 'jump') { if (loud) Sound.sfx.jump(); }
     else if (type === 'land') { if (loud) Sound.sfx.land(); this.burst(tr.x, tr.y, 10, this.track.theme.d3, 60); }
     else if (type === 'bump') { if (loud && Math.random() < 0.5) Sound.sfx.bump(); }
     else if (type === 'wall') {
-      if (loud) { Sound.sfx.crash(); if (v > 150) Announcer.event('crash', tr); }
+      if (loud) Sound.sfx.crash();
       this.burst(tr.x, tr.y, 6, '#fff3a0', 90, 0.3);
       if (loud && v > 120) this.shake = 0.15;
     }
@@ -212,7 +198,7 @@ class Race {
     this.curUp = tr.upper;
     if (tr.surface !== tr.lastSurf) {
       if (tr.surface === 'water') { this.burst(tr.x, tr.y, 14, '#bfe0ff', 90); if (tr.human && !this.demo) Sound.sfx.splash(); }
-      if (tr.surface === 'mud') { this.burst(tr.x, tr.y, 10, '#4a2f17', 70); if (tr.human && !this.demo) Announcer.event('mud', tr); }
+      if (tr.surface === 'mud') this.burst(tr.x, tr.y, 10, '#4a2f17', 70);
       tr.lastSurf = tr.surface;
     }
     if (tr.z > 0) return;

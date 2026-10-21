@@ -19,6 +19,7 @@ const BUILD = {
   path: { cost: 4, tile: 'path', icon: '🪨' },
   grass: { cost: 2, tile: 'grass', icon: '🌿' },
   pond: { cost: 30, tile: 'water', icon: '💧', tier: 1 },
+  drip: { cost: 14, icon: '🪢' },
   shade: { cost: 18, over: 1, icon: '🕸️', tier: 1 },
   bench: { cost: 70, beauty: 4, walk: 1, icon: '🪑' },
   lantern: { cost: 45, beauty: 3, icon: '🏮' },
@@ -33,37 +34,57 @@ const BUILD = {
   greenhouse: { cost: 1500, w: 4, h: 3, beauty: 18, icon: '🏡', tier: 2 },
   statue: { cost: 380, beauty: 18, icon: '🗿', tier: 3 }
 };
-const BUILD_ORDER = ['bed', 'path', 'grass', 'pond', 'shade', 'bench', 'lantern', 'gnome', 'birdbath', 'sprinkler', 'beehive', 'arch', 'pergola', 'sundial', 'fountain', 'greenhouse', 'statue'];
+const BUILD_ORDER = ['bed', 'path', 'grass', 'drip', 'pond', 'shade', 'bench', 'lantern', 'gnome', 'birdbath', 'sprinkler', 'beehive', 'arch', 'pergola', 'sundial', 'fountain', 'greenhouse', 'statue'];
 
 // Cuidados del suelo y de las plantas
 const CARE = {
   compost: { cost: 8, icon: '🍂' }, sand: { cost: 6, icon: '⏳' }, peat: { cost: 10, icon: '🟤' },
   sulfur: { cost: 8, icon: '🟡' }, lime: { cost: 6, icon: '⚪' }, fert: { cost: 5, icon: '🧪' },
-  mulch: { cost: 4, icon: '🪵' }, weed: { cost: 0, icon: '🌾' }, spray: { cost: 6, icon: '🫧' }, cloth: { cost: 12, icon: '🧣' }
+  mulch: { cost: 4, icon: '🪵' }, weed: { cost: 0, icon: '🌾' }, prune: { cost: 0, icon: '✂️' }, spray: { cost: 6, icon: '🫧' }, cloth: { cost: 12, icon: '🧣' },
+  tray: { cost: 6, icon: '🪨' }   // bandeja con piedras y agua bajo una maceta: más humedad para plantas tropicales
 };
-const CARE_ORDER = ['compost', 'sand', 'peat', 'sulfur', 'lime', 'fert', 'mulch', 'weed', 'spray', 'cloth'];
+const CARE_ORDER = ['compost', 'sand', 'peat', 'sulfur', 'lime', 'fert', 'mulch', 'weed', 'prune', 'spray', 'cloth'];
 
 const idx = (x, y) => y * GW + x;
 const inside = (x, y) => x >= 0 && y >= 0 && x < GW && y < GH;
-const tileAt = (x, y) => (inside(x, y) ? G.tiles[idx(x, y)] : null);
+// Las macetas de las ventanas de la casa viven "fuera" del terreno: x = 100, 101, …
+const POT_X = 100, POTS_PER_WINDOW = 3, POT_PRICE = 8;
+const tileAt = (x, y) => (inside(x, y) ? G.tiles[idx(x, y)] : x >= POT_X && G.pots ? G.pots[x - POT_X] || null : null);
+// Hacia dónde mira cada ventana (en el mundo, el norte está hacia x e y negativos)
+const WINDOWS = [
+  { id: 'N', n: [-Math.SQRT1_2, -Math.SQRT1_2] }, { id: 'E', n: [Math.SQRT1_2, -Math.SQRT1_2] },
+  { id: 'S', n: [Math.SQRT1_2, Math.SQRT1_2] }, { id: 'W', n: [-Math.SQRT1_2, Math.SQRT1_2] }
+];
+// Una maceta con sustrato: franco, suelto, rico y casi neutro. Las dos primeras ya están en la casa.
+function makePot(i) {
+  return {
+    x: POT_X + i, y: 0, t: 'pot', pot: 1, win: WINDOWS[Math.floor(i / POTS_PER_WINDOW)].id, own: i % POTS_PER_WINDOW === 0 && i < 6 ? 1 : 0, parcel: 0,
+    drain: 0.62, ph: 6.5, ph0: 6.5, org: 0.6, fert: 0.55, moist: 0.5, mulch: 0, weeds: 0, obj: 0, over: 0, gh: 0, shade: 0, drip: 0, tray: 0,
+    plant: null, seedBank: null, sun: 0, sunAm: 0, sunPm: 0, prof: new Float32Array(48), mSum: 0, mN: 0, mMin: 0.5, mMax: 0.5, wet: 0, v: 0.5
+  };
+}
 const isHouse = (x, y) => x >= HOUSE.x0 && x < HOUSE.x1 && y >= HOUSE.y0 && y < HOUSE.y1;
 const parcelOf = (x, y) => PARCELS.findIndex(p => x >= p.x0 && x < p.x1 && y >= p.y0 && y < p.y1);
 
 const G = {};
 
 // ---------- Crear un jardín nuevo ----------
-function newGarden(seed) {
+function newGarden(seed, climate) {
+  setClimate(climate);
   Object.assign(G, {
-    v: 1, seed: seed || (Math.random() * 1e9) | 0, day: 0, hour: 7.5, speed: 1,
+    v: 1, seed: seed || (Math.random() * 1e9) | 0, climate: climate && CLIMATES[climate] ? climate : 'santiago', day: 0, hour: 7.5, speed: 1,
     money: START_MONEY, rep: 0, repMax: 0, open: false, price: 3,
     tiles: [], plants: [], structs: [], nextId: 1, owned: [true, false, false, false, false],
     w: null, wNext: null, beauty: 0, fair: 3,
     stats: { visitors: 0, income: 0, harvests: 0, planted: 0, watered: 0, lens: 0, beds: 0, bloomed: 0 },
     today: { visitors: 0, income: 0, sat: 0, satN: 0, harvest: 0 },
-    herb: {}, goal: 0, orders: [], orderDay: 6, log: [], hose: 0
+    herb: {}, goal: 0, goalsDone: {}, orders: [], orderDay: 6, log: [], hose: 0,
+    // la abuela dejó semillas en el cobertizo
+    inv: { calendula: 4, lettuce: 4, tagetes: 3, sunflower: 2, basil: 2 }
   });
   const r = rng(G.seed);
   for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) G.tiles.push(makeTile(x, y, r));
+  G.pots = WINDOWS.flatMap((_, w) => Array.from({ length: POTS_PER_WINDOW }, (_, k) => makePot(w * POTS_PER_WINDOW + k)));
   // camino de la puerta de la casa a la reja
   for (let y = HOUSE.y1; y < GH; y++) setType(GATE_X, y, 'path');
   for (let x = HOUSE.x1; x < HOUSE.x1 + 2; x++) setType(x, 3, 'path');
@@ -72,6 +93,8 @@ function newGarden(seed) {
   for (let x = 4; x < 9; x++) setType(x, 7, 'bed');
   setType(6, 8, 'bed'); setType(7, 8, 'bed');
   for (let x = 7; x < 10; x++) for (let y = 1; y < 3; y++) setType(x, y, 'bed');
+  // la abuela abonaba sus canteros: tierra franca, rica y casi neutra
+  for (const t of G.tiles) if (t.t === 'bed' && t.parcel === 0) Object.assign(t, { drain: 0.52, ph: 6.8, ph0: 6.9, org: 0.5, fert: 0.55 });
   addPlant('walnut', 7, 13, { g: 1, hp: 95, old: 1 });
   addPlant('rose', 1, 6, { g: 1, hp: 55, old: 1 });          // la rosa de la abuela, a la sombra de la casa
   addPlant('rosemary', 2, 8, { g: 1, hp: 90 });
@@ -98,13 +121,14 @@ function newGarden(seed) {
 function makeTile(x, y, r) {
   const p = parcelOf(x, y), soil = PARCELS[p].soil;
   const n1 = noise2(x / 4, y / 4, G.seed), n2 = noise2(x / 3 + 9, y / 3, G.seed + 7);
-  let drain = 0.48 + (n1 - 0.5) * 0.3, ph = 7.4 + (n2 - 0.5) * 0.7, org = 0.25 + n2 * 0.15, fert = 0.35 + n1 * 0.15;
+  let drain = 0.48 + CL.drain + (n1 - 0.5) * 0.3, ph = CL.ph + (n2 - 0.5) * 0.7, org = 0.25 + n2 * 0.15 + (CL.ph < 6.2 ? 0.15 : 0), fert = 0.35 + n1 * 0.15;
   if (soil === 'home') {
     // junto a la casa la tierra quedó compactada (arcillosa); bajo el nogal es más rica
     const dh = Math.hypot(x - 3, y - 2.5);
     if (dh < 7) drain -= (7 - dh) * 0.035;
     const dw = Math.hypot(x - 7, y - 13);
     if (dw < 4) { org += 0.2; ph -= 0.35; fert += 0.1; }
+    ph = clamp(ph, 4.8, 8.6);
   } else if (soil === 'sandy') { drain = 0.78 + n1 * 0.12; ph = 7.0 + (n2 - 0.5) * 0.4; org = 0.12; fert = 0.2; }
   else if (soil === 'wet') { drain = 0.16 + n1 * 0.16; ph = 6.6 + (n2 - 0.5) * 0.4; org = 0.55; fert = 0.5; }
   else if (soil === 'rocky') { drain = 0.9 + n1 * 0.1; ph = 7.9 + (n2 - 0.5) * 0.4; org = 0.06; fert = 0.12; }
@@ -113,7 +137,7 @@ function makeTile(x, y, r) {
   return {
     x, y, t: isHouse(x, y) ? 'house' : 'grass', own: p === 0, parcel: p,
     drain, ph, ph0: ph, org: clamp(org, 0, 1), fert: clamp(fert, 0, 1), moist: 0.45 + n1 * 0.15,
-    mulch: 0, weeds: 0, obj: 0, over: 0, gh: 0, shade: 0, plant: null, seedBank: null,
+    mulch: 0, weeds: 0, obj: 0, over: 0, gh: 0, shade: 0, drip: 0, plant: null, seedBank: null,
     sun: 0, sunAm: 0, sunPm: 0, prof: new Float32Array(48), mSum: 0, mN: 0, mMin: 1, mMax: 0, wet: 0, v: hash2(x, y, 3)
   };
 }
@@ -135,7 +159,7 @@ function addPlant(id, x, y, o = {}) {
     id: G.nextId++, sp: id, x, y, g: o.g !== undefined ? o.g : sp.start, hp: o.hp || 80, age: o.old ? 400 : 0,
     bloom: 0, fruit: 0, dorm: false, dead: false, chill: 0, pests: 0, imm: 0, cloth: 0, cut: 0, cutYear: -1,
     seed: (Math.random() * 1e9) | 0, fac: null, cond: 1, wilt: 0, burn: 0, yellow: 0, frostHit: 0, done: 0,
-    bloomedYear: -1, rich: 0, old: o.old || 0, pal: 0
+    bloomedYear: -1, rich: 0, old: o.old || 0, pal: 0, prunedDay: o.old ? -999 : G.day, propYear: -1
   };
   if (sp.art.fl && sp.art.fl.pal) p.pal = (p.seed >>> 3) % sp.art.fl.pal.length;
   // las plantas de vivero que necesitan frío ya lo pasaron si se compran a fines del invierno
@@ -263,6 +287,17 @@ function computeLight() {
       if (k < 26) t.sunAm += v / 2; else t.sunPm += v / 2;
     }
   }
+  // por una ventana entra sol cuando el sol está de frente; el alero tapa el sol muy alto y el vidrio deja pasar el 85 %
+  for (const t of G.pots) {
+    t.prof.fill(0); t.sun = t.sunAm = t.sunPm = 0;
+    const n = WINDOWS.find(w => w.id === t.win).n;
+    for (const [k, s] of sm) {
+      const facing = (s.x * n[0] + s.y * n[1]) / (Math.hypot(s.x, s.y) || 1), elev = Math.asin(clamp(s.z, -1, 1));
+      const v = facing > 0.25 ? 0.85 * clamp(1 - (elev - 0.9) / 0.5, 0, 1) : 0;
+      t.prof[k] = v; t.sun += v / 2;
+      if (k < 26) t.sunAm += v / 2; else t.sunPm += v / 2;
+    }
+  }
   G.lightDirty = false;
 }
 
@@ -271,10 +306,12 @@ const rangeScore = (v, r, soft, floor = 0.1) =>
   v < r[0] ? clamp(1 - (r[0] - v) / soft, floor, 1) : v > r[1] ? clamp(1 - (v - r[1]) / soft, floor, 1) : 1;
 
 function ambientHum(t, w) {
+  if (t.pot) return 0.4 + (t.tray ? 0.2 : 0);   // dentro de la casa el aire es seco; la bandeja con agua ayuda
   if (t.gh) return 0.82;
   return clamp(w.hum + (nearWater(t.x, t.y) ? 0.15 : 0) + (t.sun < 3 ? 0.08 : 0), 0, 1);
 }
 function nightMin(t, p, w) {
+  if (t.pot) return 16;                          // dentro de la casa nunca hiela
   let tmin = w.tmin;
   if (t.gh) tmin = Math.max(tmin + 8, 14);   // invernadero con calefacción
   if (p && p.cloth) tmin += 3;
@@ -283,6 +320,7 @@ function nightMin(t, p, w) {
   return tmin;
 }
 function dayMax(t, w) {
+  if (t.pot) return 23 + t.sun * 0.4;
   let tmax = w.tmax - (1 - clamp(t.sun / 10, 0, 1)) * 3;
   if (t.gh) tmax += 4;
   return tmax;
@@ -327,7 +365,7 @@ function evaluate(sp, t, p, w, plan) {
   const tmax = dayMax(t, w);
   f.heat = !dorm && tmax > sp.maxT ? clamp(1 - (tmax - sp.maxT) * 0.09, 0.3, 1) : 1;
   f.coldRisk = nightMin(t, p, w) < sp.minT - (dorm ? 4 : 0) ? 1 : 0;
-  f.cold = plan ? (sp.minT > 8 && !t.gh ? 0.7 : 1) : 1;
+  f.cold = plan ? (sp.minT > 8 && !t.gh && !t.pot ? 0.7 : 1) : 1;
   const amb = ambientHum(t, w);
   f.hum = sp.hum && amb < sp.hum && !dorm ? clamp(1 - (sp.hum - amb) * 1.8, 0.3, 1) : 1;
   // Vecinos y bichos
@@ -335,14 +373,24 @@ function evaluate(sp, t, p, w, plan) {
   if (sp.juglone) for (const q of G.plants) if (spOf(q).walnut && !q.dead && Math.hypot(q.x - t.x, q.y - t.y) < 4) f.jug = 0.55;
   f.pest = p && p.pests ? 0.65 : 1;
   f.weed = t.weeds > 0.5 ? 0.88 : 1;
+  // plantas compañeras a un paso de distancia
+  f.comp = 1; f.compNames = [];
+  const comp = COMPANIONS[sp.id];
+  if (comp) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const n = (dx || dy) && tileAt(t.x + dx, t.y + dy), q = n && n.plant;
+    if (q && !q.dead && comp[q.sp] && !f.compNames.includes(q.sp)) { f.comp += comp[q.sp]; f.compNames.push(q.sp); }
+  }
+  f.comp = Math.min(f.comp, 1.12);
   f.cond = Math.pow(f.light, 1) * Math.pow(f.water, 1.05) * Math.pow(f.drain, 0.65) * Math.pow(f.ph, 0.65) *
     Math.pow(f.feed, 0.4) * Math.pow(f.heat, 0.75) * Math.pow(f.hum, 0.75) * f.jug * f.pest * f.weed * f.cold;
+  f.cond = Math.min(1, f.cond * f.comp);
   return f;
 }
 
 // ¿Puede ir esta especie en esta casilla?
 function canPlantHere(sp, t) {
   if (!t || !t.own || t.plant || t.obj) return false;
+  if (t.pot) return sp.water !== 'aquatic' && !isTree(sp) && (sp.art.h || 0) <= 1.4;
   if (sp.water === 'aquatic') return t.t === 'water';
   if (t.t === 'water') return sp.water === 'bog';
   return t.t === 'bed';
@@ -372,8 +420,21 @@ function hourTick(h) {
     if (t.moist < t.mMin) t.mMin = t.moist;
     if (t.moist > t.mMax) t.mMax = t.moist;
   }
+  // macetas: se secan más lento que el jardín y drenan por abajo
+  for (const t of G.pots) {
+    if (!t.own) continue;
+    const sunF = h > 5 && h < 21 ? t.prof[k] : 0;
+    t.moist -= 0.006 * (0.6 + 0.6 * sunF) * (0.8 + 0.4 * t.drain) + (t.plant && !t.plant.dead && !t.plant.dorm ? 0.003 * clamp(plantSize(t.plant).w, 0.1, 1.2) : 0);
+    const fc = 0.5 + 0.35 * (1 - t.drain) + 0.12 * t.org;
+    if (t.moist > fc) t.moist -= (t.moist - fc) * (0.2 + 0.5 * t.drain);
+    t.moist = clamp(t.moist, 0, 1);
+    t.mSum += t.moist; t.mN++;
+    if (t.moist < t.mMin) t.mMin = t.moist;
+    if (t.moist > t.mMax) t.mMax = t.moist;
+  }
   if (h === 6) frostCheck();
   if (h === 7) runSprinklers();
+  if (h === 6 || h === 15) runDrip();
 }
 
 function waterTile(t, amount = 0.4) {
@@ -384,16 +445,47 @@ function waterTile(t, amount = 0.4) {
   return true;
 }
 
+// El agua de la llave se paga (en Chile es cara): el riego automático suma a la cuenta del día
+const WATER_PRICE = 0.25;
+function payWater(tiles) {
+  const cost = tiles * WATER_PRICE;
+  G.money -= cost; G.today.water = (G.today.water || 0) + cost;
+}
+
 function runSprinklers() {
   if (G.w.rain > 0) return;
   for (const s of G.structs) {
     if (s.k !== 'sprinkler') continue;
+    let n = 0;
     for (let y = s.y - 2; y <= s.y + 2; y++) for (let x = s.x - 2; x <= s.x + 2; x++) {
       const t = tileAt(x, y);
-      if (t && t.own && Math.hypot(x - s.x, y - s.y) <= 2.3) waterTile(t, 0.32);
+      if (t && t.own && Math.hypot(x - s.x, y - s.y) <= 2.3 && waterTile(t, 0.32)) n++;
     }
+    payWater(n);
     if (typeof fxSprinkle === 'function') fxSprinkle(s);
   }
+}
+
+// Riego por goteo con temporizador: a las 6:00 y a las 15:00 repone el agua justo hasta lo que pide cada planta
+const waterTarget = sp => (WATER[sp.water][0] + Math.min(1, WATER[sp.water][1])) / 2;
+function runDrip() {
+  let n = 0;
+  for (const t of G.tiles) {
+    const p = t.plant;
+    if (!t.drip || !t.own || !p || p.dead || p.dorm) continue;
+    const target = waterTarget(spOf(p));
+    if (t.moist < target - 0.04) { waterTile(t, target - t.moist); t.wet = 0; n++; }
+  }
+  if (n) payWater(n);
+}
+
+// Regar de una vez todas las plantas que tienen sed (cuesta el agua y el trabajo)
+const THIRSTY_PRICE = 0.5;
+function thirstyPlants() {
+  return G.plants.filter(p => {
+    const t = tileAt(p.x, p.y), sp = spOf(p);
+    return !p.dead && t.own && sp.water !== 'aquatic' && t.t !== 'water' && t.moist < WATER[sp.water][0] + 0.08;
+  });
 }
 
 // La helada llega al amanecer: daña a las plantas que no la resisten
@@ -455,14 +547,14 @@ function dayTick() {
     if (!p.dorm && p.g < 1) {
       const gT = clamp((tmean - sp.baseT) / 7, 0, 1);
       const before = p.g;
-      p.g = Math.min(1, p.g + (1 / sp.grow) * gT * (0.35 + 0.65 * p.hp / 100) * (0.7 + 0.3 * f.feed));
+      p.g = Math.min(1, p.g + (1 / sp.grow) * gT * (0.35 + 0.65 * p.hp / 100) * (0.7 + 0.3 * f.feed) * f.comp);
       if (isTree(sp) || (sp.art.h || 0) > 1.3) if (Math.floor(before * 10) !== Math.floor(p.g * 10)) G.lightDirty = true;
     }
     // florecer
     const chillOK = !sp.chill || p.chill >= sp.chill;
     const canBloom = sp.bloom && p.g >= 0.92 && inWindow(yd, sp.bloom) && !p.dorm && p.hp > 30 && chillOK && !p.done &&
       p.cutYear !== year && !p.cut;
-    const target = canBloom ? clamp(p.hp / 100 * (p.rich ? 0.35 : 1) * (0.4 + 0.6 * f.light), 0, 1) : 0;
+    const target = canBloom ? clamp(p.hp / 100 * (p.rich ? 0.35 : 1) * (0.4 + 0.6 * f.light) * (needsPrune(p) ? 0.65 : 1), 0, 1) : 0;
     p.bloom = clamp(p.bloom + clamp(target - p.bloom, -0.4, 0.45), 0, 1);
     if (p.bloom > 0.5 && p.hp > 50 && t.own) registerHerb(p);
     if (p.bloom > 0.5) p.bloomedYear = year;
@@ -487,6 +579,11 @@ function dayTick() {
     t.ph += (t.ph0 - t.ph) * 0.012;
     t.fert += 0.004 * t.org - 0.005 * t.drain * (w.rain > 0 ? 2 : 1);
     if (t.plant && !t.plant.dead && !t.plant.dorm) t.fert -= (spOf(t.plant).feed + 0.5) * 0.008 * clamp(plantSize(t.plant).w, 0.2, 1.2);
+    // el poroto fija nitrógeno del aire y abona su casilla y las vecinas
+    if (t.plant && spOf(t.plant).nfix && !t.plant.dead && t.plant.g > 0.4) {
+      t.fert += 0.012;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = tileAt(t.x + dx, t.y + dy); if (n && n.own) n.fert = clamp(n.fert + 0.006, 0, 1); }
+    }
     t.org = Math.max(0.03, t.org - 0.0012 + (t.mulch ? 0.002 : 0));
     t.fert = clamp(t.fert, 0, 1);
     if (t.mulch) t.mulch--;
@@ -499,6 +596,13 @@ function dayTick() {
       addPlant(t.seedBank, t.x, t.y, { g: 0.05, hp: 80 }); t.seedBank = null;
     }
     t.wet = 0;
+    resetMoistStats(t);
+  }
+  for (const t of G.pots) {
+    if (!t.own) continue;
+    t.ph += (t.ph0 - t.ph) * 0.012;
+    if (t.plant && !t.plant.dead && !t.plant.dorm) t.fert -= (spOf(t.plant).feed + 0.5) * 0.008;
+    t.fert = clamp(t.fert + 0.002 * t.org, 0, 1);
     resetMoistStats(t);
   }
 }
@@ -514,7 +618,7 @@ function pestTick(p, sp, t, w, yd) {
   }
   if (!sp.pests || p.imm || p.dorm || p.g < 0.4) return;
   const s = seasonOf(yd);
-  let chance = 0.03 * (1.4 - p.hp / 100) * (s === 0 || s === 1 ? 1.3 : 0.6);
+  let chance = 0.03 * (1.4 - p.hp / 100) * (s === 0 || s === 1 ? 1.3 : 0.6) * (p.fac && p.fac.comp > 1 ? 0.7 : 1);
   if (sp.pests === 'slug') chance *= t.moist > 0.6 || w.rain ? 2.2 : 0.5;
   if (sp.pests === 'mildew') chance *= (ambientHum(t, w) > 0.6 ? 1.6 : 0.6) * (t.sun < 5 ? 1.8 : 0.8);
   chance *= Math.max(0.25, 1 - 0.3 * insectaries(p.x, p.y));
@@ -538,6 +642,19 @@ function killPlant(p, why) {
   if (typeof dropSprite === 'function') dropSprite(p);
   if (why !== 'cycle' && why !== 'frost') news('died', { sp: p.sp });
   G.lightDirty = true;
+}
+
+// ---------- Poda y multiplicación ----------
+// Una planta que debía podarse y no se podó el invierno pasado florece menos (ramas viejas)
+const needsPrune = p => !!spOf(p).prune && p.age > 52 && G.day - (p.prunedDay === undefined ? -999 : p.prunedDay) > 44;
+const canPrune = p => !!spOf(p).prune && !p.dead && inWindow(G.day % DAYS_YEAR, spOf(p).prune) && G.day - (p.prunedDay === undefined ? -999 : p.prunedDay) > 20;
+// Cuántas semillas, esquejes o divisiones se pueden sacar ahora (0 = no se puede)
+function propCount(p) {
+  const sp = spOf(p), how = propMethod(sp), year = Math.floor(G.day / DAYS_YEAR);
+  if (!how || p.dead || p.propYear === year || !tileAt(p.x, p.y).own) return 0;
+  if (how === 'seed') return (p.bloomedYear === year && p.bloom < 0.4) || p.done ? 3 : 0;
+  if (how === 'cutting') return p.g >= 1 && !p.dorm && p.hp > 60 ? 2 : 0;
+  return p.g >= 1 && p.age >= 26 && p.hp > 50 ? 2 : 0;
 }
 
 // ---------- Herbario ----------
@@ -568,7 +685,8 @@ function updateBeauty() {
   let b = 0;
   const kinds = new Set();
   for (const p of G.plants) {
-    if (!tileAt(p.x, p.y).own) continue;
+    const t = tileAt(p.x, p.y);
+    if (!t.own || t.pot) continue;
     const pb = plantBeauty(p, yd);
     p.beauty = pb; b += pb;
     if (!p.dead && p.hp > 50 && p.g > 0.5) kinds.add(p.sp);
@@ -612,18 +730,20 @@ const unlockedTier = () => Math.floor(G.repMax + 1e-6);
 
 // ---------- Guardar ----------
 const SAVE_KEY = 'jardinvivo.save';
-const TILE_KEYS = ['t', 'own', 'drain', 'ph', 'ph0', 'org', 'fert', 'moist', 'mulch', 'weeds', 'obj', 'over', 'gh', 'shade', 'seedBank'];
-const PLANT_KEYS = ['id', 'sp', 'x', 'y', 'g', 'hp', 'age', 'bloom', 'fruit', 'dorm', 'dead', 'chill', 'pests', 'imm', 'cloth', 'cut',
+const POT_KEYS = ['own', 'drain', 'ph', 'ph0', 'org', 'fert', 'moist', 'tray'];
+const TILE_KEYS = ['t', 'own', 'drain', 'ph', 'ph0', 'org', 'fert', 'moist', 'mulch', 'weeds', 'obj', 'over', 'gh', 'shade', 'seedBank', 'drip'];
+const PLANT_KEYS = ['id', 'sp', 'x', 'y', 'g', 'hp', 'age', 'bloom', 'fruit', 'dorm', 'dead', 'chill', 'pests', 'imm', 'cloth', 'cut', 'prunedDay', 'propYear',
   'cutYear', 'seed', 'done', 'bloomedYear', 'old', 'pal'];
 
 function serialize() {
   const r3 = v => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v);
   return JSON.stringify({
-    v: 1, seed: G.seed, day: G.day, hour: G.hour, money: G.money, rep: G.rep, repMax: G.repMax, open: G.open, price: G.price,
-    nextId: G.nextId, owned: G.owned, w: G.w, wNext: G.wNext, stats: G.stats, today: G.today, herb: G.herb, goal: G.goal,
-    orders: G.orders, orderDay: G.orderDay, speed: G.speed, hose: G.hose || 0,
+    v: 1, seed: G.seed, climate: G.climate, day: G.day, hour: G.hour, money: G.money, rep: G.rep, repMax: G.repMax, open: G.open, price: G.price,
+    nextId: G.nextId, owned: G.owned, w: G.w, wNext: G.wNext, stats: G.stats, today: G.today, herb: G.herb, goal: G.goal, goalsDone: G.goalsDone,
+    orders: G.orders, orderDay: G.orderDay, speed: G.speed, hose: G.hose || 0, inv: G.inv,
     tiles: G.tiles.map(t => TILE_KEYS.map(k => r3(t[k]))),
     plants: G.plants.map(p => PLANT_KEYS.map(k => r3(p[k]))),
+    pots: G.pots.map(t => POT_KEYS.map(k => r3(t[k]))),
     structs: G.structs
   });
 }
@@ -631,17 +751,20 @@ function serialize() {
 function deserialize(json) {
   const d = JSON.parse(json);
   if (!d || d.v !== 1) return false;
-  newGarden(d.seed);
+  newGarden(d.seed, d.climate || 'santiago');
   Object.assign(G, {
     day: d.day, hour: d.hour, money: d.money, rep: d.rep, repMax: d.repMax, open: d.open, price: d.price, nextId: d.nextId,
     owned: d.owned, w: d.w, wNext: d.wNext, stats: d.stats, today: d.today, herb: d.herb, goal: d.goal, orders: d.orders || [],
-    orderDay: d.orderDay || 0, speed: d.speed || 1, structs: d.structs, plants: [], hose: d.hose || 0
+    orderDay: d.orderDay || 0, speed: d.speed || 1, structs: d.structs, plants: [], hose: d.hose || 0, inv: d.inv || {},
+    // las partidas antiguas guardaban solo cuántos objetivos iban en orden
+    goalsDone: d.goalsDone || Object.fromEntries(OLD_GOAL_ORDER.slice(0, d.goal || 0).map(id => [id, 1]))
   });
   d.tiles.forEach((row, i) => { const t = G.tiles[i]; TILE_KEYS.forEach((k, j) => { t[k] = row[j]; }); t.plant = null; });
+  if (d.pots) d.pots.forEach((row, i) => { const t = G.pots[i]; if (t) POT_KEYS.forEach((k, j) => { t[k] = row[j]; }); });
   for (const row of d.plants) {
     const p = { fac: null, cond: 1, wilt: 0, burn: 0, yellow: 0, frostHit: 0, rich: 0 };
     PLANT_KEYS.forEach((k, j) => { p[k] = row[j]; });
-    if (!SP[p.sp]) continue;
+    if (!SP[p.sp] || !tileAt(p.x, p.y)) continue;
     G.plants.push(p);
     tileAt(p.x, p.y).plant = p;
   }

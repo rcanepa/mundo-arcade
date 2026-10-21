@@ -13,6 +13,8 @@ const HOSE_COST = 150;
 function buildUI() {
   $('#toolbar').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
   $('#lensbar').addEventListener('click', e => {
+    const r = e.target.closest('[data-rot]');
+    if (r) { rotateView(+r.dataset.rot); Sound.sfx.click(); renderLensBar(); return; }
     const b = e.target.closest('[data-lens]'); if (!b) return;
     R.lens = R.lens === b.dataset.lens ? null : b.dataset.lens;
     if (R.lens) G.stats.lens = (G.stats.lens || 0) + 1;
@@ -22,7 +24,7 @@ function buildUI() {
   $('#menubtns').addEventListener('click', e => {
     const b = e.target.closest('[data-open]'); if (!b) return;
     Sound.sfx.click();
-    ({ herb: () => openHerbarium(), goals: openGoals, visits: openVisits, menu: openMenu, help: openHelp })[b.dataset.open]();
+    ({ house: () => openHouse(), herb: () => openHerbarium(), goals: openGoals, visits: openVisits, menu: openMenu, help: openHelp })[b.dataset.open]();
   });
   $('#tray').addEventListener('click', trayClick);
   $('#inspector').addEventListener('click', inspectorClick);
@@ -35,7 +37,7 @@ function renderAll() {
   document.documentElement.lang = LANG;
   document.title = L().title;
   $('#brand').textContent = L().title;
-  $('#menubtns').innerHTML = [['herb', '📖'], ['goals', '🎯'], ['visits', '🎟️'], ['help', '❔'], ['menu', '⚙️']]
+  $('#menubtns').innerHTML = [['house', '🏠'], ['herb', '📖'], ['goals', '🎯'], ['visits', '🎟️'], ['help', '❔'], ['menu', '⚙️']]
     .map(([k, i]) => `<button class="iconbtn ${k}" data-open="${k}" title="${esc(L().menuBtn[k])}"><span>${i}</span><small>${esc(L().menuBtn[k])}</small></button>`).join('');
   renderToolbar(); renderTray(); renderLensBar(); renderHUD(true); renderGoalCard(); layoutHUD();
   if (UI.sel) refreshInspector(true);
@@ -66,6 +68,7 @@ function renderHUD(force) {
   $('#stars').title = L().repTip(G.rep.toFixed(1));
   $('#beauty').innerHTML = `<span class="ic">🌸</span>${Math.round(G.beauty)}`;
   $('#beauty').title = L().beautyTip;
+  $('#date').title = L().climates[G.climate || 'santiago'][0];
   $('#date').innerHTML = `<span class="ic">${['🌷', '☀️', '🍂', '❄️'][s]}</span>${esc(L().seasons[s])} · ${L().dayN(yd % DAYS_SEASON + 1)}${year > 1 ? ' · ' + L().yearN(year) : ''}`;
   $('#time').textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   $('#weather').innerHTML = `${WEATHER_ICON[G.w.kind]} ${temp}°`;
@@ -107,7 +110,7 @@ function renderTray() {
   if (tool === 'plant') {
     const sp = UI.seed && SP[UI.seed];
     html += `<div class="trayrow">`;
-    if (sp) html += `<div class="seedsel"><img src="${speciesThumb(sp, 54)}" alt=""><div><b>${esc(spName(sp))}</b><small>${money(sp.price)} · ${esc(sunLabel(sp))}</small></div></div>`;
+    if (sp) html += `<div class="seedsel"><img src="${speciesThumb(sp, 54)}" alt=""><div><b>${esc(spName(sp))}</b><small>${G.inv[sp.id] ? '🌰 ' + esc(T.invHave(G.inv[sp.id])) : money(sp.price)} · ${esc(sunLabel(sp))}</small></div></div>`;
     html += `<button class="btn" data-act="catalog">📒 ${esc(T.catalog)}</button>`;
     for (const id of UI.recent.filter(i => i !== UI.seed).slice(0, 5)) html += `<button class="mini" data-seed="${id}" title="${esc(spName(SP[id]))}"><img src="${speciesThumb(SP[id], 34)}" alt=""></button>`;
     html += `</div><p class="hint">${esc(T.plantHint)}</p>`;
@@ -121,8 +124,10 @@ function renderTray() {
       return `<button class="item ${UI.build === k ? 'on' : ''} ${lock ? 'locked' : ''}" data-build="${k}" title="${esc(T.build[k][1])}"><span>${b.icon}</span><b>${esc(T.build[k][0])}</b><small>${lock ? '★' + b.tier : money(b.cost)}</small></button>`;
     }).join('') + `</div><p class="hint">${esc(T.build[UI.build][1])}</p>`;
   } else if (tool === 'water') {
-    html += `<p class="hint">${esc(G.hose ? T.hoseOn : T.canOn)}</p>`;
+    const thirsty = thirstyPlants().length;
+    html += `<div class="trayrow"><button class="btn ${thirsty ? 'good' : ''}" data-act="thirsty">💧 ${esc(T.thirstyBtn(thirsty))}${thirsty ? ' · ' + money(thirsty * THIRSTY_PRICE) : ''}</button>`;
     if (!G.hose) html += `<button class="btn" data-act="hose">🚿 ${esc(T.buyHose)} · ${money(HOSE_COST)}</button>`;
+    html += `</div><p class="hint">${esc(G.hose ? T.hoseOn : T.canOn)} ${esc(T.dripTip)}</p>`;
   } else if (tool === 'land') {
     html += `<div class="trayrow wrap">` + PARCELS.map((p, i) => i === 0 ? '' : `<div class="parcel ${G.owned[i] ? 'owned' : ''}"><b>${esc(T.parcels[i])}</b><small>${esc(T.parcelDesc[i])}</small>
       ${G.owned[i] ? `<em>✓ ${esc(T.yours)}</em>` : `<button class="btn small" data-buy="${i}">${esc(T.buy)} ${money(p.price)}</button>`}</div>`).join('') + `</div>`;
@@ -136,6 +141,7 @@ function trayClick(e) {
   const b = e.target.closest('button');
   if (!b) return;
   if (b.dataset.act === 'catalog') openCatalog();
+  if (b.dataset.act === 'thirsty') { actWaterThirsty(); renderTray(); if (UI.sel) refreshInspector(true); }
   if (b.dataset.act === 'hose') { if (spend(HOSE_COST)) { G.hose = 1; R.area = 1; Sound.sfx.fanfare(); renderTray(); } }
   if (b.dataset.seed) selectSeed(b.dataset.seed);
   if (b.dataset.care) { UI.care = b.dataset.care; Sound.sfx.click(); renderTray(); }
@@ -154,7 +160,10 @@ function selectSeed(id) {
 }
 
 function renderLensBar() {
+  // la brújula apunta al norte del jardín según cómo esté girada la vista
+  const [nx, ny] = PV(-1, -1), deg = Math.round(Math.atan2(nx, -ny) * 180 / Math.PI);
   $('#lensbar').innerHTML = `<small>${esc(L().lensTitle)}</small>` + LENSES.map(([k, i]) => `<button data-lens="${k}" class="${R.lens === k ? 'on' : ''}" title="${esc(L().lens[k][1])}"><span>${i}</span><em>${esc(L().lens[k][0])}</em></button>`).join('') +
+    `<div class="rotrow"><button data-rot="-1" title="${esc(L().rotL)}">⟲</button><span class="compass" style="--r:${deg}deg" title="${esc(L().north)}"><i></i><b>N</b></span><button data-rot="1" title="${esc(L().rotR)}">⟳</button></div>` +
     (R.lens ? `<div class="legend">${legendHTML(R.lens)}</div>` : '');
 }
 function legendHTML(k) {
@@ -205,13 +214,15 @@ function needRows(sp, t, p) {
   }
   rows.push({ i: '🌿', n: T.need.feed, v: pct(t.fert), ideal: T.feedK[sp.feed], s: sp.carniv && f.feed < 1 ? 0 : f.rich ? 1 : st(f.feed),
     h: sp.carniv && f.feed < 1 ? T.hint.carniv : f.rich ? T.hint.rich : f.feed < 0.95 ? T.hint.hungry : '' });
-  rows.push({ i: '🌡️', n: T.need.temp, v: `${deg(w.tmin)} / ${deg(w.tmax)}`, ideal: T.hardy(deg(sp.minT)) + (sp.maxT < 34 ? ' · ' + T.heatMax(deg(sp.maxT)) : ''),
+  rows.push({ i: '🌡️', n: T.need.temp, v: t.pot || t.gh ? `${deg(nightMin(t, p, w))} / ${deg(dayMax(t, w))}` : `${deg(w.tmin)} / ${deg(w.tmax)}`, ideal: T.hardy(deg(sp.minT)) + (sp.maxT < 34 ? ' · ' + T.heatMax(deg(sp.maxT)) : ''),
     s: f.coldRisk || (G.wNext && nightMin(t, p, G.wNext) < sp.minT) ? 0 : f.heat < 0.95 ? 1 : 2,
-    h: (G.wNext && nightMin(t, p, G.wNext) < sp.minT - (p && p.dorm ? 4 : 0)) ? T.hint.frostSoon(deg(G.wNext.tmin)) : f.heat < 0.95 ? T.hint.heat : sp.minT > 5 && !t.gh ? T.hint.tender : '' });
+    h: (G.wNext && nightMin(t, p, G.wNext) < sp.minT - (p && p.dorm ? 4 : 0)) ? T.hint.frostSoon(deg(G.wNext.tmin)) : f.heat < 0.95 ? T.hint.heat : sp.minT > 5 && !t.gh && !t.pot ? T.hint.tender : '' });
   if (sp.hum) rows.push({ i: '💨', n: T.need.hum, v: pct(ambientHum(t, w)), ideal: '≥ ' + pct(sp.hum), s: st(f.hum), h: f.hum < 0.95 ? T.hint.hum : '' });
   if (f.jug < 1) rows.push({ i: '🌰', n: T.need.special, v: T.juglone, ideal: '', s: 0, h: T.hint.juglone });
   if (p && p.pests) rows.push({ i: '🐛', n: T.need.special, v: T.pestK[spOf(p).pests || 'aphid'], ideal: '', s: 0, h: T.hint.pests });
   if (t.weeds > 0.5) rows.push({ i: '🌾', n: T.need.special, v: T.weedsV, ideal: '', s: 1, h: T.hint.weeds });
+  if (f.compNames && f.compNames.length) rows.push({ i: '🤝', n: T.need.comp, v: f.compNames.map(id => spName(SP[id])).join(', '), ideal: '+' + Math.round((f.comp - 1) * 100) + '%', s: 2, h: '' });
+  if (p && needsPrune(p)) rows.push({ i: '✂️', n: T.need.prune, v: T.pruneLate, ideal: '', s: 1, h: T.hint.prune(L().seasonRange(sp.prune)) });
   if (sp.chill && p && !p.dorm) rows.push({ i: '🧊', n: T.need.chill, v: `${Math.round(p.chill)} h`, ideal: `${sp.chill} h`, s: p.chill >= sp.chill ? 2 : 1, h: p.chill >= sp.chill ? '' : T.hint.chill(sp.chill) });
   return rows;
 }
@@ -240,14 +251,16 @@ function closeInspector() { UI.sel = null; R.sel = null; $('#inspector').hidden 
 function refreshInspector(force) {
   const el = $('#inspector');
   if (!UI.sel) { el.hidden = true; return; }
-  const t = tileAt(UI.sel.x, UI.sel.y), p = t.plant, T = L();
   if (!force && el.matches(':hover')) return;
   el.hidden = false;
-  let html = `<button class="close" data-act="close" aria-label="${esc(T.close)}">✕</button>`;
-  if (!t.own) {
-    html += `<h3>${esc(T.parcels[t.parcel])}</h3><p class="muted">${esc(T.parcelDesc[t.parcel])}</p><button class="btn" data-buy="${t.parcel}">${esc(T.buy)} ${money(PARCELS[t.parcel].price)}</button>`;
-    el.innerHTML = html; return;
-  }
+  el.innerHTML = `<button class="close" data-act="close" aria-label="${esc(L().close)}">✕</button>` + inspectorHTML(tileAt(UI.sel.x, UI.sel.y));
+}
+// Lo que se sabe de una casilla (o maceta) y su planta, con los botones para cuidarla
+function inspectorHTML(t) {
+  const p = t.plant, T = L();
+  let html = '';
+  if (!t.own && t.pot) return `<h3>${esc(T.potEmpty)}</h3><p class="muted">${esc(T.potLocked)}</p><button class="btn good" data-act="buypot">🪴 ${esc(T.potBuy(money(POT_PRICE)))}</button>`;
+  if (!t.own) return `<h3>${esc(T.parcels[t.parcel])}</h3><p class="muted">${esc(T.parcelDesc[t.parcel])}</p><button class="btn" data-buy="${t.parcel}">${esc(T.buy)} ${money(PARCELS[t.parcel].price)}</button>`;
   if (p) {
     const sp = spOf(p), hp = Math.round(p.hp);
     html += `<div class="phead"><img src="${speciesThumb(sp, 76)}" alt=""><div><h3>${esc(spName(sp))}</h3><i>${esc(sp.la)}</i>
@@ -258,15 +271,21 @@ function refreshInspector(force) {
     const acts = [];
     if (canHarvest(p)) acts.push(`<button class="btn good" data-act="harvest">🧺 ${esc(T.harvestBtn(money(Math.round(sp.harv[1] * (0.5 + p.hp / 200)))))}</button>`);
     if (!p.dead) acts.push(`<button class="btn" data-act="water">💧 ${esc(T.tools.water[0])}</button>`);
+    if (t.drip) html += `<p class="muted small">🪢 ${esc(T.dripOn(pct(waterTarget(sp))))}</p>`;
     if (p.pests) acts.push(`<button class="btn" data-act="spray">🫧 ${esc(T.care.spray[0])} · ${money(CARE.spray.cost)}</button>`);
-    if (!p.dead) acts.push(`<button class="btn" data-act="cloth">🧣 ${esc(p.cloth ? T.clothOff : T.clothOn)}</button>`);
-    if (!p.dead) acts.push(`<button class="btn" data-act="move">🪴 ${esc(T.tools.move[0])}</button>`);
+    if (!p.dead && !t.pot) acts.push(`<button class="btn" data-act="cloth">🧣 ${esc(p.cloth ? T.clothOff : T.clothOn)}</button>`);
+    if (canPrune(p)) acts.push(`<button class="btn" data-act="prune">✂️ ${esc(T.care.prune[0])}</button>`);
+    const np = propCount(p);
+    if (np) acts.push(`<button class="btn good" data-act="prop">🌱 ${esc(T.propBtn[propMethod(sp)](np))}</button>`);
+    if (!p.dead) acts.push(`<button class="btn" data-act="move">🪴 ${esc(t.pot ? T.moveOut : T.tools.move[0])}</button>`);
     acts.push(`<button class="btn danger" data-act="remove">⛏️ ${esc(p.dead ? T.compostIt : T.pullOut)}</button>`);
     html += `<div class="acts">${acts.join('')}</div>`;
+    if (t.pot) html += potCareHTML(t);
     html += `<p class="desc">${esc(spDesc(sp))}</p><p class="muted small">🌸 ${esc(T.blooms)}: ${esc(bloomText(sp))}${sp.harv ? ' · 🧺 ' + esc(T.harvK[sp.harv[0]]) : ''}</p>`;
   } else {
-    const st = structAt(t.x, t.y);
-    html += `<h3>${st ? esc(T.build[st.k][0]) : esc(T.tileK[t.t] || T.tileK.grass)}</h3>`;
+    const st = t.pot ? null : structAt(t.x, t.y);
+    html += `<h3>${t.pot ? esc(T.potEmpty) : st ? esc(T.build[st.k][0]) : esc(T.tileK[t.t] || T.tileK.grass)}</h3>`;
+    if (t.pot && UI.moving && canPlantHere(spOf(UI.moving), t)) html += `<button class="btn good" data-act="bring">🪴 ${esc(T.bringHere(spName(spOf(UI.moving))))}</button>`;
     if (t.t !== 'house' && t.t !== 'water') {
       html += `<div class="soilgrid">
         <div><span>☀️</span><b>${t.sun.toFixed(1)} h</b><small>${esc(T.sunToday)}</small></div>
@@ -280,29 +299,98 @@ function refreshInspector(force) {
       if (t.weeds > 0.3) html += `<p class="muted small">🌾 ${esc(T.hint.weeds)}</p>`;
     }
     if (t.t === 'grass') html += `<p class="muted small">${esc(T.grassTip)}</p>`;
-    if (t.t === 'bed' || t.t === 'water') {
+    if (t.pot) html += potCareHTML(t) + `<button class="btn" data-act="potcat">📒 ${esc(T.potCat)}</button>`;
+    if (t.t === 'bed' || t.t === 'water' || t.pot) {
       const tier = unlockedTier();
       const best = SPECIES.filter(s => s.tier <= tier && canPlantHere(s, t)).map(s => [s, suitability(s, t)]).sort((a, b) => b[1] - a[1]).slice(0, 8);
       if (best.length) html += `<h4>${esc(T.bestHere)}</h4><div class="bestgrid">` + best.map(([s, v]) => `<button data-seed="${s.id}" title="${esc(spName(s))} · ${Math.round(v * 100)}%"><img src="${speciesThumb(s, 44)}" alt=""><small>${esc(spName(s))}</small><i class="${v > 0.8 ? 'ok' : v > 0.55 ? 'mid' : 'bad'}">${Math.round(v * 100)}%</i></button>`).join('') + `</div>`;
     }
   }
-  el.innerHTML = html;
+  return html;
 }
-function inspectorClick(e) {
-  const b = e.target.closest('button');
-  if (!b || !UI.sel) return;
-  const t = tileAt(UI.sel.x, UI.sel.y), p = t.plant;
-  const a = b.dataset.act;
-  if (a === 'close') { closeInspector(); return; }
-  if (b.dataset.seed) { selectSeed(b.dataset.seed); actPlant(b.dataset.seed, t.x, t.y); refreshInspector(true); return; }
+// Cuidados que se aplican a mano a una maceta (las herramientas del jardín no llegan adentro)
+function potCareHTML(t) {
+  const T = L();
+  return `<div class="acts small">` + ['fert', 'compost', 'sand', 'peat', 'lime', 'tray'].filter(k => k !== 'tray' || !t.tray)
+    .map(k => `<button class="btn small" data-act="care" data-k="${k}" title="${esc(T.care[k][1])}">${CARE[k].icon} ${esc(T.care[k][0])} · ${money(CARE[k].cost)}</button>`).join('') + `</div>`;
+}
+function inspectorAction(b, t) {
+  const p = t.plant, a = b.dataset.act;
+  if (b.dataset.seed) { selectSeed(b.dataset.seed); actPlant(b.dataset.seed, t.x, t.y); return; }
   if (b.dataset.buy) { confirmBuy(+b.dataset.buy); return; }
   if (a === 'harvest' && p) actHarvest(p);
   if (a === 'water') actWater(t.x, t.y, 0);
   if (a === 'spray') actCare('spray', t.x, t.y);
   if (a === 'cloth') actCare('cloth', t.x, t.y);
-  if (a === 'move' && p) { setTool('move'); UI.moving = p; renderTray(); }
+  if (a === 'care') actCare(b.dataset.k, t.x, t.y);
+  if (a === 'move' && p) { if (UI.modal) closeModal(); setTool('move'); UI.moving = p; R.sel = p; renderTray(); }
+  if (a === 'prune' && p) actPrune(p);
+  if (a === 'prop' && p) actPropagate(p);
+  if (a === 'buypot') actBuyPot(t.x - POT_X);
+  if (a === 'bring' && UI.moving && actTransplant(UI.moving, t.x, t.y)) { UI.moving = null; renderTray(); }
+  if (a === 'potcat') { UI.potTarget = t.x - POT_X; UI.sel = { x: t.x, y: 0 }; UI.catSun = 'here'; closeModal(); openCatalog(); }
   if (a === 'remove') { if (actRemove(t.x, t.y)) { if (!t.plant) R.sel = null; } }
+}
+function inspectorClick(e) {
+  const b = e.target.closest('button');
+  if (!b || !UI.sel) return;
+  if (b.dataset.act === 'close') { closeInspector(); return; }
+  inspectorAction(b, tileAt(UI.sel.x, UI.sel.y));
   refreshInspector(true);
+}
+
+// ---------- Guía de los primeros pasos: señala qué tocar ----------
+function coachTarget() {
+  if (UI.title || G.goal >= 6 || !GOALS[G.goal]) return null;
+  const C = L().coach, open = !!UI.modal, ui = (sel, text) => ({ sel, text });
+  switch (GOALS[G.goal].id) {
+    case 'lens': return open ? null : ui('[data-lens="light"]', C.lens);
+    case 'plant':
+      if (open) return null;
+      if (UI.tool !== 'plant' || !UI.seed) return ui('[data-tool="plant"]', C.plantTool);
+      return { tiles: G.tiles.filter(t => t.own && t.t === 'bed' && !t.plant), text: C.plantBed };
+    case 'water':
+      if (open) return null;
+      if (UI.tool !== 'water') return ui('[data-tool="water"]', C.waterTool);
+      return { tiles: G.plants.filter(p => !p.dead && tileAt(p.x, p.y).own && tileAt(p.x, p.y).t !== 'water').map(p => tileAt(p.x, p.y)), text: C.waterBed };
+    case 'open':
+      if (UI.modal && UI.modal.kind === 'visits') return ui('[data-toggle="1"]', C.openBtn);
+      return open ? null : ui('[data-open="visits"]', C.visits);
+    case 'rose': {
+      const rose = G.plants.find(p => p.sp === 'rose' && !p.dead);
+      if (open || !rose) return null;
+      if (UI.tool !== 'move') return ui('[data-tool="move"]', C.moveTool);
+      if (!UI.moving) return { tiles: [tileAt(rose.x, rose.y)], text: C.rose };
+      return { tiles: G.tiles.filter(t => t.own && t.t === 'bed' && !t.plant && t.sun >= 6), text: C.roseDest };
+    }
+    case 'beds':
+      if (open) return null;
+      if (UI.tool !== 'build') return ui('[data-tool="build"]', C.buildTool);
+      if (UI.build !== 'bed') return ui('[data-build="bed"]', C.bedItem);
+      return null;
+  }
+  return null;
+}
+function updateCoach() {
+  const el = $('#coach'), c = coachTarget();
+  R.coach = c && c.tiles ? c.tiles.slice(0, 60) : null;
+  let x, y, w, h;
+  if (c && c.sel) {
+    const t = document.querySelector(c.sel), r = t && t.getBoundingClientRect();
+    if (r && r.width) { x = r.left; y = r.top; w = r.width; h = r.height; }
+  } else if (c && c.tiles && c.tiles.length) {
+    const [sx, sy] = P(c.tiles[0].x + 0.5, c.tiles[0].y + 0.5);
+    x = sx - 22; y = sy - 14; w = 44; h = 28;
+  }
+  if (x === undefined) { el.hidden = true; return; }
+  el.hidden = false;
+  const ring = el.firstElementChild, tag = el.lastElementChild;
+  ring.style.cssText = c.sel ? `left:${x - 6}px;top:${y - 6}px;width:${w + 12}px;height:${h + 12}px` : 'display:none';
+  if (tag.textContent !== c.text) tag.textContent = c.text;
+  const below = y < VH * 0.5, tw = Math.min(260, VW - 24);
+  const lx = clamp(x + w / 2 - tw / 2, 12, VW - tw - 12);
+  tag.className = 'tag ' + (below ? 'down' : 'up');
+  tag.style.cssText = `left:${lx}px;width:${tw}px;${below ? `top:${y + h + 14}px` : `bottom:${VH - y + 14}px`};--ax:${clamp(x + w / 2 - lx, 16, tw - 16)}px`;
 }
 
 // ---------- Avisos ----------
@@ -328,7 +416,9 @@ function news(kind, d) {
   const msg = {
     frost: () => [T.news.frost(d.n, deg(d.t)), 'bad'], cycle: () => [T.news.cycle(name), 'info'], died: () => [T.news.died(name), 'bad'],
     pest: () => [T.news.pest(name, T.pestK[d.k]), 'bad'], herb: () => [T.news.herb(name), 'good'], star: () => [T.news.star(d.n), 'goal'],
-    order: () => [T.news.order(d.n, name), 'info'], orderLost: () => [T.news.orderLost, 'bad'], forecast: () => [d.text, d.type]
+    order: () => [T.news.order(d.n, name), 'info'], orderLost: () => [T.news.orderLost, 'bad'], forecast: () => [d.text, d.type],
+    contestSoon: () => [T.news.contestSoon, 'info'], contestJury: () => [T.news.contestJury, 'info'],
+    contestWin: () => [T.news.contestWin(d.place, d.prize), 'goal'], contestNone: () => [T.news.contestNone, 'info']
   }[kind];
   if (!msg) return;
   const [m, type] = msg();
@@ -361,14 +451,14 @@ function openCatalog() {
     if (UI.catSun === 'part') list = list.filter(s => s.sun[0] < 6 && s.sun[1] > 4);
     if (UI.catSun === 'shade') list = list.filter(s => s.sun[1] <= 6 && s.sun[0] <= 2);
     if (forTile && UI.catSun === 'here') list = list.filter(s => canPlantHere(s, selT)).sort((a, b) => suitability(b, selT) - suitability(a, selT));
-    else list.sort((a, b) => (a.tier > tier) - (b.tier > tier) || a.tier - b.tier || a.price - b.price);
+    else list.sort((a, b) => !!G.inv[b.id] - !!G.inv[a.id] || (a.tier > tier) - (b.tier > tier) || a.tier - b.tier || a.price - b.price);
     const cats = ['all', ...CATS].map(c => `<button data-cat="${c}" class="${UI.catCat === c ? 'on' : ''}">${esc(T.cats[c])}</button>`).join('');
     const suns = ['all', 'sun', 'part', 'shade', ...(forTile ? ['here'] : [])].map(c => `<button data-sun="${c}" class="${UI.catSun === c ? 'on' : ''}">${esc(T.sunF[c])}</button>`).join('');
     const cards = list.map(s => {
-      const lock = s.tier > tier, v = forTile && canPlantHere(s, selT) ? suitability(s, selT) : null;
+      const lock = s.tier > tier && !G.inv[s.id], v = forTile && canPlantHere(s, selT) ? suitability(s, selT) : null;
       return `<button class="card ${lock ? 'locked' : ''} ${UI.seed === s.id ? 'on' : ''}" data-pick="${s.id}">
         <img src="${speciesThumb(s, 84)}" alt="" loading="lazy">
-        ${lock ? `<span class="lock">🔒 ★${s.tier}</span>` : `<span class="price">${money(s.price)}</span>`}
+        ${G.inv[s.id] ? `<span class="price inv">🌰 ×${G.inv[s.id]}</span>` : lock ? `<span class="lock">🔒 ★${s.tier}</span>` : `<span class="price">${money(s.price)}</span>`}
         ${v !== null && !lock ? `<span class="fit ${v > 0.8 ? 'ok' : v > 0.55 ? 'mid' : 'bad'}">${Math.round(v * 100)}%</span>` : ''}
         <b>${esc(spName(s))}</b><i>${esc(s.la)}</i>
         <span class="reqs" title="${esc(sunLabel(s))} · ${esc(waterLabel(s))} · ${esc(drainLabel(s))}">${sunIcon(s)} ${waterIcon(s)} ${s.ph[1] <= 6.2 ? '🍋' : s.ph[0] >= 6.8 ? '🐚' : ''}${s.minT > 5 ? '🏡' : ''}</span>
@@ -383,8 +473,12 @@ function openCatalog() {
     if (b.dataset.sun) { UI.catSun = b.dataset.sun; UI.modal.render(); }
     if (b.dataset.pick) {
       const s = SP[b.dataset.pick];
-      if (s.tier > unlockedTier()) { toast(L().locked(s.tier), 'bad'); Sound.sfx.nope(); return; }
+      if (s.tier > unlockedTier() && !G.inv[s.id]) { toast(L().locked(s.tier), 'bad'); Sound.sfx.nope(); return; }
       selectSeed(s.id); closeModal();
+      if (UI.potTarget !== undefined && UI.potTarget !== null) {
+        const i = UI.potTarget; UI.potTarget = null; UI.sel = null; UI.catSun = 'all';
+        actPlant(s.id, POT_X + i, 0); UI.potSel = i; openHouse(); return;
+      }
       toast(L().seedChosen(spName(s)), 'info');
     }
   };
@@ -434,6 +528,9 @@ function herbDetail(s) {
       ${row('🌸', T.blooms, bloomText(s))}
       ${s.dorm ? row('💤', T.restsL, L().seasonRange(s.dorm)) : ''}
       ${row('⏳', T.growL, T.weeks(s.grow))}
+      ${row('🌱', T.propL, T.propHow[propMethod(s) || 'none'])}
+      ${s.prune ? row('✂️', T.pruneL, L().seasonRange(s.prune)) : ''}
+      ${COMPANIONS[s.id] && Object.keys(COMPANIONS[s.id]).length ? row('🤝', T.compL, Object.keys(COMPANIONS[s.id]).map(id => spName(SP[id])).join(', ')) : ''}
       ${s.harv ? row('🧺', T.harvL, T.harvK[s.harv[0]] + ' · ' + money(s.harv[1])) : ''}
       <div class="acts"><button class="btn" data-back="1">← ${esc(T.back)}</button>${s.tier <= unlockedTier() ? `<button class="btn good" data-plantit="${s.id}">🌱 ${esc(T.plantThis)} · ${money(s.price)}</button>` : `<span class="muted">🔒 ★${s.tier}</span>`}</div>
     </div></div>`;
@@ -443,10 +540,11 @@ function herbDetail(s) {
 function openGoals() {
   openModal(() => {
     const T = L();
+    let shown = 0;
     const goals = GOALS.map((gl, i) => {
-      const [t, d] = T.goals[gl.id], cls = i < G.goal ? 'done' : i === G.goal ? 'now' : 'next';
-      if (i > G.goal + 2) return '';
-      return `<div class="goal ${cls}"><span>${i < G.goal ? '✓' : i === G.goal ? '🎯' : '·'}</span><div><b>${esc(t)}</b><small>${esc(d)}</small></div><em>${money(gl.reward)}</em></div>`;
+      const [t, d] = T.goals[gl.id], done = goalDone(gl), cls = done ? 'done' : i === G.goal ? 'now' : 'next';
+      if (!done && ++shown > 4) return '';
+      return `<div class="goal ${cls}"><span>${done ? '✓' : i === G.goal ? '🎯' : '·'}</span><div><b>${esc(t)}</b><small>${esc(d)}</small></div><em>${money(gl.reward)}</em></div>`;
     }).join('');
     G.orders.forEach(o => { o.seen = true; });
     const orders = G.orders.length ? G.orders.map(o => `<div class="goal order"><img src="${speciesThumb(SP[o.sp], 40)}" alt=""><div><b>${esc(T.clients[o.client])}</b><small>${esc(T.orderTxt(o.n, spName(SP[o.sp]), o.until - G.day))}</small>
@@ -470,6 +568,7 @@ function openVisits() {
       <h4>⭐ ${esc(T.reputation)}</h4><div class="bigstars">${starsHTML(G.rep)}</div><p class="muted small">${esc(T.repExplain(Math.round(G.beauty), next))}</p>
       </section><section><h4>💬 ${esc(T.comments)}</h4><ul class="comments">${log || `<li class="muted">${esc(T.noComments)}</li>`}</ul></section></div>`;
   });
+  UI.modal.kind = 'visits';
   UI.modal.onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.toggle) { G.open = !G.open; if (G.open && G.hour >= OPEN_H && G.hour < CLOSE_H && !VIS.queue.length) planVisitors(); Sound.sfx.click(); }
@@ -486,6 +585,8 @@ function openMenu() {
       <button class="btn" data-m="music">${Sound.musicOn() ? '🎵' : '🔇'} ${esc(T.musicBtn(Sound.musicOn()))}</button>
       <button class="btn" data-m="sfx">${Sound.sfxOn() ? '🔔' : '🔕'} ${esc(T.sfxBtn(Sound.sfxOn()))}</button>
       <button class="btn" data-m="save">💾 ${esc(T.saveBtn)}</button>
+      <button class="btn" data-m="export">📤 ${esc(T.exportBtn)}</button>
+      <button class="btn" data-m="import">📥 ${esc(T.importBtn)}</button>
       <button class="btn" data-m="title">🏡 ${esc(T.toTitle)}</button>
       ${IN_SITE ? `<a class="btn" href="../index.html">← ${esc(T.moreGames)}</a>` : ''}
     </div>`;
@@ -497,6 +598,8 @@ function openMenu() {
     if (m === 'music') Sound.toggleMusic();
     if (m === 'sfx') Sound.toggleSfx();
     if (m === 'save') { saveGame(); toast(L().saved, 'good'); }
+    if (m === 'export') exportGame();
+    if (m === 'import') { importGame(); return; }
     if (m === 'title') { saveGame(); closeModal(); showTitle(); return; }
     if (UI.modal) UI.modal.render();
   };
@@ -513,15 +616,105 @@ function openHelp() {
 function openIntro() {
   openModal(() => {
     const T = L();
-    return `<div class="letter"><p class="date">${esc(T.letterDate)}</p>${T.letter.map(p => `<p>${esc(p)}</p>`).join('')}<p class="sign">${esc(T.letterSign)}</p>
+    return `<div class="letter"><p class="date">${esc(T.climates[G.climate][3])}</p>${T.letter.map(p => `<p>${esc(p)}</p>`).join('')}<p class="sign">${esc(T.letterSign)}</p>
       <button class="btn good big" data-close>🌱 ${esc(T.letterGo)}</button></div>`;
   }, 'letterbox');
+}
+
+// Antes de empezar: ¿dónde está el jardín? El clima cambia qué plantas prosperan
+function openClimates() {
+  openModal(() => {
+    const T = L();
+    return modalHead(T.climateTitle, T.climateSub) + `<div class="climates">` + CLIMATE_ORDER.map(id => {
+      const [name, region, desc] = T.climates[id];
+      return `<button class="climate" data-climate="${id}"><span class="cimg c-${id}"></span><b>${esc(name)}</b><small>${esc(region)}</small><p>${esc(desc)}</p></button>`;
+    }).join('') + `</div>`;
+  }, 'wide');
+  UI.modal.onclick = e => {
+    const b = e.target.closest('[data-climate]'); if (!b) return;
+    closeModal();
+    newGarden(undefined, b.dataset.climate);
+    startPlaying(true);
+  };
+}
+
+// ---------- Dentro de la casa: macetas en las ventanas ----------
+const POT_IMG = new Map();
+function potPlantImg(p) {
+  const vs = plantVS(p), key = p.id + '|' + vs.key;
+  let url = POT_IMG.get(key);
+  if (!url) {
+    if (POT_IMG.size > 80) POT_IMG.clear();
+    const sp = spOf(p), box = artBox(sp), px = 90 * Math.min(2, window.devicePixelRatio || 1);
+    const { cv } = renderPlantCanvas(sp, vs, p.seed, Math.min(px * 0.95 / box.w, px * 1.3 / (box.up + box.down)));
+    url = cv.toDataURL(); POT_IMG.set(key, url);
+  }
+  return url;
+}
+function potHTML(t) {
+  const i = t.x - POT_X, sel = UI.potSel === i ? ' sel' : '', p = t.plant;
+  if (!t.own) return `<button class="pot buy${sel}" data-pot="${i}"><b>+</b><small>${money(POT_PRICE)}</small></button>`;
+  return `<button class="pot${sel}" data-pot="${i}">${p ? `<img src="${potPlantImg(p)}" alt="${esc(spName(spOf(p)))}">` : ''}<i class="clay"></i>${p && (p.wilt > 0.3 || p.dead) ? `<em>${p.dead ? '🥀' : '💧'}</em>` : ''}</button>`;
+}
+function openHouse() {
+  if (UI.potSel === undefined || UI.potSel === null) UI.potSel = 0;
+  openModal(() => {
+    const T = L(), s = sunNow(), [top, bot] = skyColors(s.z);
+    const wins = WINDOWS.map((w, wi) => {
+      const pots = G.pots.slice(wi * POTS_PER_WINDOW, (wi + 1) * POTS_PER_WINDOW), lit = pots[0].prof[Math.floor(G.hour * 2) % 48] > 0.2 && s.z > 0.05;
+      return `<div class="win"><div class="wintitle"><b>${esc(T.windowK[w.id])}</b><small>☀️ ${pots[0].sun.toFixed(1)} h ${esc(T.sunToday)}</small></div>
+        <div class="pane" style="--sky1:${css(top)};--sky2:${css(bot)}">${lit ? '<i class="ray"></i>' : ''}</div>
+        <div class="sill">${pots.map(potHTML).join('')}</div></div>`;
+    }).join('');
+    const t = G.pots[UI.potSel];
+    return modalHead(T.houseTitle, T.houseSub) + `<div class="houseview"><div class="wins">${wins}</div><aside class="potpanel">${t ? inspectorHTML(t) : ''}</aside></div>
+      <p class="muted small">${esc(T.indoorTip)}</p>`;
+  }, 'wide');
+  UI.modal.kind = 'house';
+  UI.modal.onclick = e => {
+    const slot = e.target.closest('[data-pot]');
+    if (slot) { UI.potSel = +slot.dataset.pot; Sound.sfx.click(); UI.modal.render(); return; }
+    const b = e.target.closest('.potpanel button'), t = G.pots[UI.potSel];
+    if (!b || !t) return;
+    inspectorAction(b, t);
+    if (UI.modal && UI.modal.kind === 'house') UI.modal.render();
+  };
 }
 
 function confirmBuy(i) {
   const pc = PARCELS[i], T = L();
   openModal(() => modalHead(T.parcels[i], T.parcelDesc[i]) + `<p>${esc(T.buyAsk(money(pc.price)))}</p><div class="acts"><button class="btn" data-close>${esc(T.cancel)}</button><button class="btn good" data-yes="1">${esc(T.buy)} ${money(pc.price)}</button></div>`);
   UI.modal.onclick = e => { if (e.target.closest('[data-yes]')) { closeModal(); actBuyParcel(i); renderTray(); } };
+}
+
+// ---------- Respaldo: la partida en un archivo ----------
+function exportGame() {
+  saveGame();
+  const blob = new Blob([serialize()], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `jardin-vivo-${L().climates[G.climate][0].replace(/\s+/g, '-').toLowerCase()}-${L().yearN(Math.floor(G.day / DAYS_YEAR) + 1).replace(/\s+/g, '')}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(L().exported, 'good');
+}
+function importGame() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json,application/json';
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let ok = false;
+      try { ok = deserialize(String(reader.result)); } catch (e) { ok = false; }
+      if (!ok) { toast(L().importBad, 'bad'); return; }
+      saveGame(); closeModal(); startPlaying(false);
+      toast(L().imported, 'good');
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ---------- Pantalla de título ----------
@@ -534,6 +727,7 @@ function showTitle() {
     <div class="titlebtns">${hasSave() ? `<button class="btn good big" data-t="continue">▶ ${esc(T.continue)}</button>` : ''}
     <button class="btn ${hasSave() ? '' : 'good'} big" data-t="new">🌱 ${esc(T.newGame)}</button>
     <button class="btn" data-t="lang">🌐 ${esc(T.langBtn)}</button>
+    <button class="btn" data-t="import">📥 ${esc(T.importBtn)}</button>
     ${IN_SITE ? `<a class="btn" href="../index.html">← ${esc(T.moreGames)}</a>` : ''}</div>
     <small>${esc(T.titleFoot)}</small></div>`;
   el.onclick = e => {
@@ -543,9 +737,10 @@ function showTitle() {
     if (a === 'lang') { setLang(LANG === 'es' ? 'en' : 'es'); showTitle(); renderAll(); return; }
     if (a === 'new') {
       if (hasSave() && !confirm(T.confirmNew)) return;
-      newGarden(); startPlaying(true);
+      openClimates();
     }
     if (a === 'continue') { if (!loadGame()) newGarden(); startPlaying(false); }
+    if (a === 'import') importGame();
   };
   renderGoalCard();
 }

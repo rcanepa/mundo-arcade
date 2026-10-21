@@ -1,7 +1,9 @@
 // ===== Sonido: todo sintetizado con WebAudio (música suave, pájaros, grillos, lluvia y efectos) =====
 const Sound = (() => {
   const PREFS = 'jardinvivo.sound';
-  let ac = null, master, sfxBus, musicBus, ambBus, verb, noiseBuf;
+  // volúmenes medidos con Sound.levels(): música suave de fondo, efectos claros, nada satura
+  const MUSIC_VOL = 0.65, SFX_VOL = 1.3, AMB_VOL = 0.55;
+  let ac = null, master, sfxBus, musicBus, ambBus, verb, noiseBuf, meter;
   let musicOn = true, sfxOn = true, playing = false;
   let nextT = 0, step = 0, chord = 0, birdT = 0, cricketT = 0;
   let rain = null, wind = null;
@@ -13,16 +15,17 @@ const Sound = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ac = new AC();
-    master = ac.createGain(); master.gain.value = 0.7; master.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = 1; master.connect(ac.destination);
+    meter = ac.createAnalyser(); meter.fftSize = 2048; master.connect(meter);
     // reverberación suave hecha con ruido que se apaga
     verb = ac.createConvolver();
     const len = ac.sampleRate * 2.6, ir = ac.createBuffer(2, len, ac.sampleRate);
     for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
     verb.buffer = ir;
     const wet = ac.createGain(); wet.gain.value = 0.35; verb.connect(wet); wet.connect(master);
-    sfxBus = ac.createGain(); sfxBus.gain.value = sfxOn ? 0.5 : 0; sfxBus.connect(master);
-    musicBus = ac.createGain(); musicBus.gain.value = musicOn ? 0.2 : 0; musicBus.connect(master); musicBus.connect(verb);
-    ambBus = ac.createGain(); ambBus.gain.value = sfxOn ? 0.35 : 0; ambBus.connect(master); ambBus.connect(verb);
+    sfxBus = ac.createGain(); sfxBus.gain.value = sfxOn ? SFX_VOL : 0; sfxBus.connect(master);
+    musicBus = ac.createGain(); musicBus.gain.value = musicOn ? MUSIC_VOL : 0; musicBus.connect(master); musicBus.connect(verb);
+    ambBus = ac.createGain(); ambBus.gain.value = sfxOn ? AMB_VOL : 0; ambBus.connect(master); ambBus.connect(verb);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -101,7 +104,7 @@ const Sound = (() => {
     if (!ac || typeof G === 'undefined' || !G.w) return;
     const h = G.hour, w = G.w, raining = w.rain > 0 && h >= 4 && h < 4 + Math.min(18, w.rain * 0.6);
     const t = ac.currentTime;
-    rain.gain.setTargetAtTime(raining ? 0.35 + Math.min(0.4, w.rain / 60) : 0, t, 0.8);
+    rain.gain.setTargetAtTime(raining ? 0.12 + Math.min(0.15, w.rain / 120) : 0, t, 0.8);
     wind.gain.setTargetAtTime(0.04 + R.wind * 0.08, t, 1.5);
     if (!sfxOn) return;
     birdT -= dt; cricketT -= dt;
@@ -119,11 +122,20 @@ const Sound = (() => {
 
   function thunder() { if (ac && sfxOn) { hiss(ac.currentTime + 0.3, 2.5, 0.5, 160, 'lowpass', sfxBus); hiss(ac.currentTime + 0.35, 1.2, 0.3, 400, 'lowpass', sfxBus); } }
   function play() { playing = true; }
-  function toggleMusic() { musicOn = !musicOn; if (musicBus) musicBus.gain.setTargetAtTime(musicOn ? 0.2 : 0, ac.currentTime, 0.3); savePrefs(); return musicOn; }
+  function toggleMusic() { musicOn = !musicOn; if (musicBus) musicBus.gain.setTargetAtTime(musicOn ? MUSIC_VOL : 0, ac.currentTime, 0.3); savePrefs(); return musicOn; }
   function toggleSfx() {
     sfxOn = !sfxOn;
-    if (sfxBus) { sfxBus.gain.setTargetAtTime(sfxOn ? 0.5 : 0, ac.currentTime, 0.1); ambBus.gain.setTargetAtTime(sfxOn ? 0.35 : 0, ac.currentTime, 0.3); }
+    if (sfxBus) { sfxBus.gain.setTargetAtTime(sfxOn ? SFX_VOL : 0, ac.currentTime, 0.1); ambBus.gain.setTargetAtTime(sfxOn ? AMB_VOL : 0, ac.currentTime, 0.3); }
     savePrefs(); return sfxOn;
   }
-  return { init, play, sfx, update, thunder, toggleMusic, toggleSfx, musicOn: () => musicOn, sfxOn: () => sfxOn };
+  // Nivel de lo que suena ahora (para revisar volúmenes en las pruebas)
+  function levels() {
+    if (!meter) return null;
+    const d = new Float32Array(meter.fftSize);
+    meter.getFloatTimeDomainData(d);
+    let sum = 0, peak = 0;
+    for (const v of d) { sum += v * v; peak = Math.max(peak, Math.abs(v)); }
+    return { rms: Math.sqrt(sum / d.length), peak, state: ac.state };
+  }
+  return { init, play, sfx, update, thunder, toggleMusic, toggleSfx, levels, musicOn: () => musicOn, sfxOn: () => sfxOn };
 })();

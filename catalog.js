@@ -10,13 +10,13 @@ const GAMES = [
     es: {
       title: 'Jardín Vivo',
       tagline: 'Cultiva el jardín de tus sueños',
-      description: 'Hereda la casa de tu abuela y su jardín. Más de 80 especies con necesidades reales de luz, agua, suelo, pH y clima: observa el sol, mejora la tierra y protege tus plantas de las heladas. Abre la reja y los visitantes pagarán por ver tus flores.',
+      description: 'Hereda la casa de tu abuela y su jardín en Santiago, Valdivia, La Serena o Ciudad de México. Más de 80 especies con necesidades reales de luz, agua, suelo, pH y clima: observa el sol, mejora la tierra, poda en invierno y protege tus plantas de las heladas. Abre la reja: los visitantes pagarán por ver tus flores y un jurado elige el jardín más lindo.',
       players: '1 jugador', controls: 'Mouse o pantalla táctil', age: '8+ años'
     },
     en: {
       title: 'Living Garden',
       tagline: 'Grow the garden of your dreams',
-      description: 'Inherit your grandmother\'s house and garden. Over 80 species with real needs for light, water, soil, pH and climate: watch the sun, improve the soil and shield your plants from frost. Open the gate and visitors will pay to see your flowers.',
+      description: 'Inherit your grandmother\'s house and garden in Santiago, Valdivia, La Serena or Mexico City. Over 80 species with real needs for light, water, soil, pH and climate: watch the sun, improve the soil, prune in winter and shield your plants from frost. Open the gate: visitors will pay to see your flowers and a jury picks the loveliest garden.',
       players: '1 player', controls: 'Mouse or touch', age: 'Ages 8+'
     }
   },

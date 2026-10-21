@@ -7,21 +7,23 @@ function spend(cost) {
 function changed() { bumpVis(); G.lightDirty = true; }
 
 function actPlant(id, x, y) {
-  const sp = SP[id], t = tileAt(x, y);
-  if (sp.tier > unlockedTier()) { toast(L().locked(sp.tier), 'bad'); return false; }
+  const sp = SP[id], t = tileAt(x, y), own = (G.inv[id] || 0) > 0;
+  if (sp.tier > unlockedTier() && !own) { toast(L().locked(sp.tier), 'bad'); return false; }
   if (!canPlantHere(sp, t)) {
     if (!t || !t.own) toast(L().notYours, 'bad');
     else if (t.plant) toast(L().occupied, 'bad');
     else toast(sp.water === 'aquatic' ? L().needPond : t.t === 'water' ? L().notInWater : L().needBed, 'bad');
     Sound.sfx.nope(); return false;
   }
-  if (!spend(sp.price)) return false;
-  const p = addPlant(id, x, y, { hp: 85 });
+  // lo que hay en el semillero se planta gratis
+  if (own) G.inv[id]--;
+  else if (!spend(sp.price)) return false;
+  const p = addPlant(id, x, y, { hp: 85, g: own ? Math.min(sp.start, 0.12) : undefined });
   p.fac = evaluate(sp, t, p, G.w, false); p.cond = p.fac.cond;
   G.stats.planted++;
   if (!G.herb[id]) G.herb[id] = 1;
   fxPuff(x + 0.5, y + 0.5, css(soilColor(t)));
-  fxFloat(x + 0.5, y + 0.5, '−' + money(sp.price), '#8a4a2a');
+  if (!own) fxFloat(x + 0.5, y + 0.5, '−' + money(sp.price), '#8a4a2a');
   Sound.sfx.plant();
   changed();
   return true;
@@ -39,6 +41,54 @@ function actWater(x, y, rad) {
   return n > 0;
 }
 
+function actPrune(p) {
+  const sp = spOf(p);
+  if (!sp.prune) { toast(L().noPrune, 'info'); return false; }
+  if (!canPrune(p)) { toast(L().notPruneTime(L().seasonRange(sp.prune)), 'info'); return false; }
+  p.prunedDay = G.day;
+  G.stats.pruned = (G.stats.pruned || 0) + 1;
+  if (sp.type !== 'vine') p.g = Math.max(0.85, p.g - 0.05);
+  fxPuff(p.x + 0.5, p.y + 0.5, '#6f9a45'); fxFloat(p.x + 0.5, p.y + 0.5, L().pruned, '#3a6b35');
+  Sound.sfx.care(); changed();
+  return true;
+}
+
+// Juntar semillas, sacar esquejes o dividir la mata: van al semillero y se plantan gratis
+function actPropagate(p) {
+  const n = propCount(p), sp = spOf(p), how = propMethod(sp);
+  if (!n) return false;
+  G.inv[sp.id] = (G.inv[sp.id] || 0) + n;
+  p.propYear = Math.floor(G.day / DAYS_YEAR);
+  if (how === 'cutting') p.hp -= 8;
+  if (how === 'division') p.hp -= 12;
+  G.stats.propagated = (G.stats.propagated || 0) + n;
+  fxSparkle(p.x + 0.5, p.y + 0.5, '#bfe6a0');
+  toast(L().propDone(n, spName(sp), L().propK[how]), 'good');
+  Sound.sfx.harvest(); changed();
+  return true;
+}
+
+function actBuyPot(i) {
+  const t = G.pots[i];
+  if (!t || t.own || !spend(POT_PRICE)) return false;
+  t.own = 1; t.moist = 0.5;
+  Sound.sfx.build(); changed();
+  return true;
+}
+
+function actWaterThirsty() {
+  const list = thirstyPlants();
+  if (!list.length) { toast(L().noneThirsty, 'info'); return false; }
+  const cost = list.length * THIRSTY_PRICE;
+  if (!spend(cost)) return false;
+  G.today.water = (G.today.water || 0) + cost;
+  for (const p of list) { const t = tileAt(p.x, p.y); waterTile(t, waterTarget(spOf(p)) - t.moist); fxSplash(p.x + 0.5, p.y + 0.5); }
+  G.stats.watered += list.length;
+  toast(L().thirstyDone(list.length, money(cost)), 'good');
+  Sound.sfx.water(); bumpVis();
+  return true;
+}
+
 function actCare(k, x, y) {
   const t = tileAt(x, y), c = CARE[k];
   if (!t || !t.own || t.t === 'house' || t.t === 'water' || t.t === 'path') { toast(L().careWhere, 'bad'); Sound.sfx.nope(); return false; }
@@ -46,6 +96,8 @@ function actCare(k, x, y) {
   if ((k === 'spray' || k === 'cloth') && (!p || p.dead)) { toast(L().needPlant, 'bad'); Sound.sfx.nope(); return false; }
   if (k === 'spray' && !p.pests) { toast(L().noPests, 'info'); return false; }
   if (k === 'weed' && t.weeds < 0.1) return false;
+  if (k === 'prune') return p && !p.dead ? actPrune(p) : (toast(L().needPlant, 'bad'), false);
+  if (k === 'tray' && (!t.pot || t.tray)) return false;
   if (k === 'cloth' && p.cloth) { p.cloth = 0; Sound.sfx.click(); changed(); return true; } // quitar la manta es gratis
   if (!spend(c.cost)) return false;
   switch (k) {
@@ -59,6 +111,7 @@ function actCare(k, x, y) {
     case 'weed': t.weeds = 0; break;
     case 'spray': p.pests = 0; p.imm = 6; break;
     case 'cloth': p.cloth = 1; break;
+    case 'tray': t.tray = 1; break;
   }
   G.stats.care = (G.stats.care || 0) + 1;
   fxPuff(x + 0.5, y + 0.5, { compost: '#5a3f28', sand: '#e0c890', peat: '#3f2c20', sulfur: '#f2e05a', lime: '#f4f4ee', fert: '#9fd0f0', mulch: '#a0703f', weed: '#6f9a45', spray: '#e8f4ff', cloth: '#ffffff' }[k]);
@@ -85,6 +138,7 @@ function canBuild(k, x, y) {
       continue;
     }
     if (k === 'shade') { if (t.shade) return L().already; continue; }
+    if (k === 'drip') { if (t.drip) return L().already; if (t.t !== 'bed') return L().dripWhere; continue; }
     if (i === GATE_X && (j === GH - 1 || j === HOUSE.y1)) return L().occupied;
     if (t.plant || t.obj || t.gh || (b.overhead && t.over) || t.t === 'water') return L().occupied;
     if (k === 'greenhouse' && t.over) return L().occupied;
@@ -102,6 +156,7 @@ function actBuild(k, x, y) {
     if (b.tile === 'water') t.moist = 1;
     if (b.tile !== 'bed') t.mulch = 0;
   } else if (k === 'shade') tileAt(x, y).shade = 1;
+  else if (k === 'drip') tileAt(x, y).drip = 1;
   else addStruct(k, x, y);
   const { w, h } = footprint(k, x, y);
   fxPuff(x + w / 2, y + h / 2, b.tile === 'water' ? '#6aa8c0' : '#c8b89a');
@@ -133,6 +188,7 @@ function actRemove(x, y) {
     Sound.sfx.dig(); changed(); return true;
   }
   if (t.shade) { t.shade = 0; changed(); return true; }
+  if (t.drip) { t.drip = 0; Sound.sfx.dig(); changed(); return true; }
   if (t.t === 'bed' || t.t === 'path' || t.t === 'water') { t.t = 'grass'; t.mulch = 0; Sound.sfx.dig(); changed(); return true; }
   return false;
 }
@@ -212,10 +268,15 @@ const GOALS = [
   { id: 'harvest', reward: 60, done: () => G.stats.harvests >= 10 },
   { id: 'star2', reward: 120, done: () => G.repMax >= 2 },
   { id: 'parcel', reward: 150, done: () => G.owned.filter(Boolean).length >= 2 },
+  { id: 'prune', reward: 60, done: () => (G.stats.pruned || 0) >= 3 },
+  { id: 'seeds', reward: 100, done: () => (G.stats.propagated || 0) >= 10 },
+  { id: 'sisters', reward: 120, done: () => G.plants.some(p => p.sp === 'corn' && !p.dead && p.fac && p.fac.compNames.includes('bean') && p.fac.compNames.includes('pumpkin')) },
+  { id: 'contest', reward: 150, done: () => (G.stats.contestBest || 9) <= 3 },
   { id: 'acid', reward: 150, done: () => blooming(p => spOf(p).ph[1] <= 6.0 && p.hp > 70) },
   { id: 'pond', reward: 150, done: () => blooming(p => p.sp === 'waterlily' || p.sp === 'lotus') },
   { id: 'blue', reward: 200, done: () => blooming(p => p.sp === 'hydrangea' && tileAt(p.x, p.y).ph < 5.5) },
   { id: 'greenhouse', reward: 200, done: () => G.structs.some(s => s.k === 'greenhouse') },
+  { id: 'indoor', reward: 150, done: () => (G.pots || []).filter(t => t.plant && !t.plant.dead && t.plant.hp > 70 && t.plant.g > 0.5).length >= 4 },
   { id: 'winter', reward: 300, done: () => seasonOf(G.day % DAYS_YEAR) === 3 && G.plants.filter(p => p.bloom > 0.5 && !p.dead && tileAt(p.x, p.y).own).length >= 5 },
   { id: 'tropic', reward: 300, done: () => blooming(p => p.sp === 'orchid' || p.sp === 'anthurium') },
   { id: 'herb25', reward: 400, done: () => herbCount() >= 25 },
@@ -224,15 +285,43 @@ const GOALS = [
   { id: 'star5', reward: 1000, done: () => G.repMax >= 4.95 },
   { id: 'herbAll', reward: 2000, done: () => herbCount() >= SPECIES.length }
 ];
+// Los objetivos se pueden cumplir en cualquier orden; el "actual" es el primero que falta
+const OLD_GOAL_ORDER = ['lens', 'plant', 'water', 'open', 'rose', 'beds', 'bloom5', 'visitors', 'harvest', 'star2', 'parcel', 'acid', 'pond',
+  'blue', 'greenhouse', 'winter', 'tropic', 'herb25', 'star4', 'copihue', 'star5', 'herbAll'];
+const goalDone = gl => !!G.goalsDone[gl.id];
 function checkGoals() {
   let n = 0;
-  while (G.goal < GOALS.length && GOALS[G.goal].done() && n < 3) {
-    const gl = GOALS[G.goal];
+  for (const gl of GOALS) {
+    if (n >= 3 || goalDone(gl) || !gl.done()) continue;
+    G.goalsDone[gl.id] = 1;
     G.money += gl.reward;
     toast(L().goalDone(L().goals[gl.id][0], money(gl.reward)), 'goal');
     Sound.sfx.fanfare();
-    G.goal++; n++;
+    n++;
   }
+  G.goal = GOALS.findIndex(gl => !goalDone(gl));
+  if (G.goal < 0) G.goal = GOALS.length;
+}
+
+// ---------- Concurso de jardines: una vez al año, a fines de primavera ----------
+const CONTEST_DAY = 8;
+function contestScore() {
+  const mine = G.plants.filter(p => !p.dead && tileAt(p.x, p.y).own && p.x < POT_X);
+  const health = mine.length ? mine.reduce((a, p) => a + p.hp, 0) / mine.length / 100 : 0;
+  return G.beauty * health * (1 + G.kinds * 0.01);
+}
+function judgeContest() {
+  const year = Math.floor(G.day / DAYS_YEAR), score = contestScore();
+  const th = [120, 300, 650].map(v => v * (1 + 0.3 * year));
+  const place = score >= th[2] ? 1 : score >= th[1] ? 2 : score >= th[0] ? 3 : 0;
+  if (!place) { news('contestNone', {}); return 0; }
+  const prize = [0, 800, 400, 200][place];
+  G.money += prize; G.stats.income += prize;
+  G.rep = Math.min(5, G.rep + [0, 0.4, 0.25, 0.15][place]);
+  G.stats.contestBest = Math.min(G.stats.contestBest || 9, place);
+  news('contestWin', { place, prize: money(prize) });
+  Sound.sfx.fanfare();
+  return place;
 }
 
 // ---------- Encargos: florerías, restoranes y vecinos piden cosechas ----------

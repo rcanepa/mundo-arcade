@@ -26,7 +26,7 @@ function fxSprinkle(st) {
 const BUTTERFLY = [['#f7f3e8', '#d8d2c0'], ['#f6c73a', '#d89a1a'], ['#f08a2a', '#2a2a2a'], ['#7fb0e8', '#3a5f9a'], ['#e8a0c8', '#a05080']];
 function updateCritters(dt, s) {
   const day = s.z > 0.12 && !G.w.rain && tempAt(G.w, G.hour) > 11;
-  const blooming = G.plants.filter(p => p.bloom > 0.4 && !p.dead && tileAt(p.x, p.y).own);
+  const blooming = G.plants.filter(p => p.bloom > 0.4 && !p.dead && tileAt(p.x, p.y).own && !tileAt(p.x, p.y).pot);
   const want = day ? Math.min(16, Math.round(blooming.length * 0.45)) : 0;
   const bf = FX.critters;
   if (bf.length < want && blooming.length && Math.random() < dt * 1.5) {
@@ -76,7 +76,7 @@ function drawCritter(g, c) {
     g.fillStyle = '#f2c230'; g.beginPath(); g.ellipse(x, y, 2.4 * z, 1.7 * z, 0, 0, TAU); g.fill();
     g.fillStyle = '#2a2a2a'; g.fillRect(x - 0.6 * z, y - 1.6 * z, 1.1 * z, 3.2 * z);
   } else {
-    const dir = Math.sign((c.tgt ? c.tgt.x - c.x : 1) || 1);
+    const dir = Math.sign((c.tgt ? PV(c.tgt.x - c.x, c.tgt.y - c.y)[0] : 1) || 1);
     g.fillStyle = '#2f8a5a'; g.beginPath(); g.ellipse(x, y, 4 * z, 2.4 * z, dir * -0.3, 0, TAU); g.fill();
     g.fillStyle = '#c8304a'; g.beginPath(); g.arc(x + dir * 2 * z, y - 0.5 * z, 1.4 * z, 0, TAU); g.fill();
     g.strokeStyle = '#2a2a2a'; g.lineWidth = 1 * z; g.beginPath(); g.moveTo(x + dir * 3.5 * z, y - 1 * z); g.lineTo(x + dir * 7.5 * z, y - 0.5 * z); g.stroke();
@@ -100,7 +100,7 @@ function updateParts(dt) {
   // árboles que sueltan hojas o pétalos
   if (ps.length < 160 && Math.random() < dt * 4) {
     for (const p of G.plants) {
-      if (p.dead || !isTree(spOf(p)) && spOf(p).art.f !== 'bush') continue;
+      if (p.dead || (!isTree(spOf(p)) && spOf(p).art.f !== 'bush') || p.x >= POT_X) continue;
       const sp = spOf(p), vs = p._vs;
       const falling = vs && vs.fall > 0.4, petals = sp.art.nb && p.bloom > 0.5;
       if (!(falling || petals) || Math.random() > (isTree(sp) ? 0.5 : 0.1)) continue;
@@ -122,8 +122,8 @@ function drawPart(g, p) {
 }
 
 function fxItems(items, g) {
-  for (const c of FX.critters) items.push({ k: c.x + c.y + 1.2 + c.z * 0.4, f: () => drawCritter(g, c) });
-  for (const p of FX.parts) items.push({ k: p.x + p.y + 0.5 + p.z * 0.3, f: () => drawPart(g, p) });
+  for (const c of FX.critters) items.push({ k: keyOf(c.x, c.y) + 1.2 + c.z * 0.4, f: () => drawCritter(g, c) });
+  for (const p of FX.parts) items.push({ k: keyOf(p.x, p.y) + 0.5 + p.z * 0.3, f: () => drawPart(g, p) });
 }
 
 // ---------- Clima: sombra de nubes, lluvia, relámpagos ----------

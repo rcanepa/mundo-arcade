@@ -499,6 +499,11 @@ function fruit(g, x, y, R, s, col, ripe) {
       g.fillStyle = css(c);
       g.beginPath(); g.moveTo(x - R * 0.5, y); g.quadraticCurveTo(x - R * 0.7, y + R * 2.2, x + R * 0.3, y + R * 3.2); g.quadraticCurveTo(x + R * 0.4, y + R * 1.6, x + R * 0.5, y); g.closePath(); g.fill();
       g.fillStyle = '#3f6f2a'; g.fillRect(x - R * 0.4, y - R * 0.5, R * 0.8, R * 0.6); break;
+    case 'pod':
+      g.strokeStyle = css(c); g.lineCap = 'round'; g.lineWidth = Math.max(1.2, R * 0.9);
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + R * 1.2, y + R * 2.2, x + R * 0.4, y + R * 4.2); g.stroke();
+      g.fillStyle = css(shade(c, 0.25)); for (let k = 1; k < 4; k++) { g.beginPath(); g.arc(x + R * 0.7 - k * 0.1 * R, y + R * k * 1.05, R * 0.3, 0, TAU); g.fill(); }
+      break;
     case 'strawberry':
       g.fillStyle = css(c);
       g.beginPath(); g.moveTo(x - R, y - R * 0.3); g.quadraticCurveTo(x - R * 0.8, y + R * 1.1, x, y + R * 1.4); g.quadraticCurveTo(x + R * 0.8, y + R * 1.1, x + R, y - R * 0.3); g.closePath(); g.fill();
@@ -952,6 +957,9 @@ FORMS.vine = (g, sp, vs, S, r) => {
       else flower(g, x + ox, y, R, fl.s, vs.fc, vs.fc2, vs.bloom, rr * 6);
     }
   }
+  if (a.fr && vs.fruit > 0.15 && !vs.dead) {
+    for (let i = 0; i < a.fr.n * vs.fruit; i++) { const [x, y, t] = pts[Math.floor(r() * pts.length)]; if (t > 0.2) fruit(g, x + (r() - 0.5) * W * 0.2, y, a.fr.r * S * 1.3, a.fr.s, a.fr.c, vs.fruit); }
+  }
 };
 
 FORMS.aquatic = (g, sp, vs, S, r) => {
@@ -1039,20 +1047,37 @@ FORMS.tree = (g, sp, vs, S, r) => {
   } else {
     drawBranches(false);
     const show = clumps.filter((c, i) => i / clumps.length < fallThin * (0.55 + 0.45 * vs.g));
-    const ek = cn === 'layered' ? 0.55 : 0.82;
-    for (const c of show) { g.fillStyle = css(shade(lc, -0.42)); g.beginPath(); g.ellipse(c.x + c.cr * 0.08, c.y + c.cr * 0.12, c.cr * 1.1, c.cr * ek, 0, 0, TAU); g.fill(); }
-    for (const c of show) {
-      g.fillStyle = css(shade(lc, -0.12 + c.k * 0.08)); g.beginPath(); g.ellipse(c.x, c.y, c.cr * 1.02, c.cr * ek * 0.92, 0, 0, TAU); g.fill();
-      g.fillStyle = css(shade(lc, 0.14 + c.k * 0.06), 0.85); g.beginPath(); g.ellipse(c.x - c.cr * 0.25, c.y - c.cr * 0.28, c.cr * 0.6, c.cr * ek * 0.55, 0, 0, TAU); g.fill();
-      // bordes con textura de hojas
-      for (const [u, v, w] of c.dots) {
-        const ang = Math.PI * (0.9 + u * 1.2), d = c.cr * (0.78 + v * 0.3), lx = c.x + Math.cos(ang) * d * 1.05, ly = c.y + Math.sin(ang) * d * ek;
-        g.fillStyle = css(shade(lc, w > 0.5 ? 0.22 : -0.05), 0.9);
-        if (cn === 'layered' || sp.id === 'maple') { g.save(); g.translate(lx, ly); g.scale(0.5, 0.5); palmLeaf(g, c.cr * 0.35, c.cr * 0.5, shade(lc, w > 0.5 ? 0.2 : -0.05)); g.restore(); }
-        else { g.beginPath(); g.ellipse(lx, ly, c.cr * 0.2, c.cr * 0.12, ang + 1.2, 0, TAU); g.fill(); }
+    const ek = cn === 'layered' ? 0.55 : 0.82, palm = cn === 'layered' || sp.id === 'maple';
+    // sombra general de la copa, para que tenga volumen
+    for (const c of show) { g.fillStyle = css(shade(lc, -0.45)); g.beginPath(); g.ellipse(c.x + c.cr * 0.1, c.y + c.cr * 0.14, c.cr * 1.1, c.cr * ek, 0, 0, TAU); g.fill(); }
+    show.forEach((c, i) => {
+      const lr = rng(Math.floor(c.k * 1e9) + i * 977), rx = c.cr * 1.02, ry = c.cr * ek * 0.92;
+      // relleno con luz desde arriba a la izquierda
+      const grd = g.createRadialGradient(c.x - rx * 0.35, c.y - ry * 0.45, rx * 0.1, c.x, c.y, rx * 1.1);
+      grd.addColorStop(0, css(shade(lc, 0.12 + c.k * 0.06))); grd.addColorStop(0.65, css(shade(lc, -0.08 + c.k * 0.06))); grd.addColorStop(1, css(shade(lc, -0.26)));
+      g.fillStyle = grd; g.beginPath(); g.ellipse(c.x, c.y, rx, ry, 0, 0, TAU); g.fill();
+      // hojas sueltas dentro de la mata: claras arriba, oscuras abajo
+      for (let k = 0; k < 34; k++) {
+        const ang = lr() * TAU, d = Math.sqrt(lr()) * 0.92, lx = c.x + Math.cos(ang) * d * rx, ly = c.y + Math.sin(ang) * d * ry;
+        const light = ((c.y - ly) / ry) * 0.2 - ((lx - c.x) / rx) * 0.08 + (lr() - 0.5) * 0.12;
+        const col = shade(lc, light + 0.02);
+        if (palm) { g.save(); g.translate(lx, ly); g.rotate(lr() * 6); g.scale(0.42, 0.42); palmLeaf(g, c.cr * 0.32, c.cr * 0.42, col); g.restore(); }
+        else { g.fillStyle = css(col, 0.9); g.beginPath(); g.ellipse(lx, ly, c.cr * (0.1 + lr() * 0.07), c.cr * (0.06 + lr() * 0.04), lr() * 3, 0, TAU); g.fill(); }
       }
-    }
-    if (sp.id === 'olive') for (const c of show) for (const [u, v] of c.dots) { g.fillStyle = 'rgba(230,235,215,0.35)'; g.fillRect(c.x + (u - 0.5) * c.cr * 1.4, c.y + (v - 0.6) * c.cr, 1.5, 1); }
+      // sombra interior abajo, que separa una mata de la siguiente
+      g.strokeStyle = css(shade(lc, -0.4), 0.22); g.lineWidth = Math.max(1, c.cr * 0.14);
+      g.beginPath(); g.ellipse(c.x, c.y, rx * 0.86, ry * 0.8, 0, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+      // bordes con hojas que rompen el contorno, y un brillo del sol arriba
+      for (const [u, v, w] of c.dots) {
+        const ang = Math.PI * (0.9 + u * 1.2), d = c.cr * (0.82 + v * 0.28), lx = c.x + Math.cos(ang) * d * 1.05, ly = c.y + Math.sin(ang) * d * ek;
+        const col = shade(lc, w > 0.5 ? 0.24 : -0.02);
+        if (palm) { g.save(); g.translate(lx, ly); g.scale(0.5, 0.5); palmLeaf(g, c.cr * 0.35, c.cr * 0.5, col); g.restore(); }
+        else { g.fillStyle = css(col, 0.95); g.beginPath(); g.ellipse(lx, ly, c.cr * 0.2, c.cr * 0.12, ang + 1.2, 0, TAU); g.fill(); }
+      }
+      g.strokeStyle = 'rgba(255,255,230,0.14)'; g.lineWidth = Math.max(1, c.cr * 0.1);
+      g.beginPath(); g.ellipse(c.x, c.y, rx * 0.92, ry * 0.88, 0, Math.PI * 1.1, Math.PI * 1.55); g.stroke();
+    });
+    if (sp.id === 'olive') for (const c of show) for (const [u, v] of c.dots) { g.fillStyle = 'rgba(230,235,215,0.4)'; g.fillRect(c.x + (u - 0.5) * c.cr * 1.4, c.y + (v - 0.6) * c.cr, 1.5, 1); }
   }
   // flores: nube de florecitas (cerezo, jacarandá, limonero) o grandes copas (magnolio)
   if (a.fl && vs.bloom > 0.05 && !vs.dead) {

@@ -9,7 +9,9 @@ const HAIR = ['#2a1f18', '#4a3020', '#8a5a2a', '#c9a060', '#e8d8b0', '#9a9a9a', 
 const SHIRT = ['#e86a5a', '#5a9ad8', '#f2c14e', '#7ac08a', '#c48ad8', '#f29ab8', '#ffffff', '#4a6a8a', '#e8954a', '#3fa7a0'];
 const PANTS = ['#3a4a6a', '#5a4a3a', '#2a2a2a', '#7a6a58', '#4a6a4a', '#c9b89a'];
 
-function newLook() {
+function newLook(type) {
+  if (type === 'botanist') return { skin: pick(SKIN), hair: pick(HAIR), shirt: '#c9b48a', pants: '#6a5a3a', hat: 'sun', hatCol: '#d8c890', bag: true, long: false, kid: false, old: false, book: true, h: 1.62 + Math.random() * 0.15 };
+  if (type === 'jury') return { skin: pick(SKIN), hair: pick(HAIR), shirt: pick(['#3a4050', '#4a3a48', '#2f4a44']), pants: '#2a2a30', hat: null, long: false, kid: false, old: Math.random() < 0.3, clip: true, h: 1.6 + Math.random() * 0.15 };
   const kid = Math.random() < 0.13, old = !kid && Math.random() < 0.14;
   return {
     skin: pick(SKIN), hair: old ? pick(['#d8d8d8', '#b8b8b8', '#f0f0f0']) : pick(HAIR), shirt: pick(SHIRT), pants: pick(PANTS),
@@ -66,7 +68,7 @@ function buildPOIs() {
   };
   for (const p of G.plants) {
     const t = tileAt(p.x, p.y);
-    if (!t.own) continue;
+    if (!t.own || t.pot) continue;
     const problem = p.dead || (p.fac && p.cond < 0.6) || p.pests;
     const w = Math.max(0, p.beauty || 0) + (p.bloom > 0.5 ? 2 : 0) + (problem ? 1.2 : 0);
     if (w < 0.6) continue;
@@ -97,12 +99,14 @@ function planVisitors() {
   VIS.queue.sort((a, b) => a - b);
 }
 
-function spawnVisitor(enter) {
+function spawnVisitor(enter, type) {
   const side = Math.random() < 0.5 ? -1 : 1;
+  // a veces llega una botánica que viene a ver especies raras
+  if (enter && !type && G.repMax >= 1.5 && Math.random() < 0.1) type = 'botanist';
   const v = {
-    id: Math.random(), x: side < 0 ? -1.5 : GW + 1.5, y: SIDEWALK_Y + (Math.random() - 0.5) * 0.3, look: newLook(),
+    id: Math.random(), x: side < 0 ? -1.5 : GW + 1.5, y: SIDEWALK_Y + (Math.random() - 0.5) * 0.3, look: newLook(type), type: type || 'guest', rare: 0,
     state: enter ? 'toGate' : 'pass', side, path: [], t: 0, wait: 0, sat: 0.55, stops: 0, maxStops: 4 + Math.floor(Math.random() * 5),
-    seen: new Set(), bubble: null, phase: Math.random() * 6, dir: -side, paid: false, timeLeft: 3.5 + Math.random() * 2.5
+    seen: new Set(), bubble: null, phase: Math.random() * 6, fx: -side, fy: 0, paid: false, timeLeft: 3.5 + Math.random() * 2.5
   };
   VIS.list.push(v);
   return v;
@@ -149,7 +153,7 @@ function moveAlong(v, dtH) {
   let d = WALK_SPEED * dtH * (v.look.old ? 0.7 : v.look.kid ? 1.2 : 1);
   while (d > 0 && v.path.length) {
     const [tx, ty] = v.path[0], dx = tx - v.x, dy = ty - v.y, l = Math.hypot(dx, dy);
-    if (l > 0.01) v.dir = dx - dy >= 0 ? 1 : -1;
+    if (l > 0.01) { v.fx = dx; v.fy = dy; }
     if (l <= d) { v.x = tx; v.y = ty; v.path.shift(); d -= l; }
     else { v.x += dx / l * d; v.y += dy / l * d; d = 0; }
   }
@@ -183,7 +187,7 @@ function stepVisitor(v, dtH) {
       return true;
     case 'look':
       v.wait -= dtH;
-      if (v.target && v.target.poi.p) v.dir = (v.target.poi.p.x - v.target.poi.p.y) - (v.x - v.y) >= 0 ? 1 : -1;
+      if (v.target && v.target.poi.p) { v.fx = v.target.poi.p.x + 0.5 - v.x; v.fy = v.target.poi.p.y + 0.5 - v.y; }
       if (v.wait <= 0) { v.stops++; v.state = 'choose'; v.sitting = false; }
       return true;
     case 'leave': {
@@ -193,7 +197,11 @@ function stepVisitor(v, dtH) {
       if (v.paid) {
         v.sat = clamp(v.sat, 0, 1);
         G.today.sat += v.sat; G.today.satN++;
-        if (v.sat > 0.85 && Math.random() < 0.3) {
+        if (v.type === 'botanist' && v.rare && v.sat > 0.6) {
+          const tip = 3 + v.rare * 4;
+          G.money += tip; G.today.income += tip; G.stats.income += tip;
+          fxFloat(v.x, v.y, L().tip(money(tip)), '#b8860b'); say(v, 'botanistBye');
+        } else if (v.sat > 0.85 && Math.random() < 0.3) {
           const tip = 1 + Math.floor(Math.random() * Math.max(2, G.price));
           G.money += tip; G.today.income += tip; G.stats.income += tip;
           fxFloat(v.x, v.y, L().tip(money(tip)), '#b8860b'); say(v, 'thanks');
@@ -216,7 +224,8 @@ function choosePOI(v) {
     if (v.seen.has(poi)) continue;
     let best = null, bd = 1e9;
     for (const s of poi.spots) { const d = Math.abs(s[0] + 0.5 - v.x) + Math.abs(s[1] + 0.5 - v.y); if (d < bd) { bd = d; best = s; } }
-    const w = poi.w / (1 + bd * 0.12);
+    let w = poi.w / (1 + bd * 0.12);
+    if (v.type !== 'guest' && poi.p) { const sp = spOf(poi.p); w *= sp.rare || sp.tier >= 3 ? 3 : 1; if (v.type === 'jury') w *= poi.p.bloom > 0.5 ? 2 : 1; }
     opts.push([poi, best, w]); tot += w;
   }
   if (!opts.length) return null;
@@ -248,6 +257,12 @@ function react(v, poi) {
   }
   const b = Math.max(0, p.beauty || 0);
   v.sat += 0.015 + b * 0.007;
+  if (v.type === 'botanist') {
+    if (sp.rare || sp.tier >= 3) v.rare++;
+    if (Math.random() < 0.7) say(v, 'botanist', sp);
+    return;
+  }
+  if (v.type === 'jury') { if (Math.random() < 0.6) say(v, p.bloom > 0.5 ? 'jury' : 'juryMeh', sp); return; }
   if (sp.rare && p.bloom > 0.4) { v.sat += 0.05; say(v, 'rare', name); return; }
   if (!chatty) return;
   if (p.fruit >= 1) say(v, 'fruit', name);
@@ -261,7 +276,7 @@ function say(v, kind, sp) {
   const pool = L().vc[kind];
   if (!pool) return;
   let text = pick(pool);
-  if (sp) text = text.replace('{p}', noun(sp)).replace('{P}', noun(sp, true)).replace('{n}', spName(sp).toLowerCase());
+  if (sp) text = text.replace('{p}', noun(sp)).replace('{P}', noun(sp, true)).replace('{n}', spName(sp).toLowerCase()).replace('{la}', sp.la);
   if (LANG === 'es') text = fixES(text);
   v.bubble = { text, t: 2.8, kind };
   G.log.unshift({ day: G.day, h: Math.floor(G.hour), text, kind });
@@ -270,10 +285,12 @@ function say(v, kind, sp) {
 
 // ---------- Dibujo ----------
 function visitorItems(items, g) {
-  for (const v of VIS.list) items.push({ k: v.state === 'pass' || v.y > GH ? v.x + v.y + 0.3 : v.x + v.y + 0.02, f: () => drawVisitor(g, v) });
+  for (const v of VIS.list) items.push({ k: keyOf(v.x, v.y) + (v.state === 'pass' || v.y > GH ? 0.3 : 0.02), f: () => drawVisitor(g, v) });
 }
 function drawVisitor(g, v) {
   const [x, y] = P(v.x, v.y), z = cam.z, L0 = v.look, H = L0.h * ZS * z;
+  // hacia dónde mira en la pantalla, según hacia dónde mira en el jardín y cómo está girada la vista
+  const dir = Math.sign(PV(v.fx, v.fy)[0]) || 1;
   if (x < -40 || x > VW + 40 || y < -100 || y > VH + 100) return;
   const fade = clamp(Math.min(v.x + 1.8, GW + 1.8 - v.x), 0, 1);
   g.globalAlpha = fade;
@@ -283,7 +300,7 @@ function drawVisitor(g, v) {
   const lw = Math.max(2, 3.4 * z * (L0.kid ? 0.85 : 1));
   // piernas
   g.strokeStyle = L0.pants; g.lineWidth = lw; g.lineCap = 'round';
-  if (v.sitting) { g.beginPath(); g.moveTo(x - 2 * z, hip); g.lineTo(x - 2 * z + v.dir * 6 * z, hip + 1); g.lineTo(x - 2 * z + v.dir * 6 * z, y - 1); g.moveTo(x + 2 * z, hip); g.lineTo(x + 2 * z + v.dir * 6 * z, hip + 1); g.lineTo(x + 2 * z + v.dir * 6 * z, y - 1); g.stroke(); }
+  if (v.sitting) { g.beginPath(); g.moveTo(x - 2 * z, hip); g.lineTo(x - 2 * z + dir * 6 * z, hip + 1); g.lineTo(x - 2 * z + dir * 6 * z, y - 1); g.moveTo(x + 2 * z, hip); g.lineTo(x + 2 * z + dir * 6 * z, hip + 1); g.lineTo(x + 2 * z + dir * 6 * z, y - 1); g.stroke(); }
   else { g.beginPath(); g.moveTo(x - 1.8 * z, hip); g.lineTo(x - 1.8 * z + walk * 3.5 * z, y - 1); g.moveTo(x + 1.8 * z, hip); g.lineTo(x + 1.8 * z - walk * 3.5 * z, y - 1); g.stroke(); }
   // cuerpo
   g.fillStyle = L0.shirt;
@@ -292,16 +309,18 @@ function drawVisitor(g, v) {
   // brazos
   g.strokeStyle = css(shade(L0.shirt, -0.08)); g.lineWidth = lw * 0.8;
   g.beginPath(); g.moveTo(x - 4.5 * z, sh + 2 * z); g.lineTo(x - 5.5 * z - walk * 2.5 * z, sh + H * 0.27); g.moveTo(x + 4.5 * z, sh + 2 * z); g.lineTo(x + 5.5 * z + walk * 2.5 * z, sh + H * 0.27); g.stroke();
-  if (L0.camera) { g.fillStyle = '#2a2a2a'; g.fillRect(x + v.dir * 4 * z - 2.5 * z, sh + 5 * z, 5 * z, 3.5 * z); }
-  if (L0.bag) { g.fillStyle = '#8a6a4a'; g.beginPath(); g.roundRect(x - v.dir * 7 * z - 2.5 * z, hip - 5 * z, 5 * z, 6 * z, 1.5 * z); g.fill(); }
-  if (L0.old && !v.sitting) { g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.4 * z; g.beginPath(); g.moveTo(x + v.dir * 7 * z, sh + H * 0.27); g.lineTo(x + v.dir * 8 * z, y); g.stroke(); }
+  if (L0.camera) { g.fillStyle = '#2a2a2a'; g.fillRect(x + dir * 4 * z - 2.5 * z, sh + 5 * z, 5 * z, 3.5 * z); }
+  if (L0.book) { g.fillStyle = '#5a7a4a'; g.fillRect(x + dir * 4 * z - 2 * z, sh + 4 * z, 4.5 * z, 5.5 * z); }
+  if (L0.clip) { g.fillStyle = '#f4f0e4'; g.fillRect(x + dir * 4.5 * z - 2.5 * z, sh + 3 * z, 5 * z, 6.5 * z); g.fillStyle = '#8a6a48'; g.fillRect(x + dir * 4.5 * z - 1 * z, sh + 2.5 * z, 2 * z, 1.2 * z); }
+  if (L0.bag) { g.fillStyle = '#8a6a4a'; g.beginPath(); g.roundRect(x - dir * 7 * z - 2.5 * z, hip - 5 * z, 5 * z, 6 * z, 1.5 * z); g.fill(); }
+  if (L0.old && !v.sitting) { g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.4 * z; g.beginPath(); g.moveTo(x + dir * 7 * z, sh + H * 0.27); g.lineTo(x + dir * 8 * z, y); g.stroke(); }
   // cabeza
   const hr = (L0.kid ? 4.4 : 4.8) * z;
   g.fillStyle = L0.skin; g.beginPath(); g.arc(x, head, hr, 0, TAU); g.fill();
-  g.fillStyle = L0.hair; g.beginPath(); g.arc(x - v.dir * 0.8 * z, head - 1 * z, hr * 1.02, Math.PI * 0.95, Math.PI * 2.05); g.fill();
-  if (L0.long && !L0.hat) { g.fillRect(x - v.dir * hr - (v.dir > 0 ? 1.5 * z : -0), head - 1 * z, 2.5 * z, hr * 1.4); }
+  g.fillStyle = L0.hair; g.beginPath(); g.arc(x - dir * 0.8 * z, head - 1 * z, hr * 1.02, Math.PI * 0.95, Math.PI * 2.05); g.fill();
+  if (L0.long && !L0.hat) { g.fillRect(x - dir * hr - (dir > 0 ? 1.5 * z : -0), head - 1 * z, 2.5 * z, hr * 1.4); }
   if (L0.hat === 'sun') { g.fillStyle = L0.hatCol; g.beginPath(); g.ellipse(x, head - hr * 0.6, hr * 1.9, hr * 0.55, 0, 0, TAU); g.fill(); g.beginPath(); g.arc(x, head - hr * 0.6, hr * 0.9, Math.PI, TAU); g.fill(); }
-  else if (L0.hat === 'cap') { g.fillStyle = L0.hatCol; g.beginPath(); g.arc(x, head - hr * 0.3, hr, Math.PI, TAU); g.fill(); g.fillRect(x + (v.dir > 0 ? 0 : -hr * 1.6), head - hr * 0.4, hr * 1.6, hr * 0.3); }
+  else if (L0.hat === 'cap') { g.fillStyle = L0.hatCol; g.beginPath(); g.arc(x, head - hr * 0.3, hr, Math.PI, TAU); g.fill(); g.fillRect(x + (dir > 0 ? 0 : -hr * 1.6), head - hr * 0.4, hr * 1.6, hr * 0.3); }
   else if (L0.hat === 'beret') { g.fillStyle = L0.hatCol; g.beginPath(); g.ellipse(x, head - hr * 0.75, hr * 1.1, hr * 0.45, -0.2, 0, TAU); g.fill(); }
   g.globalAlpha = 1;
   if (v.bubble) R.bubbles.push([x, head - hr - 8 * z, v.bubble]);

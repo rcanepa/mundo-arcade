@@ -22,7 +22,13 @@ function onHour() {
   if (UI.title) return;
   if (h === OPEN_H && G.open) planVisitors();
   if (h === 17) forecast();
-  if (h === CLOSE_H && G.open && G.today.visitors) toast(L().dailyReport(G.today.visitors, money(G.today.income)), 'info');
+  // concurso de jardines del barrio: el jurado pasa a media mañana y da el resultado al atardecer
+  if (G.day % DAYS_YEAR === CONTEST_DAY) {
+    if (h === 10) { for (let i = 0; i < 3; i++) spawnVisitor(true, 'jury'); news('contestJury', {}); }
+    if (h === 17) judgeContest();
+  }
+  if (h === CLOSE_H && G.open && G.today.visitors) toast(L().dailyReport(G.today.visitors, money(G.today.income)) + (G.today.water ? ' ' + L().waterBill(money(G.today.water)) : ''), 'info');
+  if (UI.tool === 'water' && h % 3 === 0) renderTray();
   if (h % 2 === 0) updateBeauty();
   bumpVis();
   checkGoals();
@@ -42,6 +48,7 @@ function onNewDay() {
     const yd = G.day % DAYS_YEAR;
     if (yd % DAYS_SEASON === 0) toast(`${['🌷', '☀️', '🍂', '❄️'][seasonOf(yd)]} ${L().seasons[seasonOf(yd)]}`, 'goal');
     maybeNewOrder(); expireOrders();
+    if (yd === CONTEST_DAY - 6) news('contestSoon', {});
     saveGame();
   }
   bumpVis();
@@ -68,7 +75,11 @@ function useTool(sx, sy, first) {
   // primero la planta que está en la casilla tocada; si no hay, la copa de un árbol que la tape
   const picked = ['inspect', 'harvest', 'move'].includes(UI.tool) && !(UI.tool === 'move' && UI.moving) ? (t && t.plant) || pickPlant(sx, sy) : null;
   switch (UI.tool) {
-    case 'inspect': if (first) { if (picked) selectTile(picked.x, picked.y, picked); else if (t) selectTile(x, y); else closeInspector(); } break;
+    case 'inspect':
+      if (!first) break;
+      if (t && t.t === 'house' && !picked) { openHouse(); break; }
+      if (picked) selectTile(picked.x, picked.y, picked); else if (t) selectTile(x, y); else closeInspector();
+      break;
     case 'water': actWater(x, y, G.hose ? 1 : 0); break;
     case 'plant': if (!UI.seed) { if (first) openCatalog(); } else if (t && !t.plant) actPlant(UI.seed, x, y); else if (first && t && t.plant) selectTile(x, y); break;
     case 'harvest': { const p = picked || (t && t.plant); if (p) actHarvest(p); break; }
@@ -77,6 +88,7 @@ function useTool(sx, sy, first) {
     case 'move':
       if (!first) break;
       if (!UI.moving) { const p = picked || (t && t.plant); if (p && !p.dead && tileAt(p.x, p.y).own) { UI.moving = p; R.sel = p; renderTray(); Sound.sfx.click(); } }
+      else if (t && t.t === 'house') openHouse();
       else if (actTransplant(UI.moving, x, y)) { const p = UI.moving; UI.moving = null; renderTray(); selectTile(p.x, p.y, p); }
       break;
     case 'remove': if (first || !(t && t.plant)) actRemove(x, y); break;
@@ -187,6 +199,7 @@ function bindInput() {
     const n = parseInt(e.key, 10);
     if (n >= 1 && n <= TOOLS.length) { setTool(TOOLS[n - 1].id); return; }
     if (e.code === 'KeyL') { R.lens = R.lens === 'light' ? null : 'light'; if (R.lens) G.stats.lens = (G.stats.lens || 0) + 1; renderLensBar(); }
+    if (e.code === 'KeyQ' || e.code === 'KeyE') { rotateView(e.code === 'KeyQ' ? -1 : 1); renderLensBar(); }
     if (e.key === '+' || e.key === '=') zoomAt(1.15, VW / 2, VH / 2);
     if (e.key === '-') zoomAt(1 / 1.15, VW / 2, VH / 2);
     keysDown.add(e.code);
@@ -215,8 +228,8 @@ function panKeys(dt) {
 }
 
 // ---------- Jardín de muestra (pantalla de título y portada) ----------
-function demoGarden() {
-  newGarden(4242);
+function demoGarden(climate) {
+  newGarden(4242, climate);
   G.owned = G.owned.map(() => true);
   for (const t of G.tiles) t.own = true;
   G.day = 8; G.hour = 17.6; G.open = true; G.rep = 4.2; G.repMax = 4.2;
@@ -292,7 +305,7 @@ function frame(now) {
   drawWorld(dt);
   if (!UI.title && !COVER) {
     hudT -= dt; inspT -= dt;
-    if (hudT <= 0) { hudT = 0.25; renderHUD(); }
+    if (hudT <= 0) { hudT = 0.25; renderHUD(); updateCoach(); }
     if (inspT <= 0) { inspT = 1; if (UI.sel) refreshInspector(); }
   }
   // la portada se dibuja unas pocas veces y queda quieta (así se puede fotografiar)
@@ -311,16 +324,17 @@ function centerTitle() { centerOn(13, 8, Math.min(VW / 1500, VH / 800) * 1.35); 
 
 function boot() {
   initRender();
-  demoGarden();
+  demoGarden(COVER ? new URLSearchParams(location.search).get('cl') : undefined);
   buildUI();
   bindInput();
   if (COVER) {
     document.body.classList.add('cover');
     centerOn(11.4, 7.4, Math.min(VW / 1320, VH / 740));
-    // parámetros para probar otras horas y estaciones: ?cover&h=12&d=40&z=0.6
+    // parámetros para probar otras horas, estaciones y vistas: ?cover&h=12&d=40&z=0.6&rot=2
     const q = new URLSearchParams(location.search);
     if (q.get('h')) G.hour = +q.get('h');
     if (q.get('d')) { G.day = +q.get('d'); bumpVis(); for (const p of G.plants) { const sp = spOf(p); p.dorm = isDormant(sp, G.day % DAYS_YEAR); p.bloom = sp.bloom && inWindow(G.day % DAYS_YEAR, sp.bloom) ? 1 : 0; } computeLight(); }
+    if (q.get('rot')) { cam.rot = +q.get('rot') & 3; centerOn(11.4, 7.4); }
     if (q.get('z')) centerOn(11.5, 9.6, +q.get('z'));
     if (q.get('rain')) Object.assign(G.w, { rain: 16, cloud: 0.92, kind: 'rain' });
     if (q.get('frost')) Object.assign(G.w, { tmin: -3 });
@@ -328,7 +342,7 @@ function boot() {
     const spots = [[3, 9, 1], [7, 12, -1], [11, 12, 1], [16, 9, -1], [16, 5, 1], [12, 2, 1], [20, 12, -1], [3, 15, -1], [14, 12, 1]];
     spots.forEach(([x, y, d]) => {
       const v = spawnVisitor(true);
-      Object.assign(v, { x: x + 0.5, y: y + 0.5, state: 'look', dir: d, wait: 99, paid: true, moving: false });
+      Object.assign(v, { x: x + 0.5, y: y + 0.5, state: 'look', fx: d, fy: -d, wait: 99, paid: true, moving: false });
     });
     for (let i = 0; i < 3; i++) drawWorld(0.016);
   } else {

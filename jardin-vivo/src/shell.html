@@ -103,6 +103,12 @@
   #lensbar button em { font-style: normal; }
   #lensbar button:hover { background: var(--soft); }
   #lensbar button.on { background: #f4e7c4; box-shadow: inset 0 0 0 1.5px var(--gold); }
+  #lensbar .rotrow { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 3px; padding-top: 5px; }
+  #lensbar .rotrow button { font-size: 18px; padding: 2px 10px; line-height: 1; }
+  .compass { position: relative; width: 30px; height: 30px; border-radius: 50%; background: var(--soft); box-shadow: inset 0 0 0 1.5px var(--line); }
+  .compass i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -6px 0 0 -3px; border: 3px solid transparent; border-bottom: 6px solid #c43c3c; border-top: 0; transform-origin: 50% 100%; transform: rotate(var(--r)); }
+  .compass i::after { content: ''; position: absolute; left: -3px; top: 6px; border: 3px solid transparent; border-top: 6px solid #9aa39a; border-bottom: 0; }
+  .compass b { position: absolute; left: 50%; top: 50%; font-size: 8px; font-weight: 800; line-height: 1; color: #c43c3c; transform: translate(-50%, -50%) rotate(var(--r)) translateY(-10.5px) rotate(calc(-1 * var(--r))); }
   .legend { display: grid; gap: 3px; padding: 6px 4px 2px; border-top: 1px solid var(--line); margin-top: 3px; }
   .legend span { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
   .legend i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }
@@ -146,7 +152,7 @@
   .bestgrid img { width: 44px; height: 44px; }
   .bestgrid small { font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; }
   .bestgrid i, .fit { position: absolute; top: 2px; right: 2px; font-style: normal; font-size: 10px; font-weight: 900; border-radius: 99px; padding: 0 5px; color: #fff !important; }
-  .ok { background: #5aa04a; } .mid { background: #d8a030; } .bad { background: #d8573a; }
+  .ok { background: #23998a; } .mid { background: #d8a030; } .bad { background: #c43c7c; }
   span.ok, span.mid, span.bad { color: #fff; border-radius: 99px; padding: 0 6px; font-weight: 900; }
 
   /* Avisos y tooltip */
@@ -179,6 +185,7 @@
   .card b { font: 700 14px/1.15 var(--serif); margin-top: 2px; }
   .card i { font-size: 11px; color: var(--muted); }
   .card .price { position: absolute; top: 6px; left: 6px; background: #fff; border-radius: 99px; padding: 0 7px; font-weight: 800; font-size: 11.5px; color: var(--leaf-d); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+  .card .price.inv { color: #8a5a10; background: #fff3cf; }
   .card .lock { position: absolute; top: 6px; left: 6px; font-size: 11px; font-weight: 800; color: var(--muted); }
   .card .reqs { font-size: 12px; margin-top: 3px; letter-spacing: 1px; }
   .card.locked img { filter: grayscale(1) opacity(0.45); }
@@ -228,6 +235,58 @@
   .letter .sign { text-align: right; font-style: italic; margin-top: 18px; }
   .letter .btn { display: flex; margin: 18px auto 0; }
 
+  /* Dentro de la casa */
+  .houseview { display: grid; grid-template-columns: 1fr 330px; gap: 16px; align-items: start; }
+  .wins { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .win { background: repeating-linear-gradient(90deg, #f3e7d0 0 22px, #efe1c6 22px 44px); border-radius: 18px; padding: 10px 12px 0; border: 1px solid var(--line); }
+  .wintitle { display: flex; justify-content: space-between; align-items: baseline; }
+  .wintitle b { font: 700 15px var(--serif); }
+  .wintitle small { color: var(--muted); font-weight: 700; }
+  .pane { position: relative; height: 92px; margin: 8px 18% 0; border: 7px solid #fbf8f0; border-bottom-width: 4px; border-radius: 6px 6px 0 0; background: linear-gradient(var(--sky1), var(--sky2)); overflow: hidden; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.06); }
+  .pane::before, .pane::after { content: ''; position: absolute; background: #fbf8f0; }
+  .pane::before { left: 50%; top: 0; bottom: 0; width: 5px; transform: translateX(-50%); }
+  .pane::after { top: 45%; left: 0; right: 0; height: 5px; }
+  .pane .ray { position: absolute; inset: -20% -40%; background: linear-gradient(115deg, transparent 35%, rgba(255, 240, 170, 0.55) 45%, transparent 60%); }
+  .sill { display: flex; gap: 6px; justify-content: space-between; background: linear-gradient(#b98a5c, #9a6c43); margin: 0 -12px; padding: 0 12px; border-radius: 0 0 16px 16px; height: 18px; position: relative; }
+  .pot { position: relative; flex: 1; height: 120px; margin-top: -102px; border: 0; background: none; padding: 0; border-radius: 12px; }
+  .pot img { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: 100%; max-height: 100px; }
+  .pot .clay { position: absolute; left: 22%; right: 22%; bottom: 0; height: 30px; background: linear-gradient(90deg, #b8603a, #d27a4f 40%, #b4593a); clip-path: polygon(0 0, 100% 0, 86% 100%, 14% 100%); }
+  .pot .clay::before { content: ''; position: absolute; left: -4%; right: -4%; top: 0; height: 7px; background: #a8502f; }
+  .pot.buy { border: 2px dashed rgba(43, 58, 44, 0.25); height: 54px; margin-top: -36px; align-self: flex-end; display: grid; place-items: center; color: var(--muted); }
+  .pot.buy b { font-size: 18px; line-height: 1; }
+  .pot.sel { box-shadow: 0 0 0 3px #f2b632; }
+  .pot em { position: absolute; top: 6px; right: 6px; font-style: normal; background: #fffdf4; border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-size: 12px; }
+  .potpanel { background: #fff8; border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px; max-height: 70vh; overflow: auto; }
+  .potpanel h3 { font: 700 19px var(--serif); margin: 0; }
+  .acts.small .btn { font-size: 11.5px; padding: 3px 8px; }
+
+  /* Elegir clima */
+  .climates { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .climate { border: 1px solid var(--line); background: linear-gradient(#fffdf6, #f5efdd); border-radius: 18px; padding: 0 0 12px; text-align: left; display: grid; overflow: hidden; transition: transform 0.12s, box-shadow 0.15s; }
+  .climate:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(43, 58, 44, 0.16); border-color: var(--leaf); }
+  .climate b { font: 700 19px var(--serif); margin: 10px 14px 0; color: var(--leaf-d); }
+  .climate small { margin: 0 14px; color: var(--terra); font-weight: 800; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .climate p { margin: 6px 14px 0; font-size: 13px; color: var(--ink); }
+  .cimg { height: 86px; display: block; position: relative; }
+  .c-santiago { background: linear-gradient(#8ec0e6, #e9d9b8 70%, #b9cc96 70%); }
+  .c-santiago::after { content: ''; position: absolute; inset: 18px 0 30% 0; background: #9eb0cc; clip-path: polygon(0 100%, 12% 40%, 22% 60%, 35% 10%, 48% 55%, 60% 25%, 74% 70%, 86% 30%, 100% 80%, 100% 100%); }
+  .c-valdivia { background: linear-gradient(#a8b8c4, #cfd8d2 70%, #6f9a68 70%); }
+  .c-valdivia::after { content: ''; position: absolute; inset: 8px 15% 30% 35%; background: linear-gradient(#ffffff 30%, #8f9fb4 30%); clip-path: polygon(0 100%, 42% 4%, 58% 4%, 100% 100%); }
+  .c-serena { background: linear-gradient(#cfd8de, #f0e6cc 70%, #d4c79e 70%); }
+  .c-serena::after { content: ''; position: absolute; inset: 40px 0 30% 0; background: #c4ad88; clip-path: polygon(0 100%, 20% 30%, 45% 60%, 70% 20%, 100% 70%, 100% 100%); }
+  .c-cdmx { background: linear-gradient(#9ccbe8, #e8e0c4 70%, #a8c084 70%); }
+  .c-cdmx::after { content: ''; position: absolute; inset: 14px 5% 30% 5%; background: linear-gradient(#ffffff 28%, #98a6c0 28%); clip-path: polygon(0 100%, 18% 0, 26% 0, 46% 100%, 50% 100%, 62% 30%, 88% 26%, 100% 100%); }
+
+  /* Guía de los primeros pasos */
+  #coach { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+  #coach .ring { position: fixed; border: 3px solid #f2b632; border-radius: 16px; box-shadow: 0 0 0 4px rgba(242, 182, 50, 0.25); animation: coachring 1.2s ease-in-out infinite; }
+  #coach .tag { position: fixed; background: #3a6b35; color: #fff; font-weight: 800; font-size: 13.5px; padding: 8px 12px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; animation: coachbob 1.2s ease-in-out infinite; }
+  #coach .tag::after { content: ''; position: absolute; left: calc(var(--ax) - 8px); border: 8px solid transparent; }
+  #coach .tag.down::after { top: -16px; border-bottom-color: #3a6b35; }
+  #coach .tag.up::after { bottom: -16px; border-top-color: #3a6b35; }
+  @keyframes coachring { 50% { transform: scale(1.06); opacity: 0.7; } }
+  @keyframes coachbob { 50% { transform: translateY(3px); } }
+
   /* Pantalla de título */
   #title { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(255, 252, 240, 0.0) 30%, rgba(30, 45, 25, 0.35) 100%); }
   .titlebox { text-align: center; background: rgba(251, 247, 236, 0.86); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 28px 40px 22px; border-radius: 32px; box-shadow: 0 30px 80px rgba(20, 30, 15, 0.3); max-width: min(520px, 92vw); animation: pop 0.6s ease-out; }
@@ -252,6 +311,9 @@
     #lensbar { bottom: 74px; left: 8px; width: auto; flex-direction: row; padding: 3px; border-radius: 14px; }
     #lensbar > small, #lensbar button em { display: none; }
     #lensbar button { padding: 4px 6px; font-size: 16px; }
+    #lensbar .rotrow { border: 0; margin: 0 0 0 2px; padding: 0; gap: 2px; }
+    #lensbar .rotrow button { padding: 4px 6px; }
+    .compass { width: 26px; height: 26px; }
     .legend { position: absolute; bottom: 44px; left: 0; background: var(--panel); border-radius: 12px; padding: 6px 8px; box-shadow: var(--shadow); }
     #tray { bottom: 120px; left: 8px; right: 8px; transform: none; max-width: none; padding: 8px 10px; max-height: 30vh; overflow: auto; }
     .trayhead span { display: none; }
@@ -260,7 +322,8 @@
     .iconbtn.help { display: none; }
     .star { width: 12px; height: 12px; }
     #tray.idle { display: none; }
-    .cols, .hdetail { grid-template-columns: 1fr; }
+    .cols, .hdetail, .houseview { grid-template-columns: 1fr; }
+    .wins { grid-template-columns: 1fr; }
     .hpic img { width: 160px; height: 160px; }
     .sheet { padding: 16px; }
     .cards { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
@@ -286,4 +349,5 @@
   <div id="tip" hidden></div>
 </div>
 <div id="modal" hidden></div>
+<div id="coach" hidden><div class="ring"></div><div class="tag"></div></div>
 <div id="title" hidden></div>

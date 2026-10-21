@@ -63,6 +63,12 @@ const SPECIES = [
     sun: [8, 14], water: 'med', drain: [0.4, 0.75], ph: [6.0, 6.8], feed: 2, minT: 2, maxT: 36, baseT: 10,
     life: 'annual', grow: 12, bloom: [14, 22], fruit: [16, 26], beauty: 2.5, fol: 0.55, harv: ['fruit', 8, 0], start: 0,
     art: { f: 'corn', h: 2.1, w: 0.5, lc: '#5a9a3a' } },
+  { id: 'bean', cat: 'huerto', type: 'annual', tier: 1, price: 3, la: 'Phaseolus vulgaris',
+    es: ['Poroto', 'Nativo de América. Trepa por lo que encuentra y fija nitrógeno del aire, así abona la tierra de sus vecinos. Con el choclo y el zapallo forma las "tres hermanas".'],
+    en: ['Bean', 'Native to the Americas. It climbs whatever it finds and fixes nitrogen from the air, feeding the soil of its neighbors. With corn and squash it forms the "three sisters".'],
+    sun: [6, 14], water: 'med', drain: [0.4, 0.8], ph: [6.0, 7.5], feed: 0, minT: 3, maxT: 34, baseT: 10,
+    life: 'annual', grow: 8, bloom: [11, 24], fruit: [14, 30], beauty: 2.5, fol: 0.5, harv: ['fruit', 5, 1], start: 0, nfix: 1,
+    art: { f: 'vine', h: 1.8, w: 0.42, lc: '#4f8f3a', lf: 'trifol', ls: 0.05, fl: { s: 'pea', c: '#f4eef6', r: 0.016, n: 12, pal: ['#f4eef6', '#c9a0dc', '#e8e0f0'] }, fr: { s: 'pod', c: '#6fae3f', r: 0.016, n: 10 } } },
   // ---------- Hierbas ----------
   { id: 'basil', cat: 'huerto', type: 'annual', tier: 0, price: 3, la: 'Ocimum basilicum',
     es: ['Albahaca', 'Hierba de verano muy sensible al frío: bajo 10 °C se daña. Corta las puntas para que siga dando hojas.'],
@@ -70,13 +76,13 @@ const SPECIES = [
     sun: [6, 12], water: 'med', drain: [0.45, 0.8], ph: [6.0, 7.5], feed: 1, minT: 8, maxT: 36, baseT: 12,
     life: 'annual', grow: 6, bloom: [14, 30], beauty: 2, fol: 0.6, harv: ['leaf', 4, 1], start: 0.08, scent: 1, insect: 1,
     art: { f: 'stem', h: 0.45, w: 0.36, st: 3, lc: '#4fa83a', lf: 'oval', ls: 0.055, ld: 6, fl: { s: 'spike', c: '#f3eaf5', r: 0.012, n: 1, len: 0.08 } } },
-  { id: 'lavender', cat: 'huerto', type: 'shrub', tier: 0, price: 7, la: 'Lavandula angustifolia',
+  { id: 'lavender', cat: 'huerto', type: 'shrub', tier: 0, price: 7, la: 'Lavandula angustifolia', prune: [24, 31],
     es: ['Lavanda', 'Mediterránea: quiere pleno sol, poco riego y suelo arenoso o pedregoso. En tierra húmeda y rica se le pudre la raíz.'],
     en: ['Lavender', 'Mediterranean: wants full sun, little water and sandy or stony soil. In rich, wet soil its roots rot.'],
     sun: [6, 14], water: 'low', drain: [0.65, 1], ph: [6.5, 8.2], feed: 0, minT: -18, maxT: 40, baseT: 6,
     life: 'evergreen', grow: 14, bloom: [8, 22], beauty: 6, fol: 0.6, harv: ['flower', 7, 1], start: 0.2, scent: 1, insect: 1,
     art: { f: 'bush', h: 0.6, w: 0.7, lc: '#8fa38a', lf: 'needle', ls: 0.05, dens: 60, fl: { s: 'spike', c: '#8e6cc4', r: 0.013, n: 24, sh: 0.25, len: 0.09 } } },
-  { id: 'rosemary', cat: 'huerto', type: 'shrub', tier: 0, price: 6, la: 'Salvia rosmarinus',
+  { id: 'rosemary', cat: 'huerto', type: 'shrub', tier: 0, price: 6, la: 'Salvia rosmarinus', prune: [6, 12],
     es: ['Romero', 'Arbusto aromático que florece en pleno invierno, cuando las abejas casi no tienen alimento. Riégalo poco.'],
     en: ['Rosemary', 'An aromatic shrub that blooms in midwinter, when bees have little to eat. Water it sparingly.'],
     sun: [6, 14], water: 'low', drain: [0.6, 1], ph: [6.0, 8.2], feed: 0, minT: -10, maxT: 40, baseT: 5,
@@ -258,7 +264,7 @@ const SPECIES = [
     sun: [6, 14], water: 'med', drain: [0.45, 0.8], ph: [6.5, 7.5], feed: 1, minT: -35, maxT: 34, baseT: 4, chill: 500,
     life: 'perennial', grow: 26, bloom: [4, 9], dorm: [33, 50], beauty: 9, fol: 0.4, harv: ['flower', 14, 1], start: 0.15, scent: 1,
     art: { f: 'stem', h: 0.9, w: 0.8, st: 6, lc: '#3f6f3a', lf: 'compound', ls: 0.1, ld: 3, fl: { s: 'peony', c: '#f5a3c0', r: 0.07, n: 1, pal: ['#f5a3c0', '#ffffff', '#c0392b', '#f8c9d6'] } } },
-  { id: 'fuchsia', cat: 'arbustos', type: 'shrub', tier: 2, price: 9, la: 'Fuchsia magellanica',
+  { id: 'fuchsia', cat: 'arbustos', type: 'shrub', tier: 2, price: 9, la: 'Fuchsia magellanica', prune: [44, 51],
     es: ['Chilco', 'Arbusto nativo del sur de Chile. Sus flores colgantes son la comida favorita de los picaflores. Prefiere sombra húmeda.'],
     en: ['Hardy fuchsia', 'A shrub native to southern Chile. Its dangling flowers are hummingbirds\' favorite food. Prefers moist shade.'],
     sun: [2, 6], am: 1, water: 'high', drain: [0.35, 0.75], ph: [5.5, 7.0], feed: 1, minT: -10, maxT: 30, baseT: 6, hum: 0.45,
@@ -296,14 +302,14 @@ const SPECIES = [
     life: 'evergreen', grow: 12, bloom: [44, 10], beauty: 6, fol: 0.6, harv: ['flower', 6, 1], start: 0.1,
     art: { f: 'strap', h: 0.6, w: 0.5, lc: '#2f6f3a', lf: 'arrow', n: 7, fl: { s: 'calla', c: '#fbfbf5', c2: '#f2c12e', r: 0.06, n: 3, sh: 0.75 } } },
   // ---------- Arbustos y trepadoras ----------
-  { id: 'rose', cat: 'arbustos', type: 'shrub', tier: 1, price: 12, la: 'Rosa × hybrida',
+  { id: 'rose', cat: 'arbustos', type: 'shrub', tier: 1, price: 12, la: 'Rosa × hybrida', prune: [42, 50],
     es: ['Rosa', 'Necesita al menos 6 horas de sol, tierra rica y mucho abono. En sombra húmeda se llena de hongos y pulgones.'],
     en: ['Rose', 'Needs at least 6 hours of sun, rich soil and plenty of feeding. In damp shade it fills with fungus and aphids.'],
     sun: [6, 14], water: 'med', drain: [0.35, 0.75], ph: [6.0, 6.9], feed: 2, minT: -20, maxT: 35, baseT: 6,
     life: 'deciduous', grow: 14, bloom: [4, 30], dorm: [41, 48], beauty: 7, fol: 0.4, harv: ['flower', 8, 1], start: 0.25,
     scent: 1, pests: 'aphid',
     art: { f: 'bush', h: 1.2, w: 0.8, lc: '#2f5e2f', lf: 'compound', ls: 0.05, dens: 45, up: 1, fl: { s: 'rose', c: '#c0392b', r: 0.045, n: 8, pal: ['#c0392b', '#f78fb3', '#ffffff', '#f6b93b', '#e84393', '#fd79a8'] } } },
-  { id: 'hydrangea', cat: 'arbustos', type: 'shrub', tier: 1, price: 12, la: 'Hydrangea macrophylla',
+  { id: 'hydrangea', cat: 'arbustos', type: 'shrub', tier: 1, price: 12, la: 'Hydrangea macrophylla', prune: [44, 50],
     es: ['Hortensia', '¡Cambia de color según el suelo! Con pH ácido (bajo 5,5) da flores azules; en suelo alcalino, rosadas. Prefiere sol de mañana.'],
     en: ['Hydrangea', 'It changes color with the soil! Acidic soil (pH under 5.5) gives blue flowers; alkaline soil, pink. Prefers morning sun.'],
     sun: [2, 6], am: 1, water: 'high', drain: [0.3, 0.7], ph: [4.5, 8.0], feed: 1, minT: -15, maxT: 32, baseT: 6,
@@ -340,7 +346,7 @@ const SPECIES = [
     life: 'deciduous', grow: 26, bloom: [0, 5], fruit: [10, 20], dorm: [41, 49], fall: '#c0392b', beauty: 4.5, fol: 0.6,
     harv: ['fruit', 10, 1], start: 0.3,
     art: { f: 'bush', h: 1.4, w: 1.0, lc: '#3f7d4a', lf: 'oval', ls: 0.045, dens: 70, up: 1, fl: { s: 'bells', c: '#f6efe6', r: 0.011, n: 16 }, fr: { s: 'berry', c: '#3b4f9a', r: 0.012, n: 30 } } },
-  { id: 'bougainvillea', cat: 'arbustos', type: 'vine', tier: 3, price: 22, la: 'Bougainvillea glabra',
+  { id: 'bougainvillea', cat: 'arbustos', type: 'vine', tier: 3, price: 22, la: 'Bougainvillea glabra', prune: [45, 51],
     es: ['Buganvilla', 'Trepadora de Brasil que estalla de color en verano. Sus "flores" son hojas de colores (brácteas). Ama el calor y la sequía.'],
     en: ['Bougainvillea', 'A Brazilian climber that bursts with color in summer. Its "flowers" are colored leaves (bracts). Loves heat and drought.'],
     sun: [8, 14], water: 'low', drain: [0.55, 0.95], ph: [5.5, 7.5], feed: 1, minT: -1, maxT: 42, baseT: 10,
@@ -352,7 +358,7 @@ const SPECIES = [
     sun: [4, 12], water: 'med', drain: [0.45, 0.85], ph: [6.0, 7.5], feed: 1, minT: -5, maxT: 36, baseT: 6,
     life: 'evergreen', grow: 20, bloom: [45, 6], beauty: 6, fol: 0.6, start: 0.25, scent: 1,
     art: { f: 'vine', h: 2.0, w: 1.0, lc: '#2f6f2f', lf: 'lance', ls: 0.03, fl: { s: 'star5', c: '#ffffff', c2: '#f7c6d9', r: 0.012, n: 70 } } },
-  { id: 'wisteria', cat: 'arbustos', type: 'vine', tier: 3, price: 35, la: 'Wisteria sinensis',
+  { id: 'wisteria', cat: 'arbustos', type: 'vine', tier: 3, price: 35, la: 'Wisteria sinensis', prune: [40, 48],
     es: ['Glicina', 'Racimos colgantes y perfumados que aparecen antes que las hojas. Tarda en florecer, y el exceso de abono la retrasa más.'],
     en: ['Wisteria', 'Fragrant hanging clusters that appear before the leaves. Slow to bloom — overfeeding delays it even more.'],
     sun: [6, 14], water: 'med', drain: [0.45, 0.8], ph: [6.0, 7.5], feed: 0, minT: -25, maxT: 38, baseT: 5,
@@ -371,7 +377,7 @@ const SPECIES = [
     sun: [6, 14], water: 'med', drain: [0.5, 0.85], ph: [5.5, 7.2], feed: 2, minT: -2, maxT: 38, baseT: 12,
     life: 'evergreen', grow: 40, bloom: [0, 9], fruit: [28, 6], beauty: 4.5, fol: 0.75, harv: ['fruit', 14, 1], start: 0.35, scent: 1,
     art: { f: 'tree', h: 3.2, w: 2.4, tr: '#7a5a3c', cn: 'round', lc: '#2f6b34', fl: { s: 'blossom', c: '#fffaf0' }, fr: { s: 'citrus', c: '#f4d03f', r: 0.05, n: 14 } } },
-  { id: 'olive', cat: 'arboles', type: 'tree', tier: 2, price: 55, la: 'Olea europaea',
+  { id: 'olive', cat: 'arboles', type: 'tree', tier: 2, price: 55, la: 'Olea europaea', prune: [44, 51],
     es: ['Olivo', 'Árbol mediterráneo que puede vivir más de mil años. Ama el sol y el suelo pobre y seco; el exceso de riego lo daña.'],
     en: ['Olive tree', 'A Mediterranean tree that can live over a thousand years. Loves sun and poor, dry soil; overwatering harms it.'],
     sun: [7, 14], water: 'low', drain: [0.6, 1], ph: [6.5, 8.5], feed: 0, minT: -8, maxT: 42, baseT: 10,
@@ -507,7 +513,7 @@ const SPECIES = [
     sun: [5, 14], water: 'med', drain: [0.45, 0.85], ph: [6.0, 7.5], feed: 2, minT: -1, maxT: 40, baseT: 10,
     life: 'evergreen', grow: 30, bloom: [36, 8], beauty: 7.5, fol: 0.75, harv: ['flower', 9, 1], start: 0.3,
     art: { f: 'strap', h: 1.1, w: 0.9, lc: '#3f6f5a', lf: 'paddle', n: 9, fl: { s: 'bird', c: '#f39c12', c2: '#3f5bd8', r: 0.08, n: 3, sh: 1.2 } } },
-  { id: 'hibiscus', cat: 'tropical', type: 'shrub', tier: 3, price: 20, la: 'Hibiscus rosa-sinensis',
+  { id: 'hibiscus', cat: 'tropical', type: 'shrub', tier: 3, price: 20, la: 'Hibiscus rosa-sinensis', prune: [45, 51],
     es: ['Hibisco', 'Flores tropicales enormes que duran un solo día, pero aparecen sin parar en verano. No tolera el frío.'],
     en: ['Hibiscus', 'Huge tropical flowers that last a single day but keep coming all summer. Can\'t tolerate cold.'],
     sun: [6, 14], water: 'high', drain: [0.45, 0.8], ph: [6.0, 7.0], feed: 2, minT: 5, maxT: 38, baseT: 12, hum: 0.45,
@@ -520,6 +526,25 @@ const SPECIES = [
     life: 'evergreen', grow: 20, bloom: [0, 51], beauty: 7, fol: 0.75, harv: ['flower', 8, 1], start: 0.3,
     art: { f: 'rosette', h: 0.5, w: 0.46, lc: '#1f5f2f', lf: 'heartbig', n: 7, ls: 0.18, fl: { s: 'anthurium', c: '#d0102f', c2: '#f7e08a', r: 0.05, n: 3, sh: 0.5 } } }
 ];
+
+// Plantas compañeras: cuánto mejora una especie con cada vecina (a un paso de distancia)
+const COMPANIONS = {
+  tomato: { basil: 0.06, tagetes: 0.04, calendula: 0.03 }, pepper: { basil: 0.05, tagetes: 0.04 },
+  corn: { bean: 0.07, pumpkin: 0.05 }, bean: { corn: 0.07, pumpkin: 0.04 }, pumpkin: { corn: 0.05, bean: 0.06, nasturtium: 0.03 },
+  lettuce: { carrot: 0.03, strawberry: 0.03 }, carrot: { lettuce: 0.03, rosemary: 0.04, cilantro: 0.03 },
+  rose: { lavender: 0.05, tagetes: 0.04, calendula: 0.03 }, strawberry: { lettuce: 0.03, thyme: 0.04 },
+  basil: { tomato: 0.03 }, cabbage: {}
+};
+
+// Cómo se multiplica cada especie: semillas, esquejes o dividiendo la mata
+function propMethod(sp) {
+  if (sp.type === 'tree') return null;
+  if (sp.id === 'foxglove') return 'seed';
+  if (sp.type === 'succulent' || ['monstera', 'mint', 'geranium'].includes(sp.id)) return 'cutting';
+  if (sp.type === 'shrub' || (sp.type === 'vine' && sp.life !== 'annual')) return 'cutting';
+  if (sp.type === 'bulb' || sp.type === 'aquatic' || (sp.life !== 'annual' && ['strap', 'rosette', 'fern', 'grass', 'papyrus'].includes(sp.art.f))) return 'division';
+  return 'seed';
+}
 
 const SP = {};
 SPECIES.forEach((s, i) => { s.idx = i; SP[s.id] = s; });

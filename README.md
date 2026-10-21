@@ -15,6 +15,7 @@ turbo-barro/    primer juego
   cover.jpg     imagen de la tarjeta (800×500)
   build.sh      arma index.html a partir de src/
   src/          código del juego (los textos de ambos idiomas están en i18n.js)
+jardin-vivo/    segundo juego, con la misma estructura
 ```
 
 ## Probar en el computador
@@ -34,6 +35,18 @@ Edita los archivos de `turbo-barro/src/` y vuelve a armar el juego:
 ```bash
 ./turbo-barro/build.sh
 ```
+
+## Cambiar Jardín Vivo
+
+Edita los archivos de `jardin-vivo/src/` y vuelve a armar el juego:
+
+```bash
+./jardin-vivo/build.sh
+```
+
+- Las especies y sus necesidades reales (luz, riego, suelo, pH, temperaturas, floración) están en `species.js`.
+- El clima, el sol y la luz de cada casilla están en `climate.js` y `garden.js`.
+- La imagen de la tarjeta se puede volver a sacar abriendo `jardin-vivo/index.html?cover` (muestra el jardín de muestra sin botones).
 
 ## Agregar un juego nuevo
 

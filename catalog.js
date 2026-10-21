@@ -2,6 +2,25 @@
 // Para agregar un juego: crea su carpeta (con su index.html y cover.jpg) y copia una entrada aquí.
 const GAMES = [
   {
+    slug: 'jardin-vivo',
+    color: '#6fbf73',
+    cover: 'jardin-vivo/cover.jpg',
+    download: 'JardinVivo.html',
+    added: '2026-10-21',
+    es: {
+      title: 'Jardín Vivo',
+      tagline: 'Cultiva el jardín de tus sueños',
+      description: 'Hereda la casa de tu abuela y su jardín. Más de 80 especies con necesidades reales de luz, agua, suelo, pH y clima: observa el sol, mejora la tierra y protege tus plantas de las heladas. Abre la reja y los visitantes pagarán por ver tus flores.',
+      players: '1 jugador', controls: 'Mouse o pantalla táctil', age: '8+ años'
+    },
+    en: {
+      title: 'Living Garden',
+      tagline: 'Grow the garden of your dreams',
+      description: 'Inherit your grandmother\'s house and garden. Over 80 species with real needs for light, water, soil, pH and climate: watch the sun, improve the soil and shield your plants from frost. Open the gate and visitors will pay to see your flowers.',
+      players: '1 player', controls: 'Mouse or touch', age: 'Ages 8+'
+    }
+  },
+  {
     slug: 'turbo-barro',              // nombre de la carpeta del juego
     color: '#ff8a00',                 // color del borde de su tarjeta
     cover: 'turbo-barro/cover.jpg',   // imagen 16:10

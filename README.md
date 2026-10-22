@@ -46,12 +46,13 @@ Edita los archivos de `jardin-vivo/src/` y vuelve a armar el juego:
 ./jardin-vivo/build.sh
 ```
 
-El mismo comando corre las pruebas automáticas (`jardin-vivo/tests/smoke.js`). Hacen pasar semanas y años de juego sin abrir el navegador y revisan que las plantas, las heladas, el suelo, el riego por goteo, las semillas y esquejes, la poda, las plantas compañeras, los climas, las macetas de la casa, los visitantes, el concurso, el guardado y la vista girada sigan funcionando.
+El mismo comando corre las pruebas automáticas (`jardin-vivo/tests/smoke.js`). Hacen pasar semanas y años de juego sin abrir el navegador y revisan que las plantas, las heladas, el suelo, el riego por goteo, las semillas y esquejes, la poda, las plantas compañeras, los climas, las macetas de la casa, los visitantes, el concurso, el guardado, la vista girada y los terrenos al azar sigan funcionando (revisan 40 terrenos distintos: que se puedan recorrer, que haya canteros con sol y que las plantas de la abuela estén a gusto).
 
 - Las especies y sus necesidades reales (luz, riego, suelo, pH, temperaturas, floración, poda) y las plantas compañeras están en `species.js`.
 - Los climas de cada ciudad (Santiago, Valdivia, La Serena y Ciudad de México) y el sol están en `climate.js`; la luz de cada casilla y de cada ventana de la casa, en `garden.js`.
+- Cada partida nueva arma un terreno distinto (`randomGarden` en `garden.js`): cambian la forma y el lugar de las parcelas, el estanque, el árbol viejo, los canteros y las plantas que dejó la abuela, elegidas para que se den en la ciudad elegida. La casa y la reja no se mueven. La pantalla de título y las partidas guardadas antes de este cambio usan el jardín clásico (`classicGarden`).
 - Los textos en español e inglés están en `i18n.js`.
-- La imagen de la tarjeta se puede volver a sacar abriendo `jardin-vivo/index.html?cover` (muestra el jardín de muestra sin botones). Acepta opciones para probar otros momentos: `h` (hora), `d` (día del año), `z` (zoom), `rot` (vista girada, 0 a 3), `cl` (clima: `santiago`, `valdivia`, `serena`, `cdmx`), `rain` y `frost`. Por ejemplo `index.html?cover&h=21&rot=2&cl=valdivia`.
+- La imagen de la tarjeta se puede volver a sacar abriendo `jardin-vivo/index.html?cover` (muestra el jardín de muestra sin botones). Acepta opciones para probar otros momentos: `h` (hora), `d` (día del año), `z` (zoom), `rot` (vista girada, 0 a 3), `cl` (clima: `santiago`, `valdivia`, `serena`, `cdmx`), `rain`, `frost` y `seed` (muestra el terreno con que empezaría una partida nueva, en vez del jardín de muestra). Por ejemplo `index.html?cover&h=21&rot=2&cl=valdivia` o `index.html?cover&seed=123&cl=cdmx`.
 
 ## Agregar un juego nuevo
 

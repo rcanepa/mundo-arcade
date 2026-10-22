@@ -129,7 +129,7 @@ function renderTray() {
     if (!G.hose) html += `<button class="btn" data-act="hose">🚿 ${esc(T.buyHose)} · ${money(HOSE_COST)}</button>`;
     html += `</div><p class="hint">${esc(G.hose ? T.hoseOn : T.canOn)} ${esc(T.dripTip)}</p>`;
   } else if (tool === 'land') {
-    html += `<div class="trayrow wrap">` + PARCELS.map((p, i) => i === 0 ? '' : `<div class="parcel ${G.owned[i] ? 'owned' : ''}"><b>${esc(T.parcels[i])}</b><small>${esc(T.parcelDesc[i])}</small>
+    html += `<div class="trayrow wrap">` + PARCELS.map((p, i) => i === 0 ? '' : `<div class="parcel ${G.owned[i] ? 'owned' : ''}"><b>${esc(T.parcels[p.soil])}</b><small>${esc(T.parcelDesc[p.soil])}</small>
       ${G.owned[i] ? `<em>✓ ${esc(T.yours)}</em>` : `<button class="btn small" data-buy="${i}">${esc(T.buy)} ${money(p.price)}</button>`}</div>`).join('') + `</div>`;
   } else if (tool === 'move' && UI.moving) {
     html += `<p class="hint">${esc(T.moveNow(spName(spOf(UI.moving))))}</p>`;
@@ -260,7 +260,7 @@ function inspectorHTML(t) {
   const p = t.plant, T = L();
   let html = '';
   if (!t.own && t.pot) return `<h3>${esc(T.potEmpty)}</h3><p class="muted">${esc(T.potLocked)}</p><button class="btn good" data-act="buypot">🪴 ${esc(T.potBuy(money(POT_PRICE)))}</button>`;
-  if (!t.own) return `<h3>${esc(T.parcels[t.parcel])}</h3><p class="muted">${esc(T.parcelDesc[t.parcel])}</p><button class="btn" data-buy="${t.parcel}">${esc(T.buy)} ${money(PARCELS[t.parcel].price)}</button>`;
+  if (!t.own) return `<h3>${esc(T.parcels[PARCELS[t.parcel].soil])}</h3><p class="muted">${esc(T.parcelDesc[PARCELS[t.parcel].soil])}</p><button class="btn" data-buy="${t.parcel}">${esc(T.buy)} ${money(PARCELS[t.parcel].price)}</button>`;
   if (p) {
     const sp = spOf(p), hp = Math.round(p.hp);
     html += `<div class="phead"><img src="${speciesThumb(sp, 76)}" alt=""><div><h3>${esc(spName(sp))}</h3><i>${esc(sp.la)}</i>
@@ -683,7 +683,7 @@ function openHouse() {
 
 function confirmBuy(i) {
   const pc = PARCELS[i], T = L();
-  openModal(() => modalHead(T.parcels[i], T.parcelDesc[i]) + `<p>${esc(T.buyAsk(money(pc.price)))}</p><div class="acts"><button class="btn" data-close>${esc(T.cancel)}</button><button class="btn good" data-yes="1">${esc(T.buy)} ${money(pc.price)}</button></div>`);
+  openModal(() => modalHead(T.parcels[pc.soil], T.parcelDesc[pc.soil]) + `<p>${esc(T.buyAsk(money(pc.price)))}</p><div class="acts"><button class="btn" data-close>${esc(T.cancel)}</button><button class="btn good" data-yes="1">${esc(T.buy)} ${money(pc.price)}</button></div>`);
   UI.modal.onclick = e => { if (e.target.closest('[data-yes]')) { closeModal(); actBuyParcel(i); renderTray(); } };
 }
 

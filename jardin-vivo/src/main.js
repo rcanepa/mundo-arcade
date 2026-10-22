@@ -126,7 +126,7 @@ function updateHover(sx, sy) {
     html = `<b>${esc(L().build[UI.build][0])}</b> · ${money(b.cost)}` + (err ? `<small>${esc(err)}</small>` : '');
   } else if (UI.tool === 'land') {
     if (R.preview) R.preview.hover = t.own ? -1 : t.parcel;
-    if (!t.own) html = `<b>${esc(L().parcels[t.parcel])}</b> · ${money(PARCELS[t.parcel].price)}<small>${esc(L().parcelDesc[t.parcel])}</small>`;
+    if (!t.own) { const pc = PARCELS[t.parcel]; html = `<b>${esc(L().parcels[pc.soil])}</b> · ${money(pc.price)}<small>${esc(L().parcelDesc[pc.soil])}</small>`; }
   } else if (UI.tool === 'care') {
     html = `<b>${esc(L().care[UI.care][0])}</b>${CARE[UI.care].cost ? ' · ' + money(CARE[UI.care].cost) : ''}`;
   } else if (UI.tool === 'move' && UI.moving) {
@@ -229,7 +229,7 @@ function panKeys(dt) {
 
 // ---------- Jardín de muestra (pantalla de título y portada) ----------
 function demoGarden(climate) {
-  newGarden(4242, climate);
+  newGarden(4242, climate, true);
   G.owned = G.owned.map(() => true);
   for (const t of G.tiles) t.own = true;
   G.day = 8; G.hour = 17.6; G.open = true; G.rep = 4.2; G.repMax = 4.2;
@@ -324,7 +324,9 @@ function centerTitle() { centerOn(13, 8, Math.min(VW / 1500, VH / 800) * 1.35); 
 
 function boot() {
   initRender();
-  demoGarden(COVER ? new URLSearchParams(location.search).get('cl') : undefined);
+  const q0 = new URLSearchParams(location.search);
+  // ?cover&seed=123 muestra el terreno con que empezaría una partida nueva (para revisar los mapas)
+  if (COVER && q0.get('seed')) { newGarden(+q0.get('seed'), q0.get('cl') || undefined); G.hour = 15; } else demoGarden(COVER ? q0.get('cl') : undefined);
   buildUI();
   bindInput();
   if (COVER) {
@@ -339,7 +341,7 @@ function boot() {
     if (q.get('rain')) Object.assign(G.w, { rain: 16, cloud: 0.92, kind: 'rain' });
     if (q.get('frost')) Object.assign(G.w, { tmin: -3 });
     // algunos visitantes paseando por el jardín
-    const spots = [[3, 9, 1], [7, 12, -1], [11, 12, 1], [16, 9, -1], [16, 5, 1], [12, 2, 1], [20, 12, -1], [3, 15, -1], [14, 12, 1]];
+    const spots = q.get('seed') ? [] : [[3, 9, 1], [7, 12, -1], [11, 12, 1], [16, 9, -1], [16, 5, 1], [12, 2, 1], [20, 12, -1], [3, 15, -1], [14, 12, 1]];
     spots.forEach(([x, y, d]) => {
       const v = spawnVisitor(true);
       Object.assign(v, { x: x + 0.5, y: y + 0.5, state: 'look', fx: d, fy: -d, wait: 99, paid: true, moving: false });

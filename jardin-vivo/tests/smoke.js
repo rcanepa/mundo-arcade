@@ -59,9 +59,10 @@ const assert = (ok, msg) => { if (!ok) throw new Error(msg); };
 const G = get('G'), SP = get('SP'), SPECIES = get('SPECIES'), STR = get('STR');
 const tileAt = get('tileAt'), addPlant = get('addPlant'), evaluate = get('evaluate'), plantAt = (x, y) => tileAt(x, y).plant;
 
-// Un jardín nuevo, ya jugando (sin la pantalla de título)
+// Un jardín nuevo, ya jugando (sin la pantalla de título). Las pruebas de plantas usan el jardín clásico,
+// que siempre es igual; los terrenos al azar tienen sus propias pruebas.
 function fresh(o = {}) {
-  run('newGarden(' + (o.seed || 7) + '); UI.title = false; VIS.list = []; VIS.queue = [];');
+  run('newGarden(' + (o.seed || 7) + ', undefined, true); UI.title = false; VIS.list = []; VIS.queue = [];');
   if (o.money) G.money = o.money;
   if (o.tier) { G.repMax = o.tier; G.rep = o.tier; }
 }
@@ -260,11 +261,16 @@ check('se pueden sacar esquejes y dividir matas para el semillero', () => {
 });
 
 check('cada clima tiene su tiempo: Valdivia llueve, La Serena casi no y en Ciudad de México no hiela', () => {
+  // 30 años de tiempo con un azar fijo, para que la prueba dé siempre lo mismo
   const stats = id => {
     run(`setClimate('${id}')`);
-    let rain = 0, frost = 0, prev = null, tmax = -99;
-    for (let y = 0; y < 3; y++) for (let d = 0; d < 52; d++) { const w = run('makeWeather')(d, prev, Math.random); prev = w; if (w.rain) rain++; if (w.tmin < -1) frost++; tmax = Math.max(tmax, w.tmax); }
-    return { rain: rain / 156, frost: frost / 156, tmax };
+    const r = run('rng')(12345), makeWeather = run('makeWeather'), seasonOf = run('seasonOf');
+    let rain = 0, frost = 0, prev = null, summer = 0, n = 0;
+    for (let y = 0; y < 30; y++) for (let d = 0; d < 52; d++) {
+      const w = makeWeather(d, prev, r); prev = w; n++;
+      if (w.rain) rain++; if (w.tmin < -1) frost++; if (seasonOf(d) === 1) summer += w.tmax;
+    }
+    return { rain: rain / n, frost: frost / n, tmax: summer / (30 * 13) };
   };
   const st = stats('santiago'), va = stats('valdivia'), se = stats('serena'), mx = stats('cdmx');
   run("setClimate('santiago')");
@@ -272,7 +278,7 @@ check('cada clima tiene su tiempo: Valdivia llueve, La Serena casi no y en Ciuda
   assert(se.rain < st.rain * 0.5, 'La Serena debería llover mucho menos que Santiago');
   assert(se.frost === 0, 'en La Serena no debería helar');
   assert(mx.frost < st.frost, 'en Ciudad de México debería helar menos que en Santiago');
-  assert(st.tmax > va.tmax + 4, 'Santiago debería tener veranos más calurosos que Valdivia');
+  assert(st.tmax > va.tmax + 4, `Santiago debería tener veranos más calurosos que Valdivia (${st.tmax.toFixed(1)} °C y ${va.tmax.toFixed(1)} °C)`);
 });
 
 check('en el hemisferio norte el sol del mediodía viene del sur', () => {
@@ -358,6 +364,77 @@ check('el jardín se guarda y se recupera igual', () => {
   assert(G.money === money && G.day === 9, 'el dinero o el día no coinciden');
   assert(G.inv.calendula === inv, 'el semillero no se guardó');
   assert(plantAt(5, 16) && plantAt(5, 16).sp === 'calendula', 'falta la caléndula');
+});
+
+check('cada partida nueva tiene un terreno distinto, y la misma partida se arma igual', () => {
+  const PARCELS = get('PARCELS');
+  const sig = () => JSON.stringify([PARCELS.map(p => [p.x1, p.y0, p.y1, p.soil]), G.tiles.filter(t => t.t !== 'grass').map(t => t.x + ',' + t.y + t.t), G.plants.map(p => p.sp + p.x + ',' + p.y)]);
+  const seen = new Set();
+  for (let i = 1; i <= 12; i++) { run(`newGarden(${i * 7919})`); seen.add(sig()); }
+  assert(seen.size === 12, `de 12 partidas salieron solo ${seen.size} terrenos distintos`);
+  run('newGarden(4242)'); const a = sig();
+  run("newGarden(4242, undefined, true)"); assert(sig() !== a, 'el jardín clásico debería ser distinto de uno al azar');
+  run('newGarden(4242)'); assert(sig() === a, 'la misma partida debería armar el mismo terreno');
+});
+
+check('todos los terrenos al azar se pueden jugar, en las cuatro ciudades', () => {
+  const PARCELS = get('PARCELS'), H = get('HOUSE'), GX = get('GATE_X'), GH = get('GH'), findPath = get('findPath'), climateLow = get('climateLow');
+  for (let i = 1; i <= 40; i++) {
+    const cl = get('CLIMATE_ORDER')[i % 4], where = `(partida ${i}, ${cl})`;
+    run(`newGarden(${i * 104729}, '${cl}'); bumpVis()`);
+    // parcelas: cubren todo el terreno, cada una con su suelo y de buen tamaño
+    assert(G.tiles.every(t => t.parcel >= 0), 'hay casillas sin parcela ' + where);
+    assert(PARCELS.slice(1).every(p => p.x1 - p.x0 >= 6 && p.y1 - p.y0 >= 7), 'una parcela quedó muy chica ' + where);
+    assert(new Set(PARCELS.map(p => p.soil)).size === 5, 'falta un tipo de suelo ' + where);
+    // la casa entera y el camino de la puerta a la reja
+    for (let y = H.y1; y < GH; y++) assert(tileAt(GX, y).t === 'path', 'el camino a la reja está cortado ' + where);
+    assert(G.tiles.filter(t => t.t === 'house').length === (H.x1 - H.x0) * (H.y1 - H.y0), 'la casa perdió casillas ' + where);
+    // cada planta en su casilla, ninguna sobre la casa o el camino, y en el agua solo las acuáticas
+    for (const p of G.plants) {
+      const t = tileAt(p.x, p.y);
+      assert(t.plant === p, 'dos plantas en la misma casilla ' + where);
+      assert(t.t !== 'house' && t.t !== 'path' && (t.t === 'water') === (SP[p.sp].water === 'aquatic'), `${p.sp} quedó sobre ${t.t} ${where}`);
+      if (t.own) assert(SP[p.sp].minT <= climateLow(), `${p.sp} no aguanta el invierno de ${cl}`);
+    }
+    // el rosal de la abuela junto a la casa, y canteros con sol para sembrar y para rescatarlo
+    const rose = G.plants.find(p => p.sp === 'rose');
+    assert(rose && rose.x <= H.x1 && rose.y <= H.y1, 'el rosal de la abuela no está junto a la casa ' + where);
+    const beds = G.tiles.filter(t => t.own && t.t === 'bed' && !t.plant);
+    assert(beds.length >= 8, `quedan solo ${beds.length} canteros libres ${where}`);
+    assert(beds.filter(t => t.sun >= 6).length >= 3, 'faltan canteros soleados adonde llevar el rosal ' + where);
+    // un árbol viejo en el jardín y el estanque dentro del rincón húmedo
+    assert(G.plants.some(p => p.old && SP[p.sp].art.f === 'tree' && tileAt(p.x, p.y).own), 'falta el árbol de la abuela ' + where);
+    const wet = PARCELS.findIndex(p => p.soil === 'wet'), pond = G.tiles.filter(t => t.t === 'water');
+    assert(pond.length >= 3 && pond.every(t => t.parcel === wet), 'el estanque no quedó en el rincón húmedo ' + where);
+    // los visitantes llegan desde la reja a todo el pasto del jardín
+    const lawn = G.tiles.filter(t => t.own && (t.t === 'grass' || t.t === 'path') && !t.plant && !t.obj);
+    const lost = lawn.filter(t => !(t.x === GX && t.y === GH - 1) && !findPath(GX, GH - 1, t.x, t.y));
+    assert(lost.length <= 2, `${lost.length} rincones del jardín quedan encerrados ${where}`);
+  }
+});
+
+check('las plantas de la abuela están a gusto donde quedaron', () => {
+  for (const [seed, cl] of [[11, 'santiago'], [23, 'valdivia'], [37, 'serena'], [41, 'cdmx']]) {
+    run(`newGarden(${seed}, '${cl}'); UI.title = false; VIS.list = []; VIS.queue = [];`);
+    days(8, careful);
+    const sick = G.plants.filter(p => tileAt(p.x, p.y).own && p.sp !== 'rose' && (p.dead || p.hp < 50));
+    assert(!sick.length, `en ${cl} sufren: ${sick.map(p => `${p.sp} (${Math.round(p.hp)})`).join(', ')}`);
+  }
+});
+
+check('un terreno al azar se guarda con sus parcelas, y las partidas antiguas siguen con el jardín clásico', () => {
+  const PARCELS = get('PARCELS'), shape = () => JSON.stringify(PARCELS) + G.tiles.map(t => t.t[0] + t.parcel).join('');
+  run("newGarden(99, 'serena'); UI.title = false;");
+  const before = shape(), n = G.plants.length;
+  run('saveGame()'); run("newGarden(5, 'cdmx')");
+  assert(run('loadGame()') && shape() === before && G.plants.length === n && G.climate === 'serena', 'el terreno no volvió igual');
+  // una partida guardada antes de los terrenos al azar no trae sus parcelas
+  fresh();
+  run('saveGame()');
+  const key = get('SAVE_KEY'), d = JSON.parse(memory[key]); delete d.parcels; delete d.map; memory[key] = JSON.stringify(d);
+  run('newGarden(3)');
+  assert(run('loadGame()') && JSON.stringify(PARCELS) === JSON.stringify(get('CLASSIC_PARCELS')), 'una partida antigua debería volver al jardín clásico');
+  assert(G.plants.some(p => p.sp === 'walnut' && p.x === 7 && p.y === 13), 'el nogal clásico no está');
 });
 
 check('la vista gira a los cuatro lados: el puntero sigue señalando la casilla correcta y todo se dibuja', () => {

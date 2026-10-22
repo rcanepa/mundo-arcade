@@ -67,7 +67,7 @@ const Sound = (() => {
   };
 
   // Un motor por jugador humano: el tono sube con la velocidad
-  function engine(id, speed01, active) {
+  function engine(id, speed01, active, electric = false) {
     if (!ac) return;
     let e = engines[id];
     if (!e) {
@@ -80,11 +80,13 @@ const Sound = (() => {
       o.start(); o2.start();
       e = engines[id] = { o, o2, f, g };
     }
-    const t = ac.currentTime, fr = 45 + speed01 * 110;
+    // el eléctrico no ruge: zumba suave y agudo
+    const t = ac.currentTime, fr = electric ? 180 + speed01 * 520 : 45 + speed01 * 110;
+    if (e.electric !== electric) { e.o.type = electric ? 'sine' : 'sawtooth'; e.o2.type = electric ? 'sine' : 'square'; e.electric = electric; }
     e.o.frequency.setTargetAtTime(fr, t, 0.05);
-    e.o2.frequency.setTargetAtTime(fr * 0.5 + 3, t, 0.05);
-    e.f.frequency.setTargetAtTime(300 + speed01 * 900, t, 0.05);
-    e.g.gain.setTargetAtTime(active ? 0.045 + speed01 * 0.04 : 0, t, 0.08);
+    e.o2.frequency.setTargetAtTime(electric ? fr * 1.5 : fr * 0.5 + 3, t, 0.05);
+    e.f.frequency.setTargetAtTime(electric ? 2400 : 300 + speed01 * 900, t, 0.05);
+    e.g.gain.setTargetAtTime(active ? (electric ? 0.015 + speed01 * 0.03 : 0.045 + speed01 * 0.04) : 0, t, 0.08);
   }
   function stopEngines() {
     if (!ac) return;
@@ -149,5 +151,26 @@ const Sound = (() => {
     }
   }
 
-  return { init, sfx, engine, stopEngines, play, toggleMusic, horn };
+  // Sirenas: ambulancia (dos tonos), policía (aullido rápido) y bomberos (aullido largo)
+  function siren(kind, who = 0) {
+    if (!ac) return;
+    const p = HORN_PITCH[(who % 4 + 4) % 4], t = ac.currentTime, dur = 1.6;
+    const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(), fq = o.frequency;
+    o.type = kind === 'police' ? 'sawtooth' : 'square';
+    f.type = 'lowpass'; f.frequency.value = 2600;
+    o.connect(f); f.connect(g); g.connect(sfxBus);
+    if (kind === 'ambulance') {
+      for (let i = 0; i < 4; i++) { fq.setValueAtTime(960 * p, t + i * 0.4); fq.setValueAtTime(770 * p, t + i * 0.4 + 0.2); }
+    } else if (kind === 'firetruck') {
+      fq.setValueAtTime(380 * p, t); fq.linearRampToValueAtTime(1050 * p, t + 0.8); fq.linearRampToValueAtTime(380 * p, t + dur);
+    } else {
+      fq.setValueAtTime(650 * p, t);
+      for (let i = 0; i < 6; i++) { fq.linearRampToValueAtTime(1350 * p, t + i * 0.27 + 0.2); fq.linearRampToValueAtTime(650 * p, t + (i + 1) * 0.27); }
+    }
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.05);
+    g.gain.setValueAtTime(0.08, t + dur - 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  return { init, sfx, engine, stopEngines, play, toggleMusic, horn, siren };
 })();

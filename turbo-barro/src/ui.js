@@ -139,7 +139,7 @@ const Game = {
   toTitle() {
     this.scene = 'title'; this.race = null; this.testing = null;
     const demoRacers = PAINTS.slice(0, 4).map((p, i) => ({
-      id: i, name: '', color: p.c, dark: p.d, model: MODEL_KEYS[i], human: false, player: -1, nitros: 2,
+      id: i, name: '', color: p.c, dark: p.d, model: MODEL_KEYS[Math.floor(Math.random() * MODEL_KEYS.length)], human: false, player: -1, nitros: 2,
       skill: 0.9 + Math.random() * 0.1, upg: { motor: 2, acel: 2, llantas: 2, amort: 2 }
     }));
     this.demo = new Race(Math.floor(Math.random() * TRACK_DEFS.length), demoRacers, true);

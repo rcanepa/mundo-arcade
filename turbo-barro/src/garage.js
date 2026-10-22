@@ -7,11 +7,16 @@ Object.assign(STR.es, {
     monster: ['Monster', 'Ruedas gigantes: salta más y no le importan los baches'],
     buggy: ['Buggy', 'Liviano y muy rápido, pero sufre en el barro'],
     tractor: ['Tractor', 'Lento pero pesado: empuja a todos y cruza el barro'],
-    icecream: ['Carrito de helados', '¡Reparte helados mientras corre!']
+    icecream: ['Carrito de helados', '¡Reparte helados mientras corre!'],
+    ambulance: ['Ambulancia', '¡Con sirena! Rápida para llegar a tiempo'],
+    police: ['Carro policial', '¡Con sirena! Ágil y rápido en las curvas'],
+    firetruck: ['Carro de bomberos', '¡Con sirena! Grande y pesado: empuja a todos'],
+    italian: ['Superdeportivo italiano', 'Velocidad máxima de locos. Ojo: odia el barro'],
+    electric: ['Superdeportivo eléctrico', 'Acelera como un rayo y casi no hace ruido']
   },
   statNames: ['Velocidad', 'Aceleración', 'Agarre', 'Peso', 'Salto'],
   decals: ['Ninguna', 'Rayas', 'Llamas', 'Estrellas', 'Rayo', 'Vaca'],
-  horns: ['Clásica', 'Camión', 'Payaso', 'Melodía', 'Pato'],
+  horns: ['Clásica', 'Camión', 'Payaso', 'Melodía', 'Pato'], sirenName: '🚨 Sirena',
   owned: '✔ Es tuya', buyModel: p => `🔒 $${p}  ·  ENTER o clic para comprar`, earnModel: p => `🔒 $${p}  ·  cómprala en la tienda, entre carreras`,
   noMoney: '¡Te falta dinero!', newTruck: '¡Nueva camioneta!', earnHint: 'Gana dinero en el campeonato para comprarla',
   done: 'Listo', switchPlayer: n => `Cambiar a Jugador ${n}`,
@@ -25,11 +30,16 @@ Object.assign(STR.en, {
     monster: ['Monster', 'Giant wheels: jumps higher and ignores bumps'],
     buggy: ['Buggy', 'Light and very fast, but struggles in mud'],
     tractor: ['Tractor', 'Slow but heavy: pushes everyone and plows through mud'],
-    icecream: ['Ice cream truck', 'Delivers ice cream while it races!']
+    icecream: ['Ice cream truck', 'Delivers ice cream while it races!'],
+    ambulance: ['Ambulance', 'With a siren! Quick to get there in time'],
+    police: ['Police car', 'With a siren! Agile and quick in the corners'],
+    firetruck: ['Fire truck', 'With a siren! Big and heavy: pushes everyone'],
+    italian: ['Italian supercar', 'Crazy top speed. Careful: it hates mud'],
+    electric: ['Electric supercar', 'Accelerates like lightning and is almost silent']
   },
   statNames: ['Speed', 'Acceleration', 'Grip', 'Weight', 'Jump'],
   decals: ['None', 'Stripes', 'Flames', 'Stars', 'Lightning', 'Cow'],
-  horns: ['Classic', 'Truck', 'Clown', 'Tune', 'Duck'],
+  horns: ['Classic', 'Truck', 'Clown', 'Tune', 'Duck'], sirenName: '🚨 Siren',
   owned: '✔ It\'s yours', buyModel: p => `🔒 $${p}  ·  ENTER or click to buy`, earnModel: p => `🔒 $${p}  ·  buy it in the shop, between races`,
   noMoney: 'Not enough money!', newTruck: 'New truck!', earnHint: 'Win money in the championship to buy it',
   done: 'Done', switchPlayer: n => `Switch to Player ${n}`,
@@ -41,6 +51,7 @@ const cycle = (v, d, n) => (v + d + n) % n;
 
 function garageMenu() {
   const C = Game.garageCtx, gp = () => Game.garage[C.player], save = () => Game.savePrefs();
+  const sirenOf = () => MODELS[MODEL_KEYS[C.view]].siren;
   const setView = d => {
     C.view = cycle(C.view, d, MODEL_KEYS.length);
     const k = MODEL_KEYS[C.view];
@@ -53,7 +64,9 @@ function garageMenu() {
     { left: () => setView(-1), right: () => setView(1), action: buyModel },
     { left: () => setColor(cycle(gp().color, -1, PAINTS.length)), right: () => setColor(cycle(gp().color, 1, PAINTS.length)), set: setColor, action: () => { setColor(cycle(gp().color, 1, PAINTS.length)); Sound.sfx.select(); } },
     { left: () => setDecal(-1), right: () => setDecal(1), action: () => { setDecal(1); Sound.sfx.select(); } },
-    { left: () => setHorn(-1), right: () => setHorn(1), action: () => Sound.horn(gp().horn, C.player) }
+    // los vehículos con sirena no cambian de bocina: probarla hace sonar la sirena y prende las balizas
+    { left: () => sirenOf() || setHorn(-1), right: () => sirenOf() || setHorn(1),
+      action: () => { if (sirenOf()) { Sound.siren(sirenOf(), C.player); Game.garageSirenUntil = Game.t + 1.6; } else Sound.horn(gp().horn, C.player); } }
   ];
   if (C.ret === 'title') {
     items.push({ label: () => L().switchPlayer(2 - C.player), action: () => {
@@ -102,7 +115,7 @@ function drawGarage(g) {
   g.beginPath(); g.arc(200, 280, 116, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
   g.save(); g.translate(200, 280); g.rotate(Game.t * 0.7); g.scale(5.4, 5.4);
   g.globalAlpha = owned ? 1 : 0.5;
-  drawTruck(g, { model: key, color: paint.c, dark: paint.d, decal: gp.decal });
+  drawTruck(g, { model: key, color: paint.c, dark: paint.d, decal: gp.decal, sirenT: Game.t < (Game.garageSirenUntil || 0) ? 1 : 0 });
   g.restore(); g.globalAlpha = 1;
   if (!owned) { emoji(54); g.textAlign = 'center'; g.fillText('🔒', 200, 280); }
   if (racer) bigText(g, '$' + racer.money, 200, 452, 40, '#7dff7a');
@@ -152,8 +165,10 @@ function drawGarage(g) {
   M.rects.push({ x, y: 210, w, h: 76, item: 1 });
 
   // 2 y 3: decoración y bocina
-  [[2, 296, L().decals[gp.decal]], [3, 368, '🔊 ' + L().horns[gp.horn]]].forEach(([i, y, val]) => {
-    row(i, y, 62); label(L().gRows[i], y + 31); arrows(i, y + 31, x + 170, x + w - 52);
+  const siren = MODELS[key].siren;
+  [[2, 296, L().decals[gp.decal]], [3, 368, siren ? L().sirenName : '🔊 ' + L().horns[gp.horn]]].forEach(([i, y, val]) => {
+    row(i, y, 62); label(L().gRows[i], y + 31);
+    if (!(i === 3 && siren)) arrows(i, y + 31, x + 170, x + w - 52);
     g.textAlign = 'center'; g.font = font(20); g.fillStyle = '#fff'; g.fillText(val, x + 380, y + 32);
     M.rects.push({ x, y, w, h: 62, item: i });
   });

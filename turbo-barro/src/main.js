@@ -111,7 +111,7 @@ function update(dt) {
 function engineSounds() {
   const r = Game.race;
   if (Game.scene === 'race' && r && !r.paused) {
-    for (const tr of r.trucks) if (tr.human) Sound.engine(tr.player, Math.min(1, tr.speed / 300), true);
+    for (const tr of r.trucks) if (tr.human) Sound.engine(tr.player, Math.min(1, tr.speed / 300), true, tr.model === 'electric');
   } else Sound.stopEngines();
 }
 

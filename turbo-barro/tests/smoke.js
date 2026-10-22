@@ -43,7 +43,7 @@ const get = name => vm.runInContext(name, sandbox);
 const Game = get('Game'), Race = get('Race'), Editor = get('Editor'), Input = get('Input'), STR = get('STR');
 const TRACK_DEFS = get('TRACK_DEFS'), PAINTS = get('PAINTS'), MODEL_KEYS = get('MODEL_KEYS');
 const update = get('update'), aiInput = get('aiInput'), trackList = get('trackList'), buyModel = get('buyModel');
-const CUP_RACES = get('CUP_RACES'), cupName = get('cupName');
+const CUP_RACES = get('CUP_RACES'), cupName = get('cupName'), MODELS = get('MODELS');
 
 // --- utilidades ---
 let failed = 0;
@@ -113,6 +113,41 @@ check('taller: comprar el tractor descuenta $120 y queda como propio', () => {
   buyModel();
   assert(Game.garage[0].owned.includes('tractor'), 'el tractor no quedó comprado');
   assert(Game.racers[0].money === 380, `quedó $${Game.racers[0].money} en vez de $380`);
+});
+
+check('vehículos nuevos: los 5 dan vueltas en una carrera', () => {
+  const extra = MODEL_KEYS.slice(5);
+  for (const group of [extra.slice(0, 4), [extra[4], extra[0], extra[1], extra[2]]]) {
+    const racers = group.map((m, i) => ({
+      id: i, name: '', color: PAINTS[i].c, dark: PAINTS[i].d, model: m, human: false, player: -1, nitros: 2,
+      skill: 0.85, upg: { motor: 0, acel: 0, llantas: 0, amort: 0 }
+    }));
+    const r = new Race(0, racers, true);
+    for (let i = 0; i < 60 * 90; i++) r.update(1 / 60);
+    for (const t of r.trucks) assert(t.prog / r.track.N >= 2, `${t.model} hizo solo ${(t.prog / r.track.N).toFixed(2)} vueltas`);
+  }
+});
+
+check('sirena: la ambulancia, la policía y los bomberos prenden las balizas al tocar la bocina', () => {
+  const owned = Game.garage[0].owned, model = Game.garage[0].model;
+  for (const m of ['ambulance', 'police', 'firetruck']) {
+    Game.garage[0].owned = [...owned, m]; Game.garage[0].model = m;
+    Game.newSeason(1);
+    const me = Game.race.trucks.find(t => t.human);
+    assert(me.model === m, `el jugador no quedó con ${m}`);
+    Game.race.honk(me);
+    assert(me.sirenT > 0, `${m}: la sirena no prendió las balizas`);
+  }
+  Game.garage[0].owned = owned; Game.garage[0].model = model;
+});
+
+check('superdeportivos: son los más caros y los mejores en velocidad y aceleración', () => {
+  const others = MODEL_KEYS.filter(k => k !== 'italian' && k !== 'electric').map(k => MODELS[k]);
+  for (const k of ['italian', 'electric']) {
+    assert(MODELS[k].price > Math.max(...others.map(m => m.price)), `${k} debería costar más que todos los demás`);
+    assert(MODELS[k].max > Math.max(...others.map(m => m.max)), `${k} debería ser el más rápido`);
+    assert(MODELS[k].accel > Math.max(...others.map(m => m.accel)), `${k} debería acelerar más`);
+  }
 });
 
 check('copas: después de 4 carreras viene la premiación y el trofeo queda guardado', () => {

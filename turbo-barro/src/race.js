@@ -66,6 +66,7 @@ class Race {
       tr.nitroHeld = inp.nitro;
       if (inp.horn && !tr.hornHeld && tr.human && !this.demo) this.honk(tr);
       tr.hornHeld = inp.horn;
+      if (tr.sirenT > 0) tr.sirenT -= dt;
       tr.update(dt, inp, this);
       this.checkLap(tr);
       this.emitDust(tr, dt);
@@ -254,7 +255,12 @@ class Race {
     }
     g.drawImage(tmp, 0, 0, W, H);
   }
-  honk(tr) { Sound.horn(tr.horn, tr.player); this.popup(tr.x, tr.y - 8, '♪♪', tr.color); }
+  // la ambulancia, la policía y los bomberos tocan la sirena y prenden las balizas
+  honk(tr) {
+    const siren = (MODELS[tr.model] || {}).siren;
+    if (siren) { Sound.siren(siren, tr.player); tr.sirenT = 1.6; this.popup(tr.x, tr.y - 8, '🚨', tr.color); }
+    else { Sound.horn(tr.horn, tr.player); this.popup(tr.x, tr.y - 8, '♪♪', tr.color); }
+  }
   popup(x, y, text, col) { this.popups.push({ x, y, text, col, life: 1.2 }); }
   showBanner(text, col, t) { this.banner = { text, col, t, max: t }; }
 

@@ -261,11 +261,16 @@ check('se pueden sacar esquejes y dividir matas para el semillero', () => {
 });
 
 check('cada clima tiene su tiempo: Valdivia llueve, La Serena casi no y en Ciudad de México no hiela', () => {
+  // 30 años de tiempo con un azar fijo, para que la prueba dé siempre lo mismo
   const stats = id => {
     run(`setClimate('${id}')`);
-    let rain = 0, frost = 0, prev = null, tmax = -99;
-    for (let y = 0; y < 3; y++) for (let d = 0; d < 52; d++) { const w = run('makeWeather')(d, prev, Math.random); prev = w; if (w.rain) rain++; if (w.tmin < -1) frost++; tmax = Math.max(tmax, w.tmax); }
-    return { rain: rain / 156, frost: frost / 156, tmax };
+    const r = run('rng')(12345), makeWeather = run('makeWeather'), seasonOf = run('seasonOf');
+    let rain = 0, frost = 0, prev = null, summer = 0, n = 0;
+    for (let y = 0; y < 30; y++) for (let d = 0; d < 52; d++) {
+      const w = makeWeather(d, prev, r); prev = w; n++;
+      if (w.rain) rain++; if (w.tmin < -1) frost++; if (seasonOf(d) === 1) summer += w.tmax;
+    }
+    return { rain: rain / n, frost: frost / n, tmax: summer / (30 * 13) };
   };
   const st = stats('santiago'), va = stats('valdivia'), se = stats('serena'), mx = stats('cdmx');
   run("setClimate('santiago')");
@@ -273,7 +278,7 @@ check('cada clima tiene su tiempo: Valdivia llueve, La Serena casi no y en Ciuda
   assert(se.rain < st.rain * 0.5, 'La Serena debería llover mucho menos que Santiago');
   assert(se.frost === 0, 'en La Serena no debería helar');
   assert(mx.frost < st.frost, 'en Ciudad de México debería helar menos que en Santiago');
-  assert(st.tmax > va.tmax + 4, 'Santiago debería tener veranos más calurosos que Valdivia');
+  assert(st.tmax > va.tmax + 4, `Santiago debería tener veranos más calurosos que Valdivia (${st.tmax.toFixed(1)} °C y ${va.tmax.toFixed(1)} °C)`);
 });
 
 check('en el hemisferio norte el sol del mediodía viene del sur', () => {

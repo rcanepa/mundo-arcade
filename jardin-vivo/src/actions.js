@@ -248,7 +248,7 @@ function actBuyParcel(i) {
   G.stats.parcels = (G.stats.parcels || 0) + 1;
   fxSparkle((pc.x0 + pc.x1) / 2, (pc.y0 + pc.y1) / 2, '#fff2a0');
   Sound.sfx.fanfare();
-  toast(L().parcelBought(L().parcels[i]), 'good');
+  toast(L().parcelBought(L().parcels[pc.soil]), 'good');
   changed();
   return true;
 }

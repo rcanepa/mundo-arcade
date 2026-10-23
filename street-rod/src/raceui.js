@@ -91,15 +91,26 @@ SCENES.ticket = {
   update(dt) { if (this.signed > 0 && this.signed < 1) this.signed = Math.min(1, this.signed + dt * 1.2); },
   draw(g) {
     const T = L(), o = this.o;
-    g.fillStyle = PAL.k; g.fillRect(0, 0, PW, PH);
-    // las luces del patrullero de fondo
-    if (Math.floor(Game.t * 3) % 2) { g.fillStyle = PAL.r2; g.fillRect(0, 0, 60, PH); } else { g.fillStyle = PAL.u1; g.fillRect(PW - 60, 0, 60, PH); }
+    // de noche al lado del camino, con las luces del patrullero que alumbran por turnos
+    const bg = g.createLinearGradient(0, 0, 0, PH);
+    bg.addColorStop(0, '#05060c'); bg.addColorStop(1, '#141826');
+    g.fillStyle = bg; g.fillRect(0, 0, PW, PH);
+    stars(g, 0, 0, PW, 160, 60, 11);
+    const blink = (Math.sin(Game.t * 9) + 1) / 2;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    glow(g, 0, PH * 0.4, 330, '#ff2a2a', 0.55 * blink);
+    glow(g, PW, PH * 0.4, 330, '#2a5cff', 0.55 * (1 - blink));
+    g.restore();
     const x = 120, y = 14, w = 400, h = 350;
-    g.fillStyle = PAL.k; g.fillRect(x + 5, y + 5, w, h);
-    g.fillStyle = PAL.c1; g.fillRect(x, y, w, h);
-    g.fillStyle = PAL.u1; g.fillRect(x, y, w, 40);
-    ptext(g, T.ticket.state, x + w / 2, y + 6, PAL.y2, 2, { align: 'center' });
-    ptext(g, T.ticket.title, x + w / 2, y + 26, PAL.w, 1, { align: 'center' });
+    card(g, x, y, w, h);
+    g.save(); roundRect(g, x, y, w, 44, 12); g.clip();
+    const hd = g.createLinearGradient(0, y, 0, y + 44); hd.addColorStop(0, '#1d3a7a'); hd.addColorStop(1, '#0f2150');
+    g.fillStyle = hd; g.fillRect(x, y, w, 44); g.restore();
+    g.fillStyle = '#e0b84a'; g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 6 : 14; g.lineTo(x + 30 + Math.cos(a) * r, y + 22 + Math.sin(a) * r); }
+    g.closePath(); g.fill();
+    ptext(g, T.ticket.state, x + w / 2, y + 7, '#f2d47a', 2, { align: 'center' });
+    ptext(g, T.ticket.title, x + w / 2, y + 28, PAL.w, 1, { align: 'center' });
     const rows = [[T.ticket.name, S.name], [T.ticket.vehicle, carTitle(o.car.model)], [T.ticket.date, T.date(dateOf(S.day))], [T.ticket.violation, T.ticket.speeding], [T.ticket.fine, money(o.fine)]];
     rows.forEach(([k, v], i) => {
       ptext(g, k, x + 16, y + 56 + i * 34, PAL.u1, 1);

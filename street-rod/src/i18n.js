@@ -38,7 +38,7 @@ const STR = {
     cond: c => (c >= 0.9 ? 'como nuevo' : c >= 0.7 ? 'bueno' : c >= 0.5 ? 'regular' : c >= 0.25 ? 'malo' : 'hecho pedazos'),
     slot: { engine: 'Motor', intake: 'Múltiple', carb: 'Carburador', trans: 'Caja', tires: 'Neumáticos' },
     parts: {
-      six: '6 cil.',
+      six: '6 cil.', four: '4 cil.',
       engine: (F, kind, ci) => `${F}${kind} ${ci} pulg³`,
       intake: (F, k) => `Múltiple ${F}${STR.es.parts.intakeShort[k]}`,
       intakeShort: { '1x2': '2 bocas', '3x2': '3 × 2 bocas', '1x4': '4 bocas', '2x4': '2 × 4 bocas', race: 'de carrera' },
@@ -52,8 +52,7 @@ const STR = {
     problem: (p, car) => ({
       'missing:engine': 'no tiene motor', 'missing:intake': 'no tiene múltiple', 'missing:carb': 'faltan carburadores',
       'missing:trans': 'no tiene caja', 'missing:tires': 'no tiene neumáticos', loose: 'hay pernos sueltos',
-      blown: 'el motor está reventado', broken: 'la caja está rota', wrecked: 'está destrozado', fuel: 'no tiene bencina',
-      roof: `le están sacando el techo (${car.mods.roofDays} días)`
+      blown: 'el motor está reventado', broken: 'la caja está rota', wrecked: 'está destrozado', fuel: 'no tiene bencina'
     }[p] || p),
     why: {
       type: 'Esa pieza no va aquí.', occupied: 'Ya hay una pieza puesta. Sácala primero.', family: 'Esa pieza es de otra marca: no calza.',
@@ -68,7 +67,8 @@ const STR = {
       ['EL GARAJE', '', 'Todo se hace con el mouse. Pasa el mouse por el garaje: abajo dice qué es cada cosa.', '', 'El diario trae autos usados y repuestos. El capó abre el motor; abajo del auto está la caja; la rueda trasera, los neumáticos. Las latas de pintura son para pintar y arreglar el auto, el estante guarda tus repuestos y el portón sale a la calle.'],
       ['EL MOTOR', '', 'Con la llave sacas los pernos uno por uno. Sin pernos, la pieza sale y queda en el estante. Para poner una pieza: PIEZAS, elígela y aprieta sus pernos.', '', 'Las piezas de motor y caja son de una marca (GM, Ford o Chrysler) y solo calzan en esa marca. El múltiple decide cuántos carburadores lleva. AFINAR deja el encendido justo en el 0: se corre un poco después de cada carrera.'],
       ['LAS CARRERAS', '', 'Mantén ↑ para acelerar y suelta el embrague con ESPACIO cuando el semáforo se ponga verde. ESPACIO sube un cambio y Z lo baja: suelta el acelerador al pasar el cambio o raspas la caja.', '', '← → para doblar y ↓ para frenar. Si la policía te sigue, detente (multa de $20) o escápate; si te alcanzan son $75.'],
-      ['BOB\'S DRIVE-IN', '', 'Haz clic en el auto del rival para desafiarlo: picada o carrera de ruta, y cuánto apostar. En la ruta puedes apostar los papeles del auto.', '', 'El tipo del poste llama a quien quieras. Antes de apostar, mira bajo el capó del rival. M: música · F: pantalla completa · Esc: pausa.']
+      ['BOB\'S DRIVE-IN', '', 'Haz clic en el auto del rival para desafiarlo: picada o carrera de ruta, y cuánto apostar. En la ruta puedes apostar los papeles del auto.', '', 'El tipo del poste llama a quien quieras. Antes de apostar, mira bajo el capó del rival. M: música · F: pantalla completa · Esc: pausa.'],
+      ['CRÉDITOS', '', 'Basado en Street Rod (1989), de California Dreams. Hecho para Mundo Arcade.', '', 'Los autos salen de modelos 3D de Sketchfab con licencia CC BY 4.0, de Nieve5677, hans1240, Libau Media, TomasLA, everhard, Free Vehicle Archive, Nathaniel Onandia y Kryox Shade. ¡Gracias!']
     ],
     title: { cont: 'Seguir el verano', fresh: 'Nueva partida', how: 'Cómo se juega', fame: 'Reyes de la calle', more: '← Más juegos', credit: 'Basado en Street Rod (1989) · Mundo Arcade' },
     license: { state: 'ESTADO DE CALIFORNIA', dmv: 'DEPARTAMENTO DE VEHÍCULOS MOTORIZADOS', title: 'LICENCIA DE CONDUCIR', name: 'NOMBRE', typeName: 'Escribe tu nombre', born: 'NACIMIENTO', city: 'CIUDAD', cls: 'CLASE', clsValue: '3 · AUTOS', expires: 'VENCE', photo: 'Clic para cambiar la foto' },
@@ -77,7 +77,6 @@ const STR = {
     g: {
       hot: { engine: 'Motor', trans: 'Caja de cambios', tires: 'Neumáticos', car: 'Tu auto', paper: 'El diario', spares: 'Repuestos', paint: 'Pintura y carrocería', clock: 'Reloj', calendar: 'Calendario', keys: 'Tus autos', door: 'Salir' },
       noCar: 'No tienes auto. Busca uno en el diario.', startTip: 'Mira el diario sobre el banco: ahí venden autos.',
-      roofWork: d => `SIN TECHO EN ${d} DÍAS`,
       body: 'Carrocería', bodyFuel: (c, f, t) => `Carrocería: ${c} · Bencina: ${f} de ${t} galones`, weight: lb => `Peso: ${lb} libras`, problems: 'No anda:',
       sparesTitle: 'Repuestos', noSpares: 'No tienes repuestos.', sellIt: 'Venderlo', sold: m => `Vendido en ${m}.`,
       fits: f => (f === 'all' ? 'Calza en todos los autos' : `Solo para autos ${FAM_NAME[f]}`),
@@ -125,9 +124,8 @@ const STR = {
       colors: m => `PINTURA ${m}`, stickers: 'CALCOMANÍAS',
       sticker: { hotrod: 'Hot Rod', flames: 'Llamas', star: 'Estrella', checker: 'Cuadros', number: 'Número', lightning: 'Rayo' },
       paintAsk: (c, m) => `¿Pintarlo ${c} por ${m}?`, stickAsk: (s, m) => `¿Poner la calcomanía ${s} por ${m}?`,
-      nobump: m => `Sin parachoques ${m}`, nobumpAsk: '¿Sacar los parachoques? El auto queda más liviano, pero los choques le duelen más.',
-      noroof: m => `Sacar techo ${m}`, noroofAsk: d => `¿Sacarle el techo? Demora ${d} días y en ese tiempo el auto no anda.`,
-      fix: m => `Arreglar choque ${m}`, fixAsk: m => `¿Arreglar la carrocería por ${m}?`, strip: 'Quitar calcomanías'
+      strip: m => `Alivianar ${m}`, stripAsk: '¿Alivianar el auto? Se sacan el asiento trasero, la rueda de repuesto y los adornos: 90 libras menos.',
+      fix: m => `Arreglar choque ${m}`, fixAsk: m => `¿Arreglar la carrocería por ${m}?`, unstick: 'Quitar calcomanías'
     },
     mech: {
       tune: 'AFINAR', parts: 'PIEZAS', select: 'ELEGIR', loosen: 'sacar perno', tighten: 'poner perno', install: 'Ponerla',
@@ -204,7 +202,7 @@ const STR = {
     cond: c => (c >= 0.9 ? 'like new' : c >= 0.7 ? 'good' : c >= 0.5 ? 'fair' : c >= 0.25 ? 'poor' : 'shot'),
     slot: { engine: 'Engine', intake: 'Intake', carb: 'Carburetor', trans: 'Transmission', tires: 'Tires' },
     parts: {
-      six: '6-cyl.',
+      six: '6-cyl.', four: '4-cyl.',
       engine: (F, kind, ci) => `${F}${kind}, ${ci} cu.in.`,
       intake: (F, k) => `${F}${STR.en.parts.intakeShort[k]} intake`,
       intakeShort: { '1x2': '2-barrel', '3x2': '3 × 2-barrel', '1x4': '4-barrel', '2x4': '2 × 4-barrel', race: 'racing' },
@@ -218,8 +216,7 @@ const STR = {
     problem: (p, car) => ({
       'missing:engine': 'no engine', 'missing:intake': 'no intake', 'missing:carb': 'missing carburetors',
       'missing:trans': 'no transmission', 'missing:tires': 'no tires', loose: 'loose bolts',
-      blown: 'blown engine', broken: 'broken transmission', wrecked: 'wrecked', fuel: 'out of gas',
-      roof: `roof being chopped (${car.mods.roofDays} days)`
+      blown: 'blown engine', broken: 'broken transmission', wrecked: 'wrecked', fuel: 'out of gas'
     }[p] || p),
     why: {
       type: "That part doesn't go here.", occupied: 'There is a part there already. Take it out first.', family: "That part is for another make: it won't fit.",
@@ -234,7 +231,8 @@ const STR = {
       ['THE GARAGE', '', 'Everything is done with the mouse. Move it around the garage: the bar at the bottom says what each thing is.', '', 'The paper has used cars and parts. The hood opens the engine; under the car is the transmission; the rear wheel, the tires. The paint cans paint and fix the car, the shelf holds your spare parts and the door goes out to the street.'],
       ['THE ENGINE', '', 'Click bolts with the wrench to take them out one by one. With no bolts left, the part comes out and goes on the shelf. To put a part in: PARTS, pick it and tighten its bolts.', '', 'Engine and transmission parts belong to a make (GM, Ford or Chrysler) and only fit that make. The intake decides how many carburetors it takes. TUNE puts the timing right on 0: it drifts a little after every race.'],
       ['RACING', '', 'Hold ↑ to rev and drop the clutch with SPACE when the light turns green. SPACE shifts up and Z shifts down: lift off the gas when you shift or you will grind the gears.', '', '← → steer and ↓ brakes. If the police chase you, pull over ($20 fine) or lose them; if they catch you it is $75.'],
-      ["BOB'S DRIVE-IN", '', "Click the rival's car to challenge him: drag or road race, and how much to bet. On the road you can race for pink slips.", '', 'The guy on the post calls anyone you want. Before you bet, look under the hood. M: music · F: full screen · Esc: pause.']
+      ["BOB'S DRIVE-IN", '', "Click the rival's car to challenge him: drag or road race, and how much to bet. On the road you can race for pink slips.", '', 'The guy on the post calls anyone you want. Before you bet, look under the hood. M: music · F: full screen · Esc: pause.'],
+      ['CREDITS', '', 'Based on Street Rod (1989) by California Dreams. Made for Mundo Arcade.', '', 'The cars come from 3D models on Sketchfab under the CC BY 4.0 license, by Nieve5677, hans1240, Libau Media, TomasLA, everhard, Free Vehicle Archive, Nathaniel Onandia and Kryox Shade. Thank you!']
     ],
     title: { cont: 'Continue summer', fresh: 'New game', how: 'How to play', fame: 'King Street Rodders', more: '← More games', credit: 'Based on Street Rod (1989) · Mundo Arcade' },
     license: { state: 'STATE OF CALIFORNIA', dmv: 'DEPARTMENT OF MOTOR VEHICLES', title: "OPERATOR'S LICENSE", name: 'NAME', typeName: 'Type your name', born: 'BIRTH DATE', city: 'CITY', cls: 'CLASS', clsValue: '3 · CARS', expires: 'EXPIRES', photo: 'Click to change the photo' },
@@ -243,7 +241,6 @@ const STR = {
     g: {
       hot: { engine: 'Engine', trans: 'Transmission', tires: 'Tires', car: 'Your car', paper: 'Newspaper', spares: 'Spare parts', paint: 'Paint & body', clock: 'Clock', calendar: 'Calendar', keys: 'Your cars', door: 'Go out' },
       noCar: "You don't have a car. Check the newspaper.", startTip: 'Check the newspaper on the bench: cars for sale.',
-      roofWork: d => `ROOF OFF IN ${d} DAYS`,
       body: 'Body', bodyFuel: (c, f, t) => `Body: ${c} · Gas: ${f} of ${t} gallons`, weight: lb => `Weight: ${lb} lbs`, problems: "Won't run:",
       sparesTitle: 'Spare parts', noSpares: 'No spare parts.', sellIt: 'Sell it', sold: m => `Sold for ${m}.`,
       fits: f => (f === 'all' ? 'Fits every car' : `${FAM_NAME[f]} cars only`),
@@ -291,9 +288,8 @@ const STR = {
       colors: m => `PAINT ${m}`, stickers: 'DECALS',
       sticker: { hotrod: 'Hot Rod', flames: 'Flames', star: 'Star', checker: 'Checkers', number: 'Number', lightning: 'Lightning' },
       paintAsk: (c, m) => `Paint it ${c} for ${m}?`, stickAsk: (s, m) => `Put on the ${s} decal for ${m}?`,
-      nobump: m => `Pull bumpers ${m}`, nobumpAsk: 'Pull the bumpers? The car gets lighter, but crashes hurt more.',
-      noroof: m => `Chop the roof ${m}`, noroofAsk: d => `Chop the roof? It takes ${d} days and the car can't run meanwhile.`,
-      fix: m => `Fix body ${m}`, fixAsk: m => `Fix the body for ${m}?`, strip: 'Strip decals'
+      strip: m => `Lighten up ${m}`, stripAsk: 'Lighten the car? Out go the back seat, the spare tire and the trim: 90 pounds less.',
+      fix: m => `Fix body ${m}`, fixAsk: m => `Fix the body for ${m}?`, unstick: 'Strip decals'
     },
     mech: {
       tune: 'TUNE', parts: 'PARTS', select: 'SELECT', loosen: 'remove bolt', tighten: 'put bolt in', install: 'Put it in',

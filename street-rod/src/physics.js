@@ -181,7 +181,7 @@ function quarterMile(stats) {
 }
 const _etCache = new Map();
 function carET(car) {
-  const key = JSON.stringify([car.model, Math.round((car.tune || 0) * 2), car.mods.noroof, car.mods.nobump, SLOTS.map(sl => car.p[sl] ? car.p[sl].k + (car.p[sl].c ?? 1).toFixed(2) : '')]);
+  const key = JSON.stringify([car.model, Math.round((car.tune || 0) * 2), car.mods.strip, SLOTS.map(sl => car.p[sl] ? car.p[sl].k + (car.p[sl].c ?? 1).toFixed(2) : '')]);
   let r = _etCache.get(key);
   if (!r) {
     r = carRuns(car) ? quarterMile(carStats(car)) : { et: 60, trap: 0 };

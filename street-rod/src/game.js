@@ -11,7 +11,7 @@ const hoursPlayed = () => S.day * 24 + (S.night ? 20 + Math.floor(S.night.min / 
 
 function newGame(name, seed = Math.floor(Math.random() * 1e9)) {
   S = {
-    v: 2, name: name || 'JOHNNY', seed, roadSeed: seed % 100000 + 11, day: 0, money: START_MONEY,
+    v: 3, name: name || 'JOHNNY', seed, roadSeed: seed % 100000 + 11, day: 0, money: START_MONEY,
     cars: [], active: null, spares: [], pop: 0, wins: { drag: 0, road: 0, kicks: 0 }, losses: 0,
     rivals: {}, night: null, kingBeaten: false, over: null, history: []
   };
@@ -26,8 +26,8 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } }
 };
 function saveGame() { if (S) store.set(SAVE_KEY, S); }
-function loadGame() { const s = store.get(SAVE_KEY); if (s && s.v === 2 && Array.isArray(s.cars)) { S = s; return true; } return false; }
-const hasSave = () => { const s = store.get(SAVE_KEY); return !!(s && s.v === 2); };
+function loadGame() { const s = store.get(SAVE_KEY); if (s && s.v === 3 && Array.isArray(s.cars)) { S = s; return true; } return false; }
+const hasSave = () => { const s = store.get(SAVE_KEY); return !!(s && s.v === 3); };
 // El libro de la Policía de Caminos guarda una partida por conductor
 const savedDrivers = () => Object.keys(store.get(SAVES_KEY) || {});
 function saveSlot() { const all = store.get(SAVES_KEY) || {}; all[S.name] = S; store.set(SAVES_KEY, all); saveGame(); }
@@ -51,7 +51,7 @@ function randomUsedCar(R, model) {
   const kind = ENGINES[car.p.engine.k].kind;
   car.extras = [];
   // a veces el dueño anterior le hizo cosas
-  if (R() < 0.28) {
+  if (kind !== '4' && R() < 0.28) {
     const ik = kind === '8' ? '2x4' : '3x2';
     setSpec(car, { intake: ik, carbs: Array(INTAKES[ik].n).fill(INTAKES[ik].carb) });
     car.extras.push(ik);
@@ -64,7 +64,7 @@ function randomUsedCar(R, model) {
 function makePaper() {
   const R = rng(S.seed * 7 + S.day * 131 + 5);
   // siempre hay un cacharro barato, para no quedarse sin auto
-  const cheap = rpick(R, ['chevy49', 'chevy40c', 'ford32s', 'valiant61', 'chevy38']);
+  const cheap = rpick(R, ['modelA', 'dodge50', 'chevy49', 'merc48', 'ford40']);
   const junker = randomUsedCar(R, cheap);
   junker.body = 0.45 + R() * 0.1; junker.p.engine.c = 0.4 + R() * 0.15;
   const cars = [junker];
@@ -72,6 +72,7 @@ function makePaper() {
   for (let i = 0; i < 7; i++) {
     let model = rpick(R, pool);
     if (MODELS[model].price > 1500 && R() < 0.5) model = rpick(R, pool);
+    pool.splice(pool.indexOf(model), 1);
     cars.push(randomUsedCar(R, model));
   }
   const ads = cars.map((car, i) => {
@@ -118,7 +119,7 @@ function catalog() {
 function partName(p) {
   const P = L().parts, fam = partFam(p), F = fam === 'all' ? '' : FAM_NAME[fam] + ' ';
   switch (p.t) {
-    case 'engine': { const E = ENGINES[p.k]; return P.engine(F, E.kind === '8' ? 'V-8' : P.six, E.ci); }
+    case 'engine': { const E = ENGINES[p.k]; return P.engine(F, E.kind === '8' ? 'V-8' : E.kind === '6' ? P.six : P.four, E.ci); }
     case 'intake': return P.intake(F, p.k);
     case 'carb': return P.carb[p.k];
     case 'trans': return P.trans[p.k](F.trim());
@@ -209,15 +210,14 @@ function installPart(car, partId) {
   return r;
 }
 
-// ----- Pintura, calcomanías y carrocería -----
+// ----- Pintura, calcomanías y alivianar -----
 function pay(m) { if (S.money < m) return false; S.money -= m; saveGame(); return true; }
 function paintCar(car, color) { if (car.color === color || !pay(PAINT_PRICE)) return false; car.color = color; S.pop += 1; saveGame(); return true; }
 function addSticker(car, k) { if (car.mods.stickers[k] || !pay(STICKERS[k])) return false; car.mods.stickers[k] = 1; S.pop += 1; saveGame(); return true; }
 function removeStickers(car) { car.mods.stickers = {}; saveGame(); }
 function bodywork(car, k) {
-  if (car.mods[k] || car.mods.roofDays || !pay(BODYWORK[k].price)) return false;
-  if (BODYWORK[k].days) car.mods.roofDays = BODYWORK[k].days; else car.mods[k] = 1;
-  S.pop += 2;
+  if (car.mods[k] || !pay(BODYWORK[k].price)) return false;
+  car.mods[k] = 1;
   _etCache.clear(); saveGame(); return true;
 }
 // Bencina: tú mismo, o Gus por el doble
@@ -240,7 +240,7 @@ function upgradeSteps(car) {
   const big = Object.keys(ENGINES).filter(k => ENGINES[k].fam === fam && ENGINES[k].kind === '8').sort((a, b) => ENGINES[a].hp - ENGINES[b].hp);
   const steps = [
     c => { c.tune = 0; },
-    c => { setSpec(c, { intake: ENGINES[c.p.engine.k].kind === '8' ? '2x4' : '3x2' }); },
+    c => { const kd = ENGINES[c.p.engine.k].kind; setSpec(c, { intake: kd === '8' ? '2x4' : kd === '6' ? '3x2' : '1x2' }); },
     c => { setSpec(c, { trans: 'man4' }); },
     c => { setSpec(c, { tires: 'slick' }); }
   ];
@@ -351,7 +351,7 @@ function applyResult(o, res) {
   if (car.p.tires) car.p.tires.c = clamp(car.p.tires.c - res.tread, 0, 1);
   if (Math.random() < 0.7) car.tune = clamp((car.tune || 0) + (Math.random() < 0.5 ? -1 : 1) * (Math.random() < 0.3 ? 2 : 1), -10, 10);
   car.fuel = Math.max(0, car.fuel - res.fuel);
-  if (res.body) { car.body = clamp(car.body - res.body * (car.mods.nobump ? 1.4 : 1), 0, 1); out.crash = true; }
+  if (res.body) { car.body = clamp(car.body - res.body, 0, 1); out.crash = true; }
   if (res.blown) out.lines.push('blown'); else if (res.engineDmg > 0.25) out.lines.push('engineHurt');
   if (res.broken) out.lines.push('broken'); else if (res.transDmg > 0.2) out.lines.push('transHurt');
   _etCache.clear();
@@ -394,7 +394,6 @@ function applyResult(o, res) {
 function endNight() {
   S.night = null;
   S.day++;
-  for (const c of S.cars) if (c.mods.roofDays > 0 && --c.mods.roofDays === 0) c.mods.noroof = 1;
   if (S.day >= SUMMER_DAYS && !S.over) S.over = 'summer';
   makePaper();
   saveGame();

@@ -1,17 +1,18 @@
 // ===== Portada, licencia de conducir, cómo se juega y los finales =====
-// Letras grandes cromadas (como el logo del original)
+// Letras grandes cromadas (como el logo del original): degradado de cromo, borde oscuro y brillo
 function chromeTitle(g, s, x, y, scale) {
-  const w = textWidth(s, scale), x0 = Math.round(x - w / 2);
-  // sombra, borde y relleno en bandas de cromo
-  ptext(g, s, x0 + scale, y + scale, PAL.k, scale);
-  const bands = [PAL.w, PAL.g6, PAL.u4, PAL.u3, PAL.b4, PAL.y3, PAL.w];
-  const c = makeCanvas(w + 2, FONT_H * scale + 2), cg = c.getContext('2d');
-  ptext(cg, s, 0, 0, PAL.w, scale);
-  cg.globalCompositeOperation = 'source-atop';
-  const top = 2 * scale, h = 7 * scale;
-  bands.forEach((col, i) => { cg.fillStyle = col; cg.fillRect(0, top + Math.floor(i * h / bands.length), w + 2, Math.ceil(h / bands.length)); });
-  for (const dx of [-1, 1]) for (const dy of [-1, 1]) ptext(g, s, x0 + dx, y + dy, PAL.u1, scale);
-  g.drawImage(c, x0, y);
+  const size = scale * 7.4 + 1;
+  g.save();
+  g.font = `italic 900 ${size}px ${FONT_TITLE}`; g.textAlign = 'center'; g.textBaseline = 'top';
+  const top = y + scale * 1.2, bot = top + size;
+  g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillText(s, x + scale * 0.6, top + scale * 0.8);
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2, scale * 0.9); g.strokeStyle = '#0c1a5a'; g.strokeText(s, x, top);
+  const gr = g.createLinearGradient(0, top, 0, bot);
+  gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.35, '#c9e2ff'); gr.addColorStop(0.5, '#3a5f9c'); gr.addColorStop(0.52, '#a86a2c');
+  gr.addColorStop(0.75, '#ffe9b0'); gr.addColorStop(1, '#ffffff');
+  g.fillStyle = gr; g.fillText(s, x, top);
+  g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,0.6)'; g.strokeText(s, x, top);
+  g.restore();
 }
 function titleBackground() {
   return pxBackground('title', g => {
@@ -36,12 +37,11 @@ SCENES.title = {
   cont() { if (loadGame()) Game.go(S.over ? 'ending' : 'garage'); },
   draw(g) {
     const T = L();
-    g.drawImage(titleBackground(), 0, 0);
-    chromeTitle(g, 'STREET ROD', PW / 2, 18, 8);
-    bulbText(g, T.subtitle, PW / 2 - textWidth(T.subtitle, 5) / 2, 100, 5, PAL.m4, PAL.m1);
+    blit(g, titleBackground(), 0, 0);
+    chromeTitle(g, 'STREET ROD', PW / 2, 14, 9);
+    bulbText(g, T.subtitle, PW / 2 - (T.subtitle.length * (FONT_W + 1) * 5 - 5) / 2, 96, 5, '#ff7ad0', '#3a0c2a');
     // el Corvette negro de El Rey esperando en el camino
-    const k = pxCarSide(this.king, 330, { flip: true, driver: KING.look });
-    g.drawImage(k, PW - k.width - 6, 392 - k.height);
+    drawCarSide(g, this.king, 455, 388, 2.0, { flip: true });
     // menú
     const items = [];
     if (hasSave()) items.push([T.title.cont, () => this.cont()]);
@@ -80,7 +80,7 @@ SCENES.license = {
     ptext(g, T.license.title, x + w / 2, y + 60, PAL.r2, 3, { align: 'center' });
     // la foto
     g.fillStyle = PAL.u4; g.fillRect(x + 20, y + 100, 110, 130);
-    g.drawImage(pxPortrait(this.look), x + 19, y + 99);
+    blit(g, pxPortrait(this.look), x + 19, y + 99);
     g.fillStyle = PAL.k; g.strokeStyle = PAL.k; g.lineWidth = 2; g.strokeRect(x + 20, y + 100, 110, 130);
     // el nombre (con el teclado; en el teléfono, tocar el campo abre el teclado)
     ptext(g, T.license.name, x + 150, y + 104, PAL.u1, 1);
@@ -107,7 +107,8 @@ SCENES.license = {
 };
 
 // Textos de varias páginas sobre fondo gris con esquinas amarillas (como en el original)
-function pagesScene(getPages, onEnd, music = 'title') {
+// art(g, page): un dibujo debajo del texto de cada página (opcional)
+function pagesScene(getPages, onEnd, music = 'title', art) {
   return {
     music, status: false,
     enter() { this.page = 0; },
@@ -116,12 +117,24 @@ function pagesScene(getPages, onEnd, music = 'title') {
     draw(g) {
       const T = L(), pages = getPages(), lines = pages[Math.min(this.page, pages.length - 1)];
       UI.textScreen(g, lines.flatMap(l => (l ? wrapText(l, 520, 2) : [''])));
+      if (art) art(g, this.page);
       ptext(g, `${this.page + 1}/${pages.length}`, PW - 182, PH - 32, PAL.y2, 1, { align: 'right' });
       if (UI.button(g, PW - 170, PH - 40, 110, 26, this.page < pages.length - 1 ? T.next : T.ok) || UI.clicked(0, 0, PW, PH - 50)) this.next();
     }
   };
 }
-SCENES.intro = pagesScene(() => L().intro, () => { Game.go('garage'); Game.tell(L().g.startTip, 6); });
+// La introducción: el auto de El Rey, y después el camino de un cacharro a un auto de verdad
+const INTRO_CARS = {};
+const introCar = (model, color, spec = {}) => INTRO_CARS[model] || (INTRO_CARS[model] = buildCar(Object.assign({ model, color }, spec)));
+function introArt(g, page) {
+  const king = INTRO_CARS.king || (INTRO_CARS.king = buildCar(KING.car));
+  const floor = (x, w) => { const fg = g.createRadialGradient(x, 330, 0, x, 330, w); fg.addColorStop(0, 'rgba(255,211,107,0.18)'); fg.addColorStop(1, 'rgba(255,211,107,0)'); g.save(); g.translate(x, 330); g.scale(1, 0.12); g.translate(-x, -330); g.fillStyle = fg; g.fillRect(x - w, 330 - w, w * 2, w * 2); g.restore(); };
+  if (page === 0) { floor(320, 220); drawCarSide(g, king, 320, 330, 1.75, { reflect: 0.12 }); return; }
+  const row = [introCar('modelA', '#6a4a30'), introCar('chevy57', '#1a8a8a'), king];
+  row.forEach((car, i) => { const x = 130 + i * 190; floor(x, 100); drawCarSide(g, car, x, 330, carScale(car.model, 150) * (0.85 + i * 0.1)); });
+  for (const x of [225, 415]) { g.fillStyle = '#ffd36b'; g.beginPath(); g.moveTo(x - 7, 296); g.lineTo(x + 7, 304); g.lineTo(x - 7, 312); g.closePath(); g.fill(); }
+}
+SCENES.intro = pagesScene(() => L().intro, () => { Game.go('garage'); Game.tell(L().g.startTip, 6); }, 'title', introArt);
 SCENES.how = pagesScene(() => L().how, () => Game.go('title'));
 // El muro de los Reyes de la Calle
 SCENES.fame = {
@@ -150,9 +163,8 @@ SCENES.ending = {
   draw(g) {
     const T = L(), E = T.end[this.kind];
     if (this.kind === 'king' && this.page === 0) {
-      g.drawImage(titleBackground(), 0, 0);
-      const k = pxCarSide(buildCar(KING.car), 420, { driver: S.look || { skin: PAL.b5, hc: PAL.b1, top: PAL.w } });
-      g.drawImage(k, (PW - k.width) / 2, 380 - k.height);
+      blit(g, titleBackground(), 0, 0);
+      drawCarSide(g, buildCar(KING.car), PW / 2, 382, 2.3);
       chromeTitle(g, T.end.kingTitle, PW / 2, 30, 5);
       wrapText(E[0], 560, 2).forEach((l, i) => ptext(g, l, PW / 2, 100 + i * 22, PAL.y3, 2, { align: 'center', shadow: PAL.k }));
     } else {
@@ -172,7 +184,7 @@ SCENES.cover = {
   music: null, status: false,
   enter() { this.k = buildCar(KING.car); this.r = buildCar({ model: 'ford32', color: '#d02c2c', engine: 'fd312', intake: '2x4', tires: 'slick', stickers: { flames: 1 } }); },
   draw(g) {
-    drawDriveIn(g, 3, { car: pxCarSide(this.k, 440, { flip: true, driver: KING.look }), carX: 150, bgCars: DINER_BG.map(([m, col, flip, size]) => pxCarSide(makeCar(m, { color: col }), size, { flip })) });
-    speechBubble(g, LANG === 'es' ? '¿Una picada, chico?' : 'Wanna race, kid?', 330, 120, 410, 240);
+    drawDriveIn(g, 3, { car: this.k, carX: 330, flip: true, bgCars: DINER_BG.map(([m, col]) => makeCar(m, { color: col })) });
+    speechBubble(g, LANG === 'es' ? '¿Una picada, chico?' : 'Wanna race, kid?', 482, 226, 366, 322);
   }
 };

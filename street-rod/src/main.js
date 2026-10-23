@@ -62,22 +62,22 @@ const touchControls = () => IS_TOUCH && Game.name === 'race';
 function drawTouchControls(g) {
   for (const k in TOUCH_BTNS) {
     const [x, y, w, h, label] = TOUCH_BTNS[k], on = Input.touch[k];
-    g.fillStyle = PAL.k; g.fillRect(x - 1, y - 1, w + 2, h + 2);
-    bevel(g, x, y, w, h, on ? PAL.y2 : PAL.g4, PAL.g6, PAL.g2, on);
-    ptext(g, label, x + w / 2, y + h / 2 - 10, on ? PAL.k : PAL.w, 2, { align: 'center' });
+    g.fillStyle = on ? 'rgba(255,211,107,0.75)' : 'rgba(255,255,255,0.18)'; g.beginPath(); g.arc(x + w / 2, y + h / 2, w / 2, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.5; g.stroke();
+    ptext(g, label, x + w / 2, y + h / 2 - 12, on ? '#1c1408' : '#ffffff', 2, { align: 'center', weight: 800 });
   }
 }
 
-// ----- Pantalla: 640×400 agrandado lo más posible, sin suavizar -----
+// ----- Pantalla: 640×400 unidades, agrandada a todo lo que dé la ventana y dibujada en alta resolución -----
 const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
 const nameEl = document.getElementById('name');
-ctx.imageSmoothingEnabled = false;
 function resize() {
   const s = Math.min(innerWidth / PW, innerHeight / PH);
-  // si cabe una escala entera sin perder mucho, se usa (los píxeles quedan todos iguales)
-  const si = Math.floor(s), k = si >= 1 && si / s > 0.9 ? si : s;
-  const w = Math.floor(PW * k), h = Math.floor(PH * k);
+  const w = Math.floor(PW * s), h = Math.floor(PH * s);
   Object.assign(canvas.style, { width: w + 'px', height: h + 'px', left: Math.floor((innerWidth - w) / 2) + 'px', top: Math.floor((innerHeight - h) / 2) + 'px' });
+  // píxeles reales por unidad: los de la pantalla (con retina), en pasos de medio, entre 1 y 4
+  const r = clamp(Math.ceil(s * Math.min(2, window.devicePixelRatio || 1) * 2) / 2, 1, 4);
+  if (r !== RES || canvas.width !== PW * r) { setRes(r); canvas.width = PW * r; canvas.height = PH * r; }
 }
 addEventListener('resize', resize);
 
@@ -153,4 +153,5 @@ function frame(now) {
 resize();
 setLang(LANG, false);
 Game.go(COVER ? 'cover' : 'title');
+loadCarArt();
 requestAnimationFrame(frame);

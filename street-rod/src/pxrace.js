@@ -1,4 +1,4 @@
-// ===== La carrera en pixel art: camino, semáforo y la cabina con los relojes dentro del volante =====
+// ===== La carrera: camino, semáforo y la cabina con los relojes dentro del volante =====
 const PX_HORIZON = 118, PX_CAM_D = 1.25;
 
 // Franja de cerros rojizos en el horizonte (como en el original), del doble del ancho para moverla con las curvas
@@ -6,8 +6,9 @@ const pxHills = (() => {
   let c = null;
   return () => {
     if (c) return c;
-    c = makeCanvas(PW * 2, 40);
+    c = makeCanvas(PW * 2 * RES, 40 * RES); c.lw = PW * 2; c.lh = 40;
     const g = c.getContext('2d');
+    g.scale(RES, RES);
     const R = rng(11);
     for (let layer = 0; layer < 3; layer++) {
       g.fillStyle = [PAL.r1, PAL.b2, PAL.o1][layer];
@@ -17,7 +18,6 @@ const pxHills = (() => {
     }
     // puntitos de matorrales verdes y rojos
     for (let i = 0; i < 260; i++) { g.fillStyle = R() < 0.5 ? PAL.e2 : PAL.r2; g.fillRect(Math.floor(R() * PW * 2), 22 + Math.floor(R() * 18), 2, 1); }
-    if (g.getImageData) { const img = g.getImageData(0, 0, c.width, c.height); pixelize(img, 20, true); g.putImageData(img, 0, 0); }
     return c;
   };
 })();
@@ -27,11 +27,15 @@ function pxRenderRoad(g, T, cam, objs, t) {
   const baseI = Math.floor(cam.z / SEG), baseF = cam.z / SEG - baseI;
   const camY = heightAt(T, cam.z) + CAM_H;
   const base = T.segs[clamp(baseI, 0, T.segs.length - 1)];
-  g.fillStyle = PAL.k; g.fillRect(0, 0, PW, PX_HORIZON + 4);
+  const sky = g.createLinearGradient(0, 0, 0, PX_HORIZON + 4);
+  sky.addColorStop(0, '#04050d'); sky.addColorStop(0.6, '#121634'); sky.addColorStop(1, '#3a2848');
+  g.fillStyle = sky; g.fillRect(0, 0, PW, PX_HORIZON + 4);
   stars(g, 0, 0, PW, PX_HORIZON - 30, 80, 5);
+  g.fillStyle = '#f4ecd0'; g.beginPath(); g.arc(520 - (cam.scroll || 0) * 0.02 % PW, 34, 9, 0, TAU); g.fill();
+  lampLight(g, 520 - (cam.scroll || 0) * 0.02 % PW, 34, 40, '255,244,210', 0.18);
   const hx = -((cam.scroll || 0) * 0.15 % PW + PW) % PW;
-  g.drawImage(pxHills(), Math.round(hx), PX_HORIZON - 36);
-  g.fillStyle = PAL.e3; g.fillRect(0, PX_HORIZON + 4, PW, PH - PX_HORIZON);
+  blit(g, pxHills(), hx, PX_HORIZON - 36);
+  g.fillStyle = '#1d4426'; g.fillRect(0, PX_HORIZON + 4, PW, PH - PX_HORIZON);
   const P = [];
   let x = 0, dx = -base.curve * SEG * SEG * baseF, maxy = PH;
   const K = PW / 2 * PX_CAM_D;
@@ -46,16 +50,25 @@ function pxRenderRoad(g, T, cam, objs, t) {
     if (z1 < 0.6 || p2[1] >= p1[1] || p2[1] >= maxy) { P[n].hidden = true; continue; }
     const [x1, y1, k1] = p1, [x2, y2, k2] = p2;
     const alt = Math.floor(s.i / 3) % 2;
-    g.fillStyle = alt ? PAL.e3 : PAL.e2; g.fillRect(0, y2, PW, y1 - y2 + 1);
+    g.fillStyle = alt ? '#24502c' : '#1d4426'; g.fillRect(0, y2, PW, y1 - y2 + 1);
     // cada tramo se estira un píxel hacia abajo para que no queden rayas entre tramos
     const quad = (xa, wa, xb, wb, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(xa - wa, y1 + 1); g.lineTo(xa + wa, y1 + 1); g.lineTo(xb + wb, y2); g.lineTo(xb - wb, y2); g.closePath(); g.fill(); };
-    quad(x1, (ROAD_W + 0.6) * k1, x2, (ROAD_W + 0.6) * k2, alt ? PAL.g3 : PAL.g2);
-    quad(x1, ROAD_W * k1, x2, ROAD_W * k2, PAL.k);
-    if (alt && T.kind !== 'drag') quad(x1, 0.14 * k1, x2, 0.14 * k2, PAL.w);
-    if (T.kind === 'drag') quad(x1, 0.12 * k1, x2, 0.12 * k2, alt ? PAL.w : PAL.k);
+    quad(x1, (ROAD_W + 0.6) * k1, x2, (ROAD_W + 0.6) * k2, alt ? '#6d6e73' : '#56575c');
+    quad(x1, ROAD_W * k1, x2, ROAD_W * k2, alt ? '#2a2b31' : '#26272c');
+    quad(x1 - (ROAD_W - 0.12) * k1, 0.07 * k1, x2 - (ROAD_W - 0.12) * k2, 0.07 * k2, '#cfcfc8');
+    quad(x1 + (ROAD_W - 0.12) * k1, 0.07 * k1, x2 + (ROAD_W - 0.12) * k2, 0.07 * k2, '#cfcfc8');
+    if (alt && T.kind !== 'drag') quad(x1, 0.14 * k1, x2, 0.14 * k2, '#f2e2a0');
+    if (T.kind === 'drag') quad(x1, 0.12 * k1, x2, 0.12 * k2, alt ? '#f4f4ee' : '#26272c');
     if (s.mark === 2) { for (let c = 0; c < 8; c++) quad(x1 + (-ROAD_W + (c + 0.5) * ROAD_W / 4) * k1, ROAD_W / 8 * k1, x2 + (-ROAD_W + (c + 0.5) * ROAD_W / 4) * k2, ROAD_W / 8 * k2, c % 2 ? PAL.k : PAL.w); }
     maxy = p2[1];
   }
+  // la luz de los focos sobre el camino (cerca del auto)
+  g.save(); g.beginPath(); g.rect(0, PX_HORIZON + 4, PW, PH); g.clip();
+  g.globalCompositeOperation = 'lighter';
+  const hl = g.createRadialGradient(PW / 2, PH + 40, 20, PW / 2, PH + 40, 330);
+  hl.addColorStop(0, 'rgba(255,240,200,0.22)'); hl.addColorStop(1, 'rgba(255,240,200,0)');
+  g.fillStyle = hl; g.fillRect(0, PX_HORIZON, PW, PH);
+  g.restore();
   // adornos del costado y autos, de lejos hacia cerca
   const pool = objs.map(o => ({ o, n: Math.floor((o.z - baseI * SEG) / SEG) })).filter(it => it.n >= 0 && it.n < DRAW_SEGS && P[it.n]);
   for (let n = DRAW_SEGS - 1; n >= 1; n--) {
@@ -108,11 +121,12 @@ function chromeTube(g, pts, width) {
   });
 }
 function pxCockpit(hoodColor) {
-  const key = 'cockpit:' + hoodColor;
+  const key = 'cockpit:' + hoodColor + '@' + RES;
   let c = PXCACHE.get(key);
   if (c) return c;
-  c = makeCanvas(PW, PH);
+  c = makeCanvas(PW * RES, PH * RES); c.lw = PW; c.lh = PH;
   const g = c.getContext('2d'), C = COCKPIT, ramp = paintRamp(hoodColor);
+  g.scale(RES, RES);
   // techo
   g.fillStyle = PAL.g3; g.fillRect(0, 0, PW, 18);
   g.fillStyle = PAL.g2; for (let x = 6; x < PW; x += 14) g.fillRect(x, 4, 1, 10);
@@ -176,13 +190,7 @@ function pxCockpit(hoodColor) {
   g.fillStyle = PAL.g6; g.beginPath(); g.arc(W0, H0 - 8, 26, 0, TAU); g.fill();
   g.fillStyle = PAL.r3; g.beginPath(); g.arc(W0, H0 - 8, 12, 0, TAU); g.fill();
   g.fillStyle = PAL.w; g.beginPath(); g.arc(W0, H0 - 8, 6, 0, TAU); g.fill();
-  if (g.getImageData) {
-    const img = g.getImageData(0, 0, PW, PH);
-    // el parabrisas queda transparente: ahí se ve el camino
-    pixelize(img, 26, true);
-    g.putImageData(img, 0, 0);
-  }
-  // recorta el parabrisas
+  // recorta el parabrisas (queda transparente: ahí se ve el camino)
   g.globalCompositeOperation = 'destination-out';
   g.beginPath(); g.moveTo(48, 214); g.lineTo(56, 70); g.quadraticCurveTo(64, 34, 100, 30); g.lineTo(540, 30); g.quadraticCurveTo(580, 34, 588, 70); g.lineTo(606, 214); g.lineTo(606, 232); g.quadraticCurveTo(300, 126, 40, 232); g.closePath();
   g.fill();
@@ -247,21 +255,14 @@ function pxDrawRace(g, race, lo) {
   const me = race.me, T = race.T;
   const objs = [];
   objs.push({ z: T.start + 34, x: 0, draw: (gg, sx, sy, sc) => pxTrafficLight(gg, sx, sy, sc, race.flag === 2 ? 'green' : 'red') });
-  if (race.rv.z > me.z + 1) objs.push({ z: race.rv.z, x: race.rv.x, draw: (gg, sx, sy, sc) => {
-    const w = Math.max(8, Math.round(2.1 * sc / 4) * 4), spr = pxCarRear(race.rv.car, Math.min(220, w), race.rv.veh.brake > 0.1);
-    gg.drawImage(spr, Math.round(sx - spr.width / 2), Math.round(sy - spr.height + 2));
-  } });
-  for (const o of race.traffic) if (o.z > me.z + 1 && !o.oncoming) objs.push({ z: o.z, x: o.x, draw: (gg, sx, sy, sc) => {
-    const w = Math.max(8, Math.round(2 * sc / 4) * 4), spr = pxCarRear(o.car, Math.min(220, w), false);
-    gg.drawImage(spr, Math.round(sx - spr.width / 2), Math.round(sy - spr.height + 2));
-  } });
-  for (const o of race.traffic) if (o.z > me.z + 1 && o.oncoming) objs.push({ z: o.z, x: o.x, draw: (gg, sx, sy, sc) => drawCarFront(gg, sx, sy, 2 * sc, { color: o.color, light: 0.8, headlights: 0.6 }) });
+  if (race.rv.z > me.z + 1) objs.push({ z: race.rv.z, x: race.rv.x, draw: (gg, sx, sy, sc) => drawCarRear(gg, race.rv.car, sx, sy + 1, Math.min(260, 2.05 * sc), race.rv.veh.brake > 0.1) });
+  for (const o of race.traffic) if (o.z > me.z + 1 && !o.oncoming) objs.push({ z: o.z, x: o.x, draw: (gg, sx, sy, sc) => drawCarRear(gg, o.car, sx, sy + 1, Math.min(260, 2 * sc), false) });
+  for (const o of race.traffic) if (o.z > me.z + 1 && o.oncoming) objs.push({ z: o.z, x: o.x, draw: (gg, sx, sy, sc) => drawCarFrontView(gg, o.car, sx, sy + 1, Math.min(260, 2 * sc), 1) });
   const shake = (me.veh.offroad ? 2 : 0) + (race.flash > 0 ? 4 : 0);
   g.save(); g.translate(Math.round((Math.random() - 0.5) * shake), Math.round((Math.random() - 0.5) * shake));
   pxRenderRoad(g, T, { z: me.z, x: me.x, scroll: race.scroll }, objs, race.t);
   g.restore();
-  if (g.getImageData) { const img = g.getImageData(0, 0, PW, PH); pixelize(img, 24); g.putImageData(img, 0, 0); }
-  g.drawImage(pxCockpit(me.car.color), 0, 0);
+  blit(g, pxCockpit(me.car.color), 0, 0);
   pxCockpitDynamic(g, race);
   void lo;
 }

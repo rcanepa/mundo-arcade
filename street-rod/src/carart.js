@@ -1,7 +1,7 @@
-// ===== Dibujo de los autos: de lado (garaje, diario, drive-in), de atrás y de frente (carreras) =====
+// ===== Siluetas de los autos (pxcar.js las pinta en pixel art), y los autos vistos de atrás y de frente =====
 // Cada modelo se describe mirando a la derecha, con x de 0 (cola) a 100 (trompa) e y hacia arriba (0 = suelo).
 // [x, y, 1] marca una esquina; el resto de los puntos se une con curvas suaves.
-const ART = {
+const ART_BASE = {
   chevy49: { len: 5.0, wr: 7.1, wheels: [80, 22], belt: 23,
     body: [[2.5, 8, 1], [1.2, 13], [2, 18.5], [6, 21.6], [16, 22.6], [30, 22.7], [48, 23], [66, 23.2], [80, 22.6], [91, 21.2], [97.2, 18.2], [99.3, 13], [99, 8.6], [97.5, 6.4, 1], [60, 5.8, 1], [10, 6.2, 1]],
     cabin: [[67, 23, 1], [61, 31], [56, 32.7], [43, 32.9], [36, 31.4], [29.5, 22.6, 1]],
@@ -144,6 +144,110 @@ const ART = {
     rear: { lights: 'round2', fin: 0, roundness: 0.75, roofW: 0.56, deck: 0.5, fast: 1 } }
 };
 
+// Copia una silueta base y le cambia algunas partes
+const artVariant = (base, o) => Object.assign(JSON.parse(JSON.stringify(ART_BASE[base])), o);
+
+// Los 25 autos del diario del juego original
+const ART = {
+  chevy38: { len: 4.8, wr: 7.4, wheels: [81, 22], belt: 25,
+    body: [[2.5, 10.6, 1], [2.4, 14], [4.5, 19.5], [10, 24.5], [18, 27.6], [26, 30.5], [33, 34], [42, 35.4], [56, 35.2], [60, 33.6], [64, 25], [78, 24.5], [90, 24], [95, 22.8], [97.2, 18], [97.6, 12], [96.6, 10.6, 1], [80, 10.8, 1], [20, 10.8, 1]],
+    glass: [[[61.5, 26, 1], [58.5, 32.6], [55, 33.6], [48, 33.6], [48, 26, 1]], [[46.5, 26, 1], [46.5, 33.6], [40, 33.4], [34, 30.6], [30.5, 26, 1]]],
+    fenders: [
+      [[63, 10.4, 1], [66, 16.5], [72, 21.8], [80, 23.4], [88, 22.4], [94, 18.4], [97.5, 12.5], [97.8, 9.2, 1], [64, 9.2, 1]],
+      [[7, 9.2, 1], [8.5, 14.5], [13.5, 19.2], [22, 20.8], [30.5, 19], [35.5, 14.5], [37, 9.2, 1]]],
+    board: [[35.5, 9.8], [64.5, 9.8], [64.5, 8.2], [35.5, 8.2]],
+    grille: [[96.4, 22], [97.4, 13], [96.4, 10.8], [95.4, 10.8], [95.6, 22]],
+    trims: [[[95, 23.8], [64, 24.6]]], doors: [[[62, 11], [62.8, 25]], [[47.5, 11], [47.5, 25.5]]], handle: [49.5, 22],
+    head: [91.6, 22.4, 1.8], tail: [[21, 18.4], [23.6, 18.4], [23.6, 20], [21, 20]],
+    bumpF: [[96, 7.4], [101.6, 7.4], [101.6, 9.8], [96, 9.8]], bumpR: [[-1.6, 7.4], [4, 7.4], [4, 9.8], [-1.6, 9.8]],
+    rear: { lights: 'round2', fin: 0, roundness: 1, roofW: 0.62, deck: 0.42, fenders: 1 } },
+  chevy40c: artVariant('ford40', {
+    grille: [[96.6, 18.5], [97.6, 13], [96.6, 10.8], [95.2, 10.8], [95.4, 18.5]],
+    trims: [[[95, 21.8], [66, 23.2]], [[96, 19.4], [68, 20.6]]], head: [90.6, 19.4, 1.7] }),
+  chevy40r: artVariant('ford40', {
+    body: [[2.5, 10.6, 1], [2.2, 14], [5, 19], [12, 23], [22, 24.8], [34, 25.2, 1], [36, 24, 1], [58, 24, 1], [61, 25, 1], [75, 24.4], [88, 23.6], [93.5, 22], [96.6, 18.5], [97.6, 13], [96.6, 10.6, 1], [80, 10.8, 1], [20, 10.8, 1]],
+    glass: null, seat: [[40, 24, 1], [40.8, 29], [44, 30], [50, 29.4], [51, 24, 1]], shield: [[61, 25], [58, 33], [56.2, 33], [59.2, 25]],
+    top: [[27, 25, 1], [28.5, 27.8], [33, 29], [37, 27.5], [37.5, 25, 1]], open: 1,
+    rear: { lights: 'round2', fin: 0, roundness: 1, roofW: 0, deck: 0.58, open: 1, fenders: 1 } }),
+  chevy49: ART_BASE.chevy49,
+  chevy55: ART_BASE.chevy55,
+  chevy58: artVariant('impala61', { len: 5.2,
+    body: [[1.5, 8, 1], [0.6, 12.5], [1, 17.2], [2.6, 19.6, 1], [12, 19.4], [24, 18.9], [34, 18.6], [50, 18.7], [64, 18.8], [80, 18.8], [94, 18.4], [98.4, 17], [99.5, 13], [99.3, 8.5], [97.8, 6.2, 1], [60, 5.2, 1], [8, 5.8, 1]],
+    cabin: [[64.8, 18.8, 1], [57.5, 26], [53, 26.9], [44, 26.9], [39, 25.8], [33, 18.7, 1]],
+    glass: [[[62.2, 19.6, 1], [57, 25.3], [53, 26], [45, 26], [41, 25.2], [36, 19.6, 1]]],
+    trims: [[[97, 13.6], [60, 13.6]], [[44, 13.6], [3, 13.6]], [[30, 16.6], [20, 16.6]]], badge: [24, 15.4],
+    rear: { lights: 'tri', fin: 0.25, roundness: 0.25, roofW: 0.64, deck: 0.5 } }),
+  vette56: ART_BASE.corvette58,
+  vette61: artVariant('corvette58', {
+    body: [[1.5, 8, 1], [0.6, 11.5], [1.2, 15.8], [3.6, 17.6, 1], [12, 19.2], [22, 20], [34, 19.8], [42, 19.6, 1], [44, 18.8, 1], [58, 18.8, 1], [61, 19.8, 1], [78, 19.6], [90, 18.5], [96.5, 16.2], [99.3, 12.5], [99.2, 8.5], [97.5, 6.3, 1], [60, 5.2, 1], [8, 5.8, 1]],
+    tail: [[0.3, 12.6], [1.4, 12.6], [1.4, 14.6], [0.3, 14.6]],
+    rear: { lights: 'round2', fin: 0, roundness: 0.7, roofW: 0, deck: 0.6, open: 1 } }),
+  vette63: ART_BASE.vette63,
+  olds49: ART_BASE.olds50,
+  olds52: artVariant('olds50', {
+    cabin: [[67, 22.6, 1], [61, 30.8], [55, 32], [43, 32], [37, 30.4], [31, 22.4, 1]],
+    glass: [[[64.5, 23.4, 1], [60, 30], [55, 31], [50, 31], [50, 23.4, 1]], [[48.4, 23.4, 1], [48.4, 31], [43.6, 31], [38.6, 29.6], [34.5, 23.4, 1]]],
+    trims: [[[96, 15.5], [58, 15.5]], [[34, 12.6], [6, 12.6]]] }),
+  pontiac50: artVariant('olds50', {
+    cabin: [[67, 22.6, 1], [61, 30.6], [55, 31.8], [45, 31.4], [32, 25.8], [20, 22.2, 1]],
+    glass: [[[64.5, 23.4, 1], [60, 29.8], [55, 30.8], [50, 30.8], [50, 23.4, 1]], [[48.4, 23.4, 1], [48.4, 30.6], [44.6, 30.4], [36, 26.2], [33, 23.4, 1]]],
+    trims: [[[96, 12.4], [62, 12.4]], [[94, 21.6], [70, 22.5]], [[94, 20.6], [70, 21.5]], [[30, 9], [10, 9]]] }),
+  ford32: ART_BASE.ford32,
+  ford32s: artVariant('ford32', {
+    cabin: [[61, 24.8, 1], [60.4, 37, 1], [31, 37.4, 1], [22, 35.6], [17.5, 31], [15, 24.2, 1]],
+    glass: [[[59.4, 26, 1], [59, 35.6, 1], [47, 35.8, 1], [47, 26, 1]], [[45.5, 26, 1], [45.5, 35.8, 1], [32, 35.8, 1], [24, 33.6], [21, 26, 1]]],
+    seat: null, shield: null, pipes: 0, belt: 24.8,
+    rear: { lights: 'round2', fin: 0, roundness: 0.5, roofW: 0.7, deck: 0.5 } }),
+  ford40: ART_BASE.ford40,
+  ford55: artVariant('chevy55', {
+    body: [[2, 7.5, 1], [1.2, 12.5], [1.6, 18.4], [2.6, 21, 1], [12, 20.6], [32, 20.3], [50, 20.5], [67, 20.8], [80, 20.8], [93, 20.4], [98, 19.4, 1], [99.3, 14.5], [99, 9], [97.5, 6.4, 1], [60, 5.4, 1], [8, 5.8, 1]],
+    cabin: [[67.5, 20.8, 1], [60, 28.8], [56, 29.6], [43, 29.6], [38, 28.6], [31, 20.4, 1]],
+    glass: [[[64.6, 21.6, 1], [59.4, 28.1], [56, 28.8], [44, 28.8], [39.4, 28], [34.6, 21.6, 1]]],
+    trims: [[[96, 17.2], [62, 17.2], [54, 12.6], [30, 12.6]], [[54, 12.6], [4, 15.6]]], head: [98.4, 17.8, 2.0],
+    rear: { lights: 'round1', fin: 0.2, roundness: 0.35, roofW: 0.68, deck: 0.5 } }),
+  ford57: artVariant('galaxie62', {
+    body: [[1.5, 8.5, 1], [0.6, 12.5], [1, 17.5], [2.4, 20.4, 1], [14, 19.6], [30, 18.8], [50, 18.9], [63.5, 19], [80, 19], [94, 18.6], [98.2, 17], [99.5, 13], [99.3, 8.5], [97.8, 6.2, 1], [60, 5.2, 1], [8, 5.8, 1]],
+    cabin: [[64, 19, 1], [57.5, 26.4], [53, 27.2], [40, 27.2], [35.5, 26.4], [31, 19, 1]],
+    glass: [[[61.5, 19.8, 1], [57, 25.6], [53, 26.3], [42, 26.3], [38, 25.6], [34, 19.8, 1]]],
+    gold: [[54, 15], [40, 12], [3, 12], [3, 17]],
+    trims: [[[97, 15], [54, 15], [40, 12], [3, 12]], [[54, 15], [3, 17]]],
+    rear: { lights: 'round1', fin: 0.3, roundness: 0.25, roofW: 0.66, deck: 0.5 } }),
+  tbird57: ART_BASE.tbird57,
+  merc54: artVariant('chevy55', {
+    body: [[2, 8, 1], [1, 13], [1.8, 18.6], [3.4, 20.8, 1], [16, 21], [32, 21], [50, 21.2], [66, 21.6], [80, 21.6], [92, 21], [97.4, 19], [99.3, 14.5], [99, 9], [97.5, 6.6, 1], [60, 5.6, 1], [8, 6, 1]],
+    cabin: [[67.4, 21.6, 1], [60.4, 29.8], [56, 30.8], [43, 30.8], [37.5, 29.6], [30.6, 21, 1]],
+    glass: [[[64.6, 22.4, 1], [59.6, 29], [56, 30], [51, 30], [51, 22.4, 1]], [[49.4, 22.4, 1], [49.4, 30], [44, 30], [39, 29], [34, 22.4, 1]]],
+    trims: [[[96, 15], [60, 15]], [[40, 15], [4, 15]], [[30, 8.6], [14, 8.6]]], skirts: 1, head: [98.5, 17.4, 2.0],
+    rear: { lights: 'vert', fin: 0.1, roundness: 0.6, roofW: 0.64, deck: 0.47 } }),
+  merc56: artVariant('chevy55', {
+    body: [[2, 8, 1], [1, 13], [1.8, 18.6], [3.4, 20.8, 1], [16, 21], [32, 21], [50, 21.2], [66, 21.6], [80, 21.6], [92, 21], [97.4, 19], [99.3, 14.5], [99, 9], [97.5, 6.6, 1], [60, 5.6, 1], [8, 6, 1]],
+    cabin: [[67.4, 21.6, 1], [60, 29], [56, 30], [43, 30], [38, 29], [31, 21, 1]],
+    glass: [[[64.6, 22.4, 1], [59.4, 28.3], [56, 29.1], [44, 29.1], [39.4, 28.3], [34.6, 22.4, 1]]],
+    trims: [[[96, 16.4], [52, 16.4], [44, 11.4], [3, 11.4]]], head: [98.5, 17.4, 2.0],
+    rear: { lights: 'vert', fin: 0.2, roundness: 0.45, roofW: 0.64, deck: 0.48 } }),
+  dodge55: artVariant('fury58', {
+    body: [[2, 8, 1], [0.8, 13], [1.2, 19.4], [2.4, 22.4, 1], [12, 21.6], [25, 20.6], [34, 19.8], [50, 19.7], [64, 19.6], [80, 19.6], [93, 19], [97.8, 17.5], [99.3, 13.5], [99, 8.5], [97.5, 6.2, 1], [60, 5, 1], [8, 5.8, 1]],
+    cabin: [[64.6, 19.6, 1], [57, 27.4], [53, 28.2], [42, 28.2], [37.5, 27.2], [31, 20.2, 1]],
+    glass: [[[62, 20.4, 1], [56.5, 26.8], [53, 27.4], [43, 27.4], [39, 26.7], [34.5, 20.6, 1]]],
+    gold: null, trims: [[[97, 16], [40, 16], [4, 19]], [[40, 16], [4, 13.5]]],
+    tail: [[0.7, 16.5], [2, 16.5], [2.3, 20.8], [1.1, 20.8]],
+    rear: { lights: 'fin', fin: 0.6, roundness: 0.3, roofW: 0.66, deck: 0.48 } }),
+  dodge62: ART_BASE.dart62,
+  valiant61: ART_BASE.valiant61,
+  valiant63: artVariant('falcon60', {
+    body: [[2, 8, 1], [0.8, 12.5], [1.2, 17.8], [2.2, 19.4, 1], [18, 19.4], [31, 19.2], [50, 19.3], [65.6, 19.4], [80, 19.3], [93, 19], [98, 18.6, 1], [99.4, 13.5], [99, 8.5], [97.5, 6.3, 1], [60, 5.4, 1], [8, 6, 1]],
+    cabin: [[66, 19.3, 1], [60, 27.4], [56, 28.2, 1], [40, 28.2, 1], [36.5, 27.4], [30, 19.3, 1]],
+    glass: [[[63.4, 20.1, 1], [58.6, 26.8], [55.4, 27.4, 1], [49.8, 27.4, 1], [49.8, 20.1, 1]], [[48.2, 20.1, 1], [48.2, 27.4, 1], [41, 27.4, 1], [38.4, 26.8], [33.4, 20.1, 1]]],
+    trims: [[[97, 15.6], [4, 15.6]]],
+    rear: { lights: 'bar', fin: 0, roundness: 0.2, roofW: 0.72, deck: 0.5 } }),
+  savoy64: artVariant('galaxie62', {
+    body: [[1.5, 8.5, 1], [0.6, 12.5], [1, 17.4], [2, 19, 1], [20, 19], [33, 18.9], [50, 19], [63.5, 19.1], [80, 19.1], [94, 18.8], [98.6, 18, 1], [99.6, 13], [99.3, 8.5], [97.8, 6.2, 1], [60, 5.2, 1], [8, 5.8, 1]],
+    cabin: [[64, 19.1, 1], [58, 26.6], [54, 27.4, 1], [40, 27.4, 1], [35, 26.6], [31.5, 19, 1]],
+    glass: [[[61.5, 19.9, 1], [57, 25.9], [53.6, 26.6, 1], [48.6, 26.6, 1], [48.6, 19.9, 1]], [[47, 19.9, 1], [47, 26.6, 1], [41, 26.6, 1], [37, 25.9], [34.4, 19.9, 1]]],
+    trims: [[[98, 15], [3, 15]]],
+    rear: { lights: 'bar', fin: 0, roundness: 0.2, roofW: 0.66, deck: 0.52 } })
+};
+
 // ----- Materiales -----
 function chromeGrad(g, y0, y1) {
   const gr = g.createLinearGradient(0, y0, 0, y1);
@@ -164,69 +268,6 @@ function polyPath(g, pts, smoothIt = false, tension = 0.5) {
   g.closePath();
 }
 // Pintura: color base, luz de arriba, reflejo del horizonte y sombra abajo (en coordenadas del modelo, y hacia arriba)
-function paintBody(g, color, top, bottom, gloss = 1) {
-  g.fillStyle = css(color); g.fill();
-  const gr = g.createLinearGradient(0, top, 0, bottom);
-  const dark = luma(color) < 0.2;
-  gr.addColorStop(0, `rgba(255,255,255,${(dark ? 0.32 : 0.42) * gloss})`);
-  gr.addColorStop(0.16, `rgba(255,255,255,${0.1 * gloss})`);
-  gr.addColorStop(0.42, 'rgba(255,255,255,0)');
-  gr.addColorStop(0.47, `rgba(255,255,255,${0.16 * gloss})`);
-  gr.addColorStop(0.5, 'rgba(0,0,0,0.12)');
-  gr.addColorStop(0.8, 'rgba(0,0,0,0.26)');
-  gr.addColorStop(1, 'rgba(0,0,0,0.5)');
-  g.fillStyle = gr; g.fill();
-}
-
-// ----- Llantas -----
-function drawWheel(g, cx, cy, r, style, ww, spin = 0, body = '#888', wide = false) {
-  // neumático
-  g.fillStyle = '#121214';
-  g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
-  const tg = g.createRadialGradient(cx, cy, r * 0.5, cx, cy, r);
-  tg.addColorStop(0, 'rgba(255,255,255,0)'); tg.addColorStop(0.82, 'rgba(255,255,255,0.08)'); tg.addColorStop(1, 'rgba(0,0,0,0.6)');
-  g.fillStyle = tg; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
-  if (wide) { g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = r * 0.04; g.beginPath(); g.arc(cx, cy, r * 0.9, 0, TAU); g.stroke(); }
-  // banda blanca
-  if (ww) {
-    g.fillStyle = '#efece2';
-    g.beginPath(); g.arc(cx, cy, r * 0.84, 0, TAU); g.arc(cx, cy, r * 0.63, 0, TAU, true); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = r * 0.03; g.beginPath(); g.arc(cx, cy, r * 0.84, 0, TAU); g.stroke();
-  }
-  const rr = r * (ww ? 0.62 : 0.66);
-  if (style === 'mags') {
-    g.fillStyle = chromeGrad(g, cy + rr, cy - rr);
-    g.beginPath(); g.arc(cx, cy, rr, 0, TAU); g.fill();
-    g.fillStyle = '#3b3f45'; g.beginPath(); g.arc(cx, cy, rr * 0.86, 0, TAU); g.fill();
-    g.fillStyle = chromeGrad(g, cy + rr, cy - rr);
-    for (let i = 0; i < 5; i++) {
-      const a = spin + i * TAU / 5;
-      g.save(); g.translate(cx, cy); g.rotate(a);
-      g.beginPath(); g.moveTo(-rr * 0.12, 0); g.lineTo(-rr * 0.2, rr * 0.84); g.lineTo(rr * 0.2, rr * 0.84); g.lineTo(rr * 0.12, 0); g.closePath(); g.fill();
-      g.restore();
-    }
-    g.fillStyle = '#c9cfd6'; g.beginPath(); g.arc(cx, cy, rr * 0.25, 0, TAU); g.fill();
-  } else if (style === 'moons') {
-    const mg = g.createRadialGradient(cx - rr * 0.3, cy + rr * 0.35, rr * 0.1, cx, cy, rr);
-    mg.addColorStop(0, '#ffffff'); mg.addColorStop(0.5, '#cfd6dd'); mg.addColorStop(0.85, '#7f8891'); mg.addColorStop(1, '#e6ebef');
-    g.fillStyle = mg; g.beginPath(); g.arc(cx, cy, rr, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.arc(cx - rr * 0.25, cy + rr * 0.3, rr * 0.18, 0, TAU); g.fill();
-  } else {
-    // llanta de acero pintada con tapa cromada
-    g.fillStyle = css(shade(body, -0.25)); g.beginPath(); g.arc(cx, cy, rr, 0, TAU); g.fill();
-    const hc = g.createRadialGradient(cx - rr * 0.25, cy + rr * 0.3, rr * 0.05, cx, cy, rr * 0.82);
-    hc.addColorStop(0, '#ffffff'); hc.addColorStop(0.45, '#c3cbd3'); hc.addColorStop(0.8, '#69727b'); hc.addColorStop(1, '#d9dfe4');
-    g.fillStyle = hc; g.beginPath(); g.arc(cx, cy, rr * 0.82, 0, TAU); g.fill();
-    g.strokeStyle = 'rgba(40,45,50,0.45)'; g.lineWidth = rr * 0.04;
-    for (let i = 0; i < 6; i++) {
-      const a = spin + i * TAU / 6;
-      g.beginPath(); g.moveTo(cx + Math.cos(a) * rr * 0.28, cy + Math.sin(a) * rr * 0.28); g.lineTo(cx + Math.cos(a) * rr * 0.72, cy + Math.sin(a) * rr * 0.72); g.stroke();
-    }
-    g.fillStyle = '#eef2f5'; g.beginPath(); g.arc(cx, cy, rr * 0.22, 0, TAU); g.fill();
-    g.fillStyle = css(shade(body, -0.1)); g.beginPath(); g.arc(cx, cy, rr * 0.12, 0, TAU); g.fill();
-  }
-}
-
 // Llamas: lenguas de fuego que nacen en la trompa y se curvan hacia atrás
 const FLAME_TONGUES = [[4.6, 0.42, 1.8, -1], [3, 0.7, 2.6, 1], [-3.4, 0.6, 2.4, -1], [1, 1, 3.2, -1], [-1.2, 0.82, 3, 1]];
 function drawFlames(g, A, color) {
@@ -246,251 +287,6 @@ function drawFlames(g, A, color) {
   }
 }
 
-// Dibuja el auto de lado. x, y = centro abajo (entre las ruedas, en el suelo). size = largo en píxeles.
-// o: { flip (mira a la izquierda), spin (giro de ruedas), night (0..1 oscurece), lights (faros encendidos), part (parcial para el taller) }
-function drawCarSide(g, car, x, y, size, o = {}) {
-  const A = ART[car.model], M = MODELS[car.model], mods = car.mods || {};
-  const s = size / 100, color = car.color;
-  const lower = mods.lowered ? 1.2 : 0, chop = mods.chop ? 0.74 : 1;
-  const tiresK = car.p && car.p.tires ? car.p.tires.k : M.stock.tires;
-  const ww = tiresK === 'ww', wideRear = tiresK === 'slick' || tiresK === 'wide';
-  const wheelStyle = mods.wheels || 'caps';
-  const candy = (paintOf(color) || {}).candy;
-  g.save();
-  g.translate(x, y);
-  g.scale(o.flip ? -s : s, -s);
-  g.translate(-50, 0);
-  // sombra en el suelo
-  const sh = g.createRadialGradient(50, 0, 4, 50, 0, 58);
-  sh.addColorStop(0, `rgba(0,0,0,${o.night ? 0.6 : 0.42})`); sh.addColorStop(1, 'rgba(0,0,0,0)');
-  g.save(); g.scale(1, 0.09); g.fillStyle = sh; g.beginPath(); g.arc(50, 0, 58, 0, TAU); g.fill(); g.restore();
-
-  const wr = A.wr, wrR = (A.wrRear || wr) * (wideRear ? 1.04 : 1);
-  const [fx, rx] = A.wheels;
-  const top = 34, bottom = 4;
-  // cabina (techo y pilares), por detrás de la carrocería
-  const belt = A.belt;
-  const chopPts = pts => pts.map(p => [p[0], p[1] > belt + 0.5 ? belt + (p[1] - belt) * chop : p[1], p[2]]);
-  const bodyPts = A.cabin ? A.body : chopPts(A.body);
-  const crisp = M.year >= 1957 ? 0.28 : 0.5;
-  const drawGlass = () => {
-    for (const gl of A.glass) {
-      polyPath(g, chopPts(gl), true, crisp);
-      const gg = g.createLinearGradient(0, belt + 10 * chop, 0, belt);
-      gg.addColorStop(0, o.night ? '#2a3550' : '#b9d4ea'); gg.addColorStop(0.45, o.night ? '#121a2a' : '#5d7a96'); gg.addColorStop(1, o.night ? '#05070c' : '#1d2a38');
-      g.fillStyle = gg; g.fill();
-      g.strokeStyle = chromeGrad(g, belt + 10, belt); g.lineWidth = 0.45; g.stroke();
-      // reflejos diagonales en el vidrio
-      g.save(); g.clip();
-      g.fillStyle = 'rgba(255,255,255,0.14)';
-      const gx = gl[0][0];
-      g.beginPath(); g.moveTo(gx - 6, belt); g.lineTo(gx - 2, belt); g.lineTo(gx - 8, belt + 12); g.lineTo(gx - 12, belt + 12); g.fill();
-      g.beginPath(); g.moveTo(gx - 14, belt); g.lineTo(gx - 12.5, belt); g.lineTo(gx - 18.5, belt + 12); g.lineTo(gx - 20, belt + 12); g.fill();
-      g.restore();
-    }
-  };
-  g.save(); g.translate(0, -lower);
-  if (A.cabin) {
-    polyPath(g, chopPts(A.cabin), true, crisp);
-    paintBody(g, mods.roof || color, belt + 11 * chop, belt - 2, candy ? 1.1 : 0.75);
-    drawGlass();
-    if (A.vent) { g.strokeStyle = chromeGrad(g, belt + 9, belt); g.lineWidth = 0.4; g.beginPath(); g.moveTo(...A.vent[0]); g.lineTo(A.vent[1][0], belt + (A.vent[1][1] - belt) * chop); g.stroke(); }
-    if (A.port) {
-      const [px, py, pr] = A.port, pyc = belt + (py - belt) * chop;
-      g.fillStyle = o.night ? '#0a0e16' : '#3e5870'; g.beginPath(); g.arc(px, pyc, pr * chop, 0, TAU); g.fill();
-      g.strokeStyle = chromeGrad(g, pyc + pr, pyc - pr); g.lineWidth = 0.5; g.stroke();
-    }
-  }
-  // asientos y parabrisas de los descapotables
-  if (A.seat) {
-    polyPath(g, A.seat, true); g.fillStyle = '#7a3b22'; g.fill();
-    const sg = g.createLinearGradient(0, belt + 6, 0, belt); sg.addColorStop(0, 'rgba(255,255,255,0.25)'); sg.addColorStop(1, 'rgba(0,0,0,0.3)');
-    g.fillStyle = sg; g.fill();
-  }
-  if (A.wheelRing) { g.strokeStyle = '#1a1a1a'; g.lineWidth = 0.7; g.beginPath(); g.ellipse(A.wheelRing[0], A.wheelRing[1], 0.6, 2.6, -0.3, 0, TAU); g.stroke(); }
-  if (A.shield) {
-    polyPath(g, chopPts(A.shield)); g.fillStyle = 'rgba(170,205,230,0.35)'; g.fill();
-    g.strokeStyle = chromeGrad(g, 36, 24); g.lineWidth = 0.7; g.stroke();
-  }
-  g.restore();
-
-  // carrocería
-  g.save(); g.translate(0, -lower);
-  if (A.frame) { g.strokeStyle = '#1b1b1d'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(...A.frame[0]); g.lineTo(...A.frame[1]); g.stroke(); }
-  polyPath(g, bodyPts, true);
-  paintBody(g, color, top - 6, bottom, candy ? 1.35 : 1);
-  if (candy) {
-    // escarchado: puntitos brillantes
-    g.save(); g.clip();
-    for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(255,255,255,${0.15 + hash1(i, 3) * 0.3})`; g.fillRect(hash1(i, 1) * 100, 5 + hash1(i, 2) * 20, 0.25, 0.25); }
-    g.restore();
-  }
-  if (!A.cabin && A.glass) drawGlass();
-  // sombra suave alrededor de los arcos de las ruedas
-  if (!A.highboy) {
-    g.save(); polyPath(g, bodyPts, true); g.clip();
-    for (const [wx, wrr] of [[fx, wr], [rx, wrR]]) {
-      const ag = g.createRadialGradient(wx, wrr + lower, wrr * 1.15, wx, wrr + lower, wrr * 1.6);
-      ag.addColorStop(0, 'rgba(0,0,0,0.35)'); ag.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = ag; g.fillRect(wx - wrr * 1.7, 0, wrr * 3.4, wrr * 3);
-    }
-    g.restore();
-  }
-  if (A.hood) {
-    // capó con persianas y la línea del costado del roadster
-    g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 0.25;
-    g.beginPath(); g.moveTo(A.hood[0], 11.4); g.lineTo(A.hood[0], 24.9); g.stroke();
-    for (let row = 0; row < 3; row++) for (let lx = A.hood[0] + 3; lx < A.hood[1] - 2; lx += 1.6) {
-      g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(lx, 15.5 + row * 2.6, 0.5, 1.8);
-      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(lx + 0.5, 15.5 + row * 2.6, 0.18, 1.8);
-    }
-    g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = 0.35;
-    g.beginPath(); g.moveTo(4, 20.6); g.bezierCurveTo(20, 21.4, 60, 21.4, A.hood[0], 21.2); g.stroke();
-    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.25;
-    g.beginPath(); g.moveTo(4, 20.2); g.bezierCurveTo(20, 21, 60, 21, A.hood[0], 20.8); g.stroke();
-  }
-  // panel de color secundario o anodizado
-  if (A.cove) { polyPath(g, A.cove, true); g.fillStyle = css(luma(color) > 0.7 ? '#b3202a' : '#ece8dc'); g.fill(); g.strokeStyle = chromeGrad(g, 18, 8); g.lineWidth = 0.5; g.stroke(); }
-  if (A.wedge) {
-    polyPath(g, A.wedge); g.fillStyle = chromeGrad(g, 18, 11); g.fill();
-    g.save(); g.clip(); g.strokeStyle = 'rgba(60,66,72,0.35)'; g.lineWidth = 0.25;
-    for (let xx = 4; xx < 52; xx += 1.2) { g.beginPath(); g.moveTo(xx, 10); g.lineTo(xx, 19); g.stroke(); }
-    g.restore();
-  }
-  if (A.gold) { polyPath(g, A.gold); g.fillStyle = goldGrad(g, 18, 12); g.fill(); }
-  // decoraciones
-  g.save(); polyPath(g, bodyPts, true); g.clip();
-  if (mods.stripes) {
-    g.fillStyle = luma(color) > 0.6 ? 'rgba(25,28,34,0.9)' : 'rgba(245,243,236,0.92)';
-    g.fillRect(0, belt - 9.4, 101, 1.2); g.fillRect(0, belt - 7.6, 101, 0.6);
-  }
-  if (mods.flames) drawFlames(g, A, color);
-  if (mods.pinstripe) {
-    g.strokeStyle = luma(color) > 0.6 ? '#9b2a20' : '#f4e3a6'; g.lineWidth = 0.22;
-    const py = belt - 3;
-    for (const [cx, d] of [[88, 1], [12, -1]]) {
-      g.beginPath();
-      g.moveTo(cx - 6 * d, py); g.bezierCurveTo(cx - 2 * d, py + 2, cx + 2 * d, py - 2, cx + 5 * d, py - 0.5);
-      g.bezierCurveTo(cx + 6.5 * d, py + 0.5, cx + 5 * d, py + 1.8, cx + 3.6 * d, py + 1);
-      g.moveTo(cx - 6 * d, py); g.bezierCurveTo(cx - 2 * d, py - 2.2, cx + 1 * d, py - 2.6, cx + 3 * d, py - 1.6);
-      g.stroke();
-    }
-  }
-  g.restore();
-  // líneas de puertas y manilla
-  g.strokeStyle = 'rgba(0,0,0,0.38)'; g.lineWidth = 0.22;
-  for (const d of A.doors) { g.beginPath(); g.moveTo(...d[0]); g.lineTo(...d[1]); g.stroke(); }
-  if (A.handle) { g.fillStyle = chromeGrad(g, A.handle[1] + 0.5, A.handle[1] - 0.5); g.fillRect(A.handle[0], A.handle[1] - 0.35, 2.4, 0.7); }
-  // molduras cromadas
-  for (const t of A.trims) {
-    g.strokeStyle = '#eef2f6'; g.lineWidth = 0.55; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(...t[0]); for (let i = 1; i < t.length; i++) g.lineTo(...t[i]); g.stroke();
-    g.strokeStyle = 'rgba(70,78,86,0.7)'; g.lineWidth = 0.18;
-    g.beginPath(); g.moveTo(t[0][0], t[0][1] - 0.22); for (let i = 1; i < t.length; i++) g.lineTo(t[i][0], t[i][1] - 0.22); g.stroke();
-  }
-  if (A.vents) for (const [vx, vy] of A.vents) { g.strokeStyle = chromeGrad(g, vy + 3, vy); g.lineWidth = 0.5; g.beginPath(); g.moveTo(vx, vy); g.lineTo(vx + 1.6, vy + 3.2); g.stroke(); }
-  if (A.louvers) { g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 0.25; for (let lx = A.louvers[0]; lx < A.louvers[1]; lx += 1.4) { g.beginPath(); g.moveTo(lx, A.louvers[2]); g.lineTo(lx + 0.7, A.louvers[2] - 0.4); g.stroke(); } }
-  if (A.ornaments) for (const [ox, oy] of A.ornaments) { g.fillStyle = chromeGrad(g, oy + 1, oy); g.beginPath(); g.moveTo(ox - 1.6, oy); g.lineTo(ox + 1.2, oy + 0.7); g.lineTo(ox + 1.4, oy); g.closePath(); g.fill(); }
-  if (A.badge) { g.fillStyle = '#d33'; g.fillRect(A.badge[0], A.badge[1], 2, 0.8); g.fillStyle = '#eee'; g.fillRect(A.badge[0] + 0.2, A.badge[1] + 0.2, 1.6, 0.4); }
-  if (A.scoop || mods.scoop) {
-    const sc = A.scoop || [[76, belt + 0.1], [79.5, belt + 1.7], [87, belt + 1.6], [89, belt]];
-    polyPath(g, sc, true); paintBody(g, color, belt + 2, belt, 1);
-    g.fillStyle = '#0d0d0f'; g.fillRect(sc[2][0] - 0.2, sc[3][1] + 0.2, 0.9, (sc[2][1] - sc[3][1]) * 0.75);
-  }
-  // salpicaderas sueltas (autos antiguos)
-  if (A.fenders) {
-    for (const f of A.fenders) { polyPath(g, f, true); paintBody(g, color, 23, 9, candy ? 1.3 : 1); }
-    g.fillStyle = '#1d1d1f'; polyPath(g, A.board); g.fill();
-    g.fillStyle = chromeGrad(g, 9.8, 9.2); g.fillRect(A.board[0][0], 9.2, A.board[1][0] - A.board[0][0], 0.6);
-  }
-  if (A.grille) {
-    polyPath(g, A.grille); g.fillStyle = chromeGrad(g, 25, 11); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 0.15; g.stroke();
-    if (A.highboy) { g.fillStyle = chromeGrad(g, 27, 25); roundRect(g, 83.2, 25, 1.6, 1.6, 0.5); g.fill(); }
-  }
-  if (A.pipes) {
-    // escapes laterales cromados (lakes pipes)
-    g.fillStyle = chromeGrad(g, 11.4, 9.6); roundRect(g, 30, 9.6, 46, 1.8, 0.9); g.fill();
-    g.fillStyle = '#222'; g.beginPath(); g.ellipse(30.2, 10.5, 0.4, 0.8, 0, 0, TAU); g.fill();
-  }
-  // huecos de las ruedas
-  if (!A.highboy) {
-    g.save();
-    polyPath(g, bodyPts, true);
-    if (A.fenders) for (const f of A.fenders) { splinePath(g, f, true); }
-    g.clip();
-    g.fillStyle = '#0b0b0c';
-    for (const [wx, wrr] of [[fx, wr], [rx, wrR]]) { g.beginPath(); g.arc(wx, wrr + lower, wrr * 1.17, 0, TAU); g.fill(); }
-    g.restore();
-  }
-  g.restore();
-
-  // ruedas
-  const spin = o.spin || 0;
-  drawWheel(g, fx, wr, wr, wheelStyle, ww, spin, color);
-  drawWheel(g, rx, wrR, wrR, wheelStyle, ww, spin, color, wideRear);
-  g.save(); g.translate(0, -lower);
-  // faldones traseros (Mercury)
-  if (A.skirts && !mods.noskirt) {
-    g.save(); polyPath(g, bodyPts, true); g.clip();
-    g.beginPath(); g.rect(rx - wr * 1.25, 4, wr * 2.5, 24);
-    paintBody(g, color, top - 6, bottom, candy ? 1.35 : 1);
-    g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 0.25;
-    g.beginPath(); g.moveTo(rx - wr * 1.2, 5.6); g.lineTo(rx - wr * 1.2, wr + 2); g.arc(rx, wr + 2, wr * 1.2, Math.PI, 0, true); g.lineTo(rx + wr * 1.2, 5.6); g.stroke();
-    g.restore();
-    g.strokeStyle = chromeGrad(g, 7, 5.5); g.lineWidth = 0.5; g.beginPath(); g.moveTo(rx - wr * 1.15, 6.4); g.lineTo(rx + wr * 1.15, 6.4); g.stroke();
-  }
-  // faros y focos traseros
-  if (A.head) {
-    const [hx, hy, hr] = A.head;
-    g.fillStyle = chromeGrad(g, hy + hr, hy - hr); g.beginPath(); g.ellipse(hx, hy, hr * 0.55, hr, 0, 0, TAU); g.fill();
-    g.fillStyle = o.lights ? '#fff8d8' : '#dfe8ee'; g.beginPath(); g.ellipse(hx + hr * 0.2, hy, hr * 0.32, hr * 0.78, 0, 0, TAU); g.fill();
-  }
-  if (A.lamp) {
-    const [lx, ly, lr] = A.lamp;
-    g.strokeStyle = '#1b1b1d'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(lx - 1, ly - lr); g.lineTo(lx - 2.6, 13); g.stroke();
-    g.fillStyle = chromeGrad(g, ly + lr, ly - lr); g.beginPath(); g.ellipse(lx, ly, lr * 0.8, lr, 0, 0, TAU); g.fill();
-    g.fillStyle = o.lights ? '#fff8d8' : '#e8eef2'; g.beginPath(); g.ellipse(lx + lr * 0.5, ly, lr * 0.3, lr * 0.8, 0, 0, TAU); g.fill();
-  }
-  if (A.tail) { polyPath(g, A.tail); g.fillStyle = o.lights ? '#ff2a1a' : '#b3141a'; g.fill(); g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(A.tail[0][0] + 0.2, A.tail[0][1] + 0.3, 0.4, (A.tail[2][1] - A.tail[0][1]) * 0.6); }
-  // parachoques
-  if (!mods.nobump) {
-    for (const b of [A.bumpF, A.bumpR]) {
-      polyPath(g, b, true); g.fillStyle = chromeGrad(g, Math.max(...b.map(p => p[1])), Math.min(...b.map(p => p[1]))); g.fill();
-      g.strokeStyle = 'rgba(40,46,52,0.5)'; g.lineWidth = 0.15; g.stroke();
-    }
-  }
-  g.restore();
-  // contorno suave para que el auto se despegue del fondo
-  g.restore();
-  if (o.lights) {
-    const dir = o.flip ? -1 : 1, hx = x + dir * (A.head ? A.head[0] - 50 : 40) * s, hy = y - (A.head ? A.head[1] : 22) * s;
-    g.save(); g.globalCompositeOperation = 'lighter';
-    glow(g, hx, hy, 9 * s, '#fff1c8', 0.9);
-    const beam = g.createLinearGradient(hx, hy, hx + dir * 60 * s, hy);
-    beam.addColorStop(0, 'rgba(255,240,200,0.32)'); beam.addColorStop(1, 'rgba(255,240,200,0)');
-    g.fillStyle = beam; g.beginPath(); g.moveTo(hx, hy - 1.2 * s); g.lineTo(hx + dir * 60 * s, hy - 8 * s); g.lineTo(hx + dir * 60 * s, y + 2 * s); g.lineTo(hx, hy + 1.5 * s); g.fill();
-    if (A.tail) glow(g, x - dir * (50 - A.tail[0][0]) * s, y - (A.tail[0][1] + 1.5) * s, 6 * s, '#ff2a1a', 0.7);
-    g.restore();
-  }
-}
-
-// Imagen cacheada del auto de lado (para el diario y las listas)
-const _thumbs = new Map();
-function carThumb(car, w = 220, h = 90) {
-  const key = JSON.stringify([car.model, car.color, car.mods, car.p && car.p.tires && car.p.tires.k, w, h]);
-  let url = _thumbs.get(key);
-  if (!url) {
-    const c = makeCanvas(w * 2, h * 2), g = c.getContext('2d');
-    g.scale(2, 2);
-    drawCarSide(g, car, w / 2, h - 8, w * 0.92);
-    url = c.toDataURL();
-    if (_thumbs.size > 120) _thumbs.clear();
-    _thumbs.set(key, url);
-  }
-  return url;
-}
-
 // ----- De atrás: el rival en la carrera. w = ancho en píxeles; light = cuánto lo alumbran tus faros (0..1) -----
 function drawCarRear(g, car, x, y, w, o = {}) {
   const A = ART[car.model], R = A.rear, light = clamp(o.light ?? 0.5, 0, 1);
@@ -499,10 +295,12 @@ function drawCarRear(g, car, x, y, w, o = {}) {
   const bodyB = -h * 0.13, belt = -h * (R.deck + (R.open ? 0 : 0.11)), roofT = -h * (R.open ? 0.66 : 0.98) + (car.mods.chop ? h * 0.06 : 0) + (car.mods.lowered ? h * 0.03 : 0);
   const low = car.mods.lowered ? h * 0.03 : 0;
   g.save(); g.translate(x, y);
-  // sombra
+  // sombra (no en los sprites de pixel art: ahí la pone el que dibuja)
+  if (o.flat) { g.save(); g.globalAlpha = 0; }
   const sg = g.createRadialGradient(0, 0, 0, 0, 0, w * 0.62);
   sg.addColorStop(0, 'rgba(0,0,0,0.7)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
   g.save(); g.scale(1, 0.12); g.fillStyle = sg; g.beginPath(); g.arc(0, 0, w * 0.62, 0, TAU); g.fill(); g.restore();
+  if (o.flat) g.restore();
   g.translate(0, low);
   // neumáticos
   const tw = w * (wide ? 0.19 : 0.15);
@@ -619,9 +417,11 @@ function drawCarRear(g, car, x, y, w, o = {}) {
     g.beginPath(); g.ellipse(lx * w, lyy, lr * w, lr * w * stretch, 0, 0, TAU); g.fill();
     g.fillStyle = `rgba(255,220,200,${0.35 * tl})`; g.beginPath(); g.ellipse(lx * w - lr * w * 0.3, lyy - lr * w * stretch * 0.3, lr * w * 0.3, lr * w * stretch * 0.25, 0, 0, TAU); g.fill();
   }
-  g.globalCompositeOperation = 'lighter';
-  for (const [lx, lyy, lr] of lamps) glow(g, lx * w, lyy, lr * w * (o.brake ? 7.5 : 4.5), '#ff3020', o.brake ? 0.75 : 0.42);
-  glow(g, 0, py + ph / 2, pw * 0.8, '#fff2c0', 0.22);
+  if (!o.flat) {
+    g.globalCompositeOperation = 'lighter';
+    for (const [lx, lyy, lr] of lamps) glow(g, lx * w, lyy, lr * w * (o.brake ? 7.5 : 4.5), '#ff3020', o.brake ? 0.75 : 0.42);
+    glow(g, 0, py + ph / 2, pw * 0.8, '#fff2c0', 0.22);
+  }
   g.restore();
 }
 
@@ -654,90 +454,3 @@ function drawCarFront(g, x, y, w, o = {}) {
   g.restore();
 }
 
-// ----- Retratos de los rivales -----
-function drawPortrait(g, look, x, y, r) {
-  g.save(); g.translate(x, y);
-  g.beginPath(); g.arc(0, 0, r, 0, TAU); g.save(); g.clip();
-  const bg = g.createLinearGradient(0, -r, 0, r); bg.addColorStop(0, '#2b3d5c'); bg.addColorStop(1, '#0f1626');
-  g.fillStyle = bg; g.fillRect(-r, -r, r * 2, r * 2);
-  const u = r / 50, wide = look.big ? 1.15 : look.slim ? 0.88 : 1;
-  // hombros y chaqueta
-  g.fillStyle = look.top;
-  g.beginPath(); g.ellipse(0, 50 * u, 42 * u * wide, 30 * u, 0, Math.PI, 0); g.fill();
-  if (look.collar) { g.fillStyle = css(shade(look.top, 0.25)); g.beginPath(); g.moveTo(-14 * u, 22 * u); g.lineTo(0, 34 * u); g.lineTo(14 * u, 22 * u); g.lineTo(18 * u, 30 * u); g.lineTo(0, 42 * u); g.lineTo(-18 * u, 30 * u); g.fill(); }
-  if (look.tee) { g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 2 * u; g.beginPath(); g.arc(0, 22 * u, 10 * u, 0.1, Math.PI - 0.1); g.stroke(); }
-  // cuello y cara
-  g.fillStyle = css(shade(look.skin, -0.12)); g.fillRect(-7 * u, 8 * u, 14 * u, 16 * u);
-  g.fillStyle = look.skin;
-  g.beginPath(); g.ellipse(0, -4 * u, 17 * u * wide, 21 * u, 0, 0, TAU); g.fill();
-  g.beginPath(); g.ellipse(-17 * u * wide, -2 * u, 3.5 * u, 5 * u, 0, 0, TAU); g.ellipse(17 * u * wide, -2 * u, 3.5 * u, 5 * u, 0, 0, TAU); g.fill();
-  // pelo
-  g.fillStyle = look.hc;
-  const hw = 18 * u * wide;
-  switch (look.hair) {
-    case 'pomp':
-      g.beginPath(); g.moveTo(-hw, -2 * u); g.bezierCurveTo(-hw - 2 * u, -26 * u, -6 * u, -36 * u, 10 * u, -34 * u);
-      g.bezierCurveTo(24 * u, -32 * u, hw + 4 * u, -18 * u, hw, -2 * u); g.bezierCurveTo(hw - 2 * u, -14 * u, 0, -18 * u, -hw + 2 * u, -10 * u); g.fill(); break;
-    case 'duck':
-      g.beginPath(); g.moveTo(-hw, 0); g.bezierCurveTo(-hw - 3 * u, -24 * u, -2 * u, -32 * u, 12 * u, -29 * u);
-      g.bezierCurveTo(hw + 6 * u, -22 * u, hw + 2 * u, -6 * u, hw, 2 * u); g.bezierCurveTo(hw - 4 * u, -16 * u, -8 * u, -17 * u, -hw + 1 * u, -8 * u); g.fill();
-      g.beginPath(); g.moveTo(0, -27 * u); g.quadraticCurveTo(-4 * u, -18 * u, -2 * u, -10 * u); g.lineTo(2 * u, -12 * u); g.fill(); break;
-    case 'flat':
-      g.fillRect(-hw, -27 * u, hw * 2, 12 * u); g.beginPath(); g.ellipse(0, -15 * u, hw, 6 * u, 0, Math.PI, 0); g.fill(); break;
-    case 'buzz':
-      g.beginPath(); g.ellipse(0, -12 * u, hw, 14 * u, 0, Math.PI, 0); g.fill(); break;
-    case 'ponytail':
-      g.beginPath(); g.ellipse(0, -10 * u, hw + 1 * u, 18 * u, 0, Math.PI, 0); g.fill();
-      g.beginPath(); g.ellipse(hw + 6 * u, -4 * u, 6 * u, 16 * u, -0.4, 0, TAU); g.fill();
-      if (look.bow) { g.fillStyle = look.bow; g.beginPath(); g.ellipse(hw + 1 * u, -20 * u, 5 * u, 3 * u, 0.6, 0, TAU); g.ellipse(hw + 6 * u, -22 * u, 5 * u, 3 * u, -0.6, 0, TAU); g.fill(); }
-      break;
-    case 'bob':
-      g.beginPath(); g.moveTo(-hw - 3 * u, 12 * u); g.bezierCurveTo(-hw - 6 * u, -30 * u, hw + 6 * u, -30 * u, hw + 3 * u, 12 * u);
-      g.lineTo(hw - 3 * u, 12 * u); g.bezierCurveTo(hw, -6 * u, 6 * u, -16 * u, -6 * u, -14 * u); g.bezierCurveTo(-hw + 2 * u, -10 * u, -hw + 1 * u, 2 * u, -hw + 3 * u, 12 * u); g.fill();
-      if (look.bow) { g.fillStyle = look.bow; g.fillRect(-hw, -20 * u, hw * 2, 3.5 * u); }
-      break;
-    case 'beehive':
-      g.beginPath(); g.ellipse(0, -26 * u, hw * 0.95, 20 * u, 0, 0, TAU); g.fill();
-      g.beginPath(); g.ellipse(0, -10 * u, hw + 2 * u, 14 * u, 0, Math.PI, 0); g.fill(); break;
-  }
-  // cara
-  const eyeY = -4 * u;
-  if (look.shades) {
-    g.fillStyle = '#0a0a0a';
-    roundRect(g, -14 * u, eyeY - 4 * u, 12 * u, 8 * u, 3 * u); g.fill(); roundRect(g, 2 * u, eyeY - 4 * u, 12 * u, 8 * u, 3 * u); g.fill();
-    g.fillRect(-3 * u, eyeY - 2 * u, 6 * u, 1.6 * u);
-    g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-12 * u, eyeY - 3 * u, 4 * u, 1.4 * u); g.fillRect(4 * u, eyeY - 3 * u, 4 * u, 1.4 * u);
-  } else {
-    g.fillStyle = '#1b1410';
-    g.beginPath(); g.ellipse(-7 * u, eyeY, 2 * u, 2.4 * u, 0, 0, TAU); g.ellipse(7 * u, eyeY, 2 * u, 2.4 * u, 0, 0, TAU); g.fill();
-    g.strokeStyle = look.hc; g.lineWidth = 1.8 * u;
-    g.beginPath(); g.moveTo(-11 * u, eyeY - 6 * u); g.lineTo(-3 * u, eyeY - 7 * u); g.moveTo(3 * u, eyeY - 7 * u); g.lineTo(11 * u, eyeY - 6 * u); g.stroke();
-    if (look.glasses) { g.strokeStyle = '#222'; g.lineWidth = 1.4 * u; g.strokeRect(-12 * u, eyeY - 4 * u, 10 * u, 8 * u); g.strokeRect(2 * u, eyeY - 4 * u, 10 * u, 8 * u); }
-    if (look.f) { g.strokeStyle = '#1b1410'; g.lineWidth = 1 * u; g.beginPath(); g.moveTo(-10 * u, eyeY - 2 * u); g.lineTo(-11 * u, eyeY - 4 * u); g.moveTo(10 * u, eyeY - 2 * u); g.lineTo(11 * u, eyeY - 4 * u); g.stroke(); }
-  }
-  if (look.freckles) { g.fillStyle = 'rgba(150,70,30,0.55)'; for (let i = 0; i < 8; i++) g.fillRect((hash1(i, 9) - 0.5) * 20 * u, eyeY + 4 * u + hash1(i, 4) * 5 * u, 1.3 * u, 1.3 * u); }
-  g.fillStyle = css(shade(look.skin, -0.18)); g.beginPath(); g.moveTo(0, eyeY + 1 * u); g.lineTo(-2.5 * u, eyeY + 8 * u); g.lineTo(2 * u, eyeY + 8 * u); g.fill();
-  if (look.mustache) { g.fillStyle = look.hc; g.beginPath(); g.ellipse(0, eyeY + 11 * u, 7 * u, 2 * u, 0, 0, TAU); g.fill(); }
-  g.strokeStyle = look.bow && look.hair !== 'bob' ? '#b8323a' : css(shade(look.skin, -0.35)); g.lineWidth = 1.8 * u; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(-6 * u, eyeY + 14 * u); g.quadraticCurveTo(1 * u, eyeY + 17 * u, 7 * u, eyeY + 13 * u); g.stroke();
-  if (look.crown) {
-    g.fillStyle = goldGrad(g, -48 * u, -32 * u);
-    g.beginPath(); g.moveTo(-14 * u, -32 * u); g.lineTo(-16 * u, -46 * u); g.lineTo(-8 * u, -38 * u); g.lineTo(0, -50 * u); g.lineTo(8 * u, -38 * u); g.lineTo(16 * u, -46 * u); g.lineTo(14 * u, -32 * u); g.closePath(); g.fill();
-    g.fillStyle = '#d0213a'; g.beginPath(); g.arc(0, -36 * u, 2 * u, 0, TAU); g.fill();
-  }
-  g.restore();
-  g.lineWidth = Math.max(2, r * 0.06); g.strokeStyle = '#e9e2cf'; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.stroke();
-  g.restore();
-}
-const _portraits = new Map();
-function portraitURL(look, size = 96) {
-  const key = JSON.stringify(look) + size;
-  let url = _portraits.get(key);
-  if (!url) {
-    const c = makeCanvas(size * 2, size * 2), g = c.getContext('2d');
-    drawPortrait(g, look, size, size, size - 3);
-    url = c.toDataURL();
-    _portraits.set(key, url);
-  }
-  return url;
-}

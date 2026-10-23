@@ -1,5 +1,4 @@
 // ===== Utilidades: números, azar con semilla, colores y dibujo =====
-const W = 1280, H = 720;
 // ?cover = solo la portada, quieta y sin botones (para sacar la imagen del catálogo)
 const COVER = typeof location !== 'undefined' && /[?&]cover/.test(location.search || '');
 const TAU = Math.PI * 2;
@@ -49,7 +48,6 @@ function css(c, a = 1) {
 // Brillo aproximado (0 = negro, 1 = blanco), para elegir texto claro u oscuro
 const luma = c => { c = rgbOf(c); return (c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11) / 255; };
 
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const money = n => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 
 // ----- Dibujo -----

@@ -1,5 +1,5 @@
 // Pruebas automáticas: corren el juego armado (index.html) sin navegador, con una página de mentira,
-// y revisan que los autos, las piezas, el taller, el diario, las carreras, los rivales, El Rey y el guardado sigan funcionando.
+// y revisan que los autos, las piezas, los pernos, el diario, las carreras, los rivales, El Rey y el guardado sigan funcionando.
 // Uso: node tests/smoke.js   (build.sh las corre solo después de armar el juego)
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -12,6 +12,7 @@ function fakeContext2d() {
   return new Proxy({}, {
     get(o, k) {
       if (k in o) return o[k];
+      if (k === 'getImageData' || k === 'putImageData') return undefined;    // sin píxeles: se salta el paso a la paleta
       if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
       if (k === 'measureText') return s => ({ width: String(s).length * 8 });
       return () => {};
@@ -21,24 +22,21 @@ function fakeContext2d() {
 }
 function fakeEl() {
   return {
-    style: {}, dataset: {}, hidden: false, innerHTML: '', textContent: '', width: 0, height: 0, firstChild: null,
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    addEventListener() {}, removeEventListener() {}, focus() {}, select() {}, closest: () => null,
-    querySelector: () => null, querySelectorAll: () => [],
-    getBoundingClientRect: () => ({ left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 }),
-    getContext: fakeContext2d, toDataURL: () => 'data:,'
+    style: {}, dataset: {}, hidden: false, value: '', width: 0, height: 0,
+    addEventListener() {}, removeEventListener() {}, focus() {}, blur() {}, setPointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 }),
+    getContext: fakeContext2d
   };
 }
 const memory = {};
 const sandbox = {
   console, Math, JSON, Date, performance, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
-  Path2D: class { moveTo() {} lineTo() {} quadraticCurveTo() {} bezierCurveTo() {} closePath() {} arc() {} rect() {} },
   localStorage: { getItem: k => (k in memory ? memory[k] : null), setItem: (k, v) => { memory[k] = String(v); }, removeItem: k => { delete memory[k]; } },
   navigator: { language: 'es-CL', getGamepads: () => [] },
   location: { pathname: '/street-rod/index.html', search: '', href: '' },
-  innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, matchMedia: () => ({ matches: false }),
+  innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, matchMedia: () => ({ matches: false }),
   requestAnimationFrame: () => 0, addEventListener() {},
-  document: { createElement: fakeEl, getElementById: fakeEl, documentElement: {}, addEventListener() {}, title: '', hidden: false }
+  document: { createElement: fakeEl, getElementById: fakeEl, documentElement: {}, addEventListener() {}, title: '', hidden: false, activeElement: null }
 };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
@@ -55,10 +53,10 @@ function check(name, fn) {
 const assert = (ok, msg) => { if (!ok) throw new Error(msg); };
 const num = (v, msg) => assert(typeof v === 'number' && isFinite(v), msg + ' (' + v + ')');
 
-const STR = get('STR'), MODELS = get('MODELS'), MODEL_KEYS = get('MODEL_KEYS'), ENGINES = get('ENGINES'), RIVALS = get('RIVALS');
+const STR = get('STR'), MODELS = get('MODELS'), MODEL_KEYS = get('MODEL_KEYS'), RIVALS = get('RIVALS'), SLOT_INFO = get('SLOT_INFO');
 const makeCar = get('makeCar'), buildCar = get('buildCar'), carStats = get('carStats'), carET = get('carET'), carValue = get('carValue');
-const carRuns = get('carRuns'), carProblems = get('carProblems'), makePart = get('makePart'), slotFor = get('slotFor'), fitProblem = get('fitProblem');
-const Race = get('Race'), newGame = get('newGame'), KING = get('KING'), KING_WINS = get('KING_WINS');
+const carRuns = get('carRuns'), carProblems = get('carProblems'), makePart = get('makePart'), fitProblem = get('fitProblem'), allBolts = get('allBolts');
+const Race = get('Race'), newGame = get('newGame'), KING = get('KING'), Game = get('Game'), UI = get('UI');
 const state = () => get('S');
 
 // Corre una carrera con los dos autos manejados por la computadora hasta que termine
@@ -69,7 +67,12 @@ function driveRace(opts, maxSeconds = 320) {
   for (let i = 0; i < 90; i++) r.update(1 / 60);
   return r;
 }
-const rival = (car, skill = 0.8) => ({ id: 'gato', name: 'Gato', look: RIVALS[0].look, car, skill });
+const rival = (car, skill = 0.8) => ({ id: 'steve', name: 'Steve', look: RIVALS[0].look, car, skill });
+// Saca todos los pernos de una pieza (y la pieza, si quedó suelta)
+function unbolt(car, sl) { for (let i = 0; i < SLOT_INFO[sl].bolts; i++) get('loosenBolt')(car, sl, i); return get('removePart')(car, sl); }
+function boltAll(car, sl) { for (let i = 0; i < SLOT_INFO[sl].bolts; i++) get('tightenBolt')(car, sl, i); }
+// Un cuadro completo: lógica y dibujo, como en el navegador
+function frames(n = 2) { for (let i = 0; i < n; i++) { Game.update(1 / 60); Game.draw(get('ctx')); } }
 
 console.log('Pruebas de Street Rod');
 
@@ -87,112 +90,136 @@ check('los textos en español e inglés tienen las mismas claves', () => {
   walk(STR.es, STR.en, '');
 });
 
-check('todos los autos se arman, andan y tienen números razonables', () => {
+check('las letras de píxeles tienen todos los caracteres de los textos', () => {
+  const FONT = get('FONT'), missing = new Set();
+  const scan = v => {
+    if (typeof v === 'string') { for (const ch of v) if (!FONT[ch]) missing.add(ch); }
+    else if (v && typeof v === 'object') Object.values(v).forEach(scan);
+  };
+  scan(STR);
+  assert(!missing.size, 'faltan letras: ' + [...missing].join(' '));
+});
+
+check('los 25 autos del diario se arman, andan y tienen números razonables', () => {
+  assert(MODEL_KEYS.length === 25, 'deberían ser 25 modelos');
   for (const k of MODEL_KEYS) {
-    const car = k === 'vette63' ? buildCar(KING.car) : makeCar(k);
+    const car = makeCar(k);
     assert(carRuns(car), `${k} no anda de fábrica: ${carProblems(car)}`);
     const st = carStats(car), q = carET(car);
     num(st.hp, k + ' potencia'); num(q.et, k + ' tiempo');
-    assert(q.et > 12 && q.et < 24, `${k}: cuarto de milla raro (${q.et.toFixed(2)} s)`);
+    assert(q.et > 12 && q.et < 26, `${k}: cuarto de milla raro (${q.et.toFixed(2)} s)`);
     assert(carValue(car) > 100, `${k}: vale muy poco`);
   }
+  assert(carET(buildCar(KING.car)).et < 14, 'el Corvette de El Rey debería ser el más rápido');
 });
 
-check('más motor = cuarto de milla más rápido', () => {
-  const base = makeCar('chevy57');
-  const hot = buildCar({ model: 'chevy57', engine: 'gm409', intake: 'race', carbs: ['4R', '4R'], cam: 'full', exhaust: 'hdr', trans: 'man4cr', axle: '4.11', tires: 'slick' });
-  assert(carET(hot).et < carET(base).et - 2, `el 409 no gana: ${carET(hot).et.toFixed(2)} vs ${carET(base).et.toFixed(2)}`);
-  const tuned = makeCar('chevy57'); tuned.timing = 10;
-  assert(carET(tuned).et < carET(base).et, 'afinar el encendido no ayuda');
+check('más motor = más rápido; mal afinado = más lento', () => {
+  const base = makeCar('chevy55');
+  const hot = buildCar({ model: 'chevy55', engine: 'gm327', intake: 'race', carbs: ['4R', '4R'], trans: 'race4', tires: 'slick' });
+  assert(carET(hot).et < carET(base).et - 1.5, `el 327 no gana: ${carET(hot).et.toFixed(2)} vs ${carET(base).et.toFixed(2)}`);
+  const off = makeCar('chevy55'); off.tune = 7;
+  assert(carET(off).et > carET(base).et, 'el encendido corrido no se nota');
 });
 
-check('las piezas solo calzan donde corresponde', () => {
-  const car = makeCar('chevy57');
-  assert(fitProblem(car, 'engine', makePart('engine', 'fd390')) === 'family', 'un motor Ford entró en un Chevrolet');
-  assert(fitProblem(car, 'trans', makePart('trans', 'man4', { f: 'mopar' })) === 'family', 'una caja Chrysler entró en un Chevrolet');
-  assert(fitProblem(car, 'intake', makePart('intake', '3x2', { m: 'ford8' })) === 'mount', 'un múltiple Ford entró en un motor Chevrolet');
-  // el múltiple de 4 bocas no acepta carburadores de 2
-  assert(fitProblem(car, 'carb1', makePart('carb', '4')) === 'noRoom', 'cabe un segundo carburador en un 1×4');
-  car.p.carb0 = null;
-  assert(fitProblem(car, 'carb0', makePart('carb', '2')) === 'carbType', 'un carburador de 2 bocas entró en un múltiple de 4');
-  assert(fitProblem(car, 'carb0', makePart('carb', '4R')) === '', 'el carburador de carrera no calza en el de 4 bocas');
-  assert(slotFor(car, makePart('tires', 'slick')).why === 'occupied', 'se pueden poner neumáticos sin sacar los viejos');
+check('las piezas solo calzan en su marca y donde corresponde', () => {
+  newGame('Piezas', 3);
+  const car = makeCar('chevy55');
+  assert(fitProblem(car, 'engine', makePart('engine', 'fd390')) === 'family', 'un motor Ford calzó en un Chevrolet');
+  assert(fitProblem(car, 'engine', makePart('engine', 'gm409')) === '', 'un motor GM no calzó en un Chevrolet');
+  assert(fitProblem(car, 'trans', makePart('trans', 'man4u', { f: 'all' })) === '', 'la caja universal no calzó');
+  assert(fitProblem(car, 'trans', makePart('trans', 'man4', { f: 'mopar' })) === 'family', 'una caja Chrysler calzó en un Chevrolet');
+  assert(fitProblem(car, 'intake', makePart('intake', '3x2', { f: 'gm' })) === 'kind', 'un múltiple de 6 cilindros calzó en un V-8');
+  // en un 2 × 4 bocas no va un carburador de 2 bocas
+  const t = buildCar({ model: 'chevy55', intake: '2x4' });
+  unbolt(t, 'carb1');
+  assert(fitProblem(t, 'carb1', makePart('carb', '2')) === 'carbType', 'un carburador de 2 bocas calzó en un múltiple de 4');
+  assert(fitProblem(t, 'carb1', makePart('carb', '4R')) === '', 'el carburador de carrera no calzó');
 });
 
-check('taller: desarmar en orden, armar y apretar los pernos', () => {
-  newGame('Test', 5);
-  const S = state(), car = makeCar('chevy57');
+check('taller: los pernos se sacan en orden, la pieza sale y vuelve a entrar', () => {
+  newGame('Taller', 5);
+  const S = state(), car = makeCar('chevy55');
   S.cars.push(car); S.active = car.id;
-  const mechClick = get('mechClick'), mechUpdate = get('mechUpdate'), installPart = get('installPart'), Mech = get('Mech');
-  const work = () => { for (let i = 0; i < 400 && Mech.queue.length; i++) mechUpdate(car, 1 / 30); };
-  assert(mechClick(car, 'intake').blocked.includes('carb0'), 'se pudo sacar el múltiple con el carburador puesto');
-  mechClick(car, 'carb0'); work();
-  assert(!car.p.carb0 && S.bench.length === 1, 'no salió el carburador');
-  mechClick(car, 'intake'); work();
-  assert(!car.p.intake, 'no salió el múltiple');
-  assert(!carRuns(car), 'el auto anda sin múltiple');
-  // un múltiple de dos cuádruples con dos carburadores nuevos
-  S.bench.push(makePart('intake', '2x4', { m: 'gm8' }), makePart('carb', '4'));
-  const ids = S.bench.map(p => p.id);
-  assert(installPart(car, ids.find(id => S.bench.find(p => p.id === id).t === 'carb')).why === 'noIntake', 'entró un carburador sin múltiple');
-  const r = installPart(car, S.bench.find(p => p.k === '2x4').id);
-  assert(r.sl === 'intake', 'no entró el múltiple 2×4');
-  assert(carProblems(car).includes('loose:intake'), 'los pernos nuevos no quedaron sueltos');
-  mechClick(car, 'intake'); work();
-  for (const p of S.bench.filter(p => p.t === 'carb')) installPart(car, p.id);
-  assert(car.p.carb0 && car.p.carb1, 'no entraron los dos carburadores');
-  mechClick(car, 'carb0'); work(); mechClick(car, 'carb1'); work();
-  assert(carRuns(car), 'el auto armado no anda: ' + carProblems(car));
+  assert(!get('loosenBolt')(car, 'intake', 0), 'se soltó el múltiple con el carburador puesto');
+  get('loosenBolt')(car, 'carb0', 0);
+  assert(!carRuns(car) && carProblems(car).includes('loose'), 'con un perno suelto el auto igual anda');
+  assert(unbolt(car, 'carb0'), 'el carburador no salió');
+  assert(unbolt(car, 'intake') && unbolt(car, 'engine'), 'el motor no salió');
+  assert(S.spares.length === 3, 'las piezas no quedaron en el estante');
+  const install = id => get('installPart')(car, id);
+  assert(install(S.spares.find(p => p.t === 'intake').id).why === 'noEngine', 'el múltiple entró sin motor');
+  for (const t of ['engine', 'intake', 'carb']) { const r = install(S.spares.find(p => p.t === t).id); assert(r.sl, 'no entró: ' + t + ' ' + r.why); boltAll(car, r.sl); }
+  assert(carRuns(car), 'el auto armado de nuevo no anda: ' + carProblems(car));
+  assert(car.tight.engine === allBolts('engine'), 'los pernos no quedaron apretados');
 });
 
-check('el diario de todo el verano: siempre hay un auto barato y precios con sentido', () => {
-  newGame('Test', 77);
-  const S = state(), makePaper = get('makePaper');
-  for (let d = 0; d < 81; d++) {
-    S.day = d; makePaper();
-    const prices = S.paper.ads.map(a => a.price);
-    assert(prices.every(p => p > 0 && isFinite(p)), `día ${d}: precio raro`);
-    assert(Math.min(...prices) <= 450, `día ${d}: no hay autos baratos (${Math.min(...prices)})`);
-    assert(S.paper.ads.every(a => carRuns(a.car)), `día ${d}: vende un auto que no anda`);
-    assert(S.paper.parts.length === 5, `día ${d}: faltan repuestos`);
+check('el diario de todo el verano: siempre hay un auto barato que anda', () => {
+  newGame('Diario', 11);
+  const S = state();
+  for (let d = 0; d < 30; d++) {
+    const ads = S.paper.ads;
+    assert(ads.length === 8, 'el diario no trae 8 autos');
+    assert(ads[0].price <= 450 && carRuns(ads[0].car), 'no hay un cacharro barato que ande');
+    for (const a of ads) assert(a.price > 0 && a.min <= a.price, 'precio raro');
+    assert(S.paper.used.length === 4, 'no hay repuestos usados');
+    get('endNight')();
+  }
+  assert(get('catalog')().length > 50, 'el catálogo de repuestos está corto');
+});
+
+check('comprar, regatear y vender', () => {
+  newGame('Compras', 21);
+  const S = state(), ad = S.paper.ads[0];
+  assert(!get('haggle')(0, Math.max(5, ad.min - 50)), 'el vendedor aceptó muy poca plata');
+  assert(!get('haggle')(0, ad.price), 'se pudo regatear dos veces');
+  const money0 = S.money;
+  assert(get('buyCar')(0, ad.price) === '' && S.money === money0 - ad.price && S.cars.length === 1, 'no se pudo comprar el auto');
+  assert(get('buyCar')(0, ad.price) === 'gone', 'se compró dos veces el mismo auto');
+  newGame('Regateo', 22);
+  const S2 = state(), ad2 = S2.paper.ads[1];
+  assert(get('haggle')(1, ad2.min) && ad2.price === ad2.min, 'ofrecer el mínimo no funcionó');
+  const p = makePart('carb', '4'); S2.spares.push(p);
+  const offer = get('buyerOffer')(get('partWorth')(p), 0);
+  assert(offer > 0 && offer < 60, 'oferta rara por un carburador: ' + offer);
+  get('sellPart')(p.id, offer);
+  assert(!S2.spares.length && S2.money === 750 + offer, 'la venta no se registró');
+});
+
+check('los rivales traen su auto de siempre, parecido al tuyo', () => {
+  newGame('Rivales', 31);
+  const S = state(), car = makeCar('chevy55', { fuel: 16 });
+  S.cars.push(car); S.active = car.id;
+  for (const r of RIVALS.slice(0, 9)) {
+    const rc = get('rivalCar')(r.id);
+    assert(rc.model === r.model, `${r.name} no vino en su ${r.model}`);
+    assert(carRuns(rc), `el auto de ${r.name} no anda`);
+    assert(Math.abs(carET(rc).et - carET(car).et) < 3.5, `${r.name} trae un auto muy distinto (${carET(rc).et.toFixed(1)} vs ${carET(car).et.toFixed(1)})`);
   }
 });
 
-check('los rivales traen autos parecidos al tuyo', () => {
-  const makeRivalCar = get('makeRivalCar');
-  for (const target of [21, 19, 17, 15.5, 14]) {
-    for (const r of [RIVALS[0], RIVALS[4], RIVALS[9]]) {
-      const car = makeRivalCar(r, target, () => 0.5);
-      const et = carET(car).et;
-      assert(carRuns(car), `${r.id} trae un auto que no anda`);
-      assert(Math.abs(et - target) < 1.1 || (target > 20 && et < target), `${r.id} pidió ${target} s y trajo ${et.toFixed(2)} s`);
-    }
-  }
-});
-
-check('picada: los dos llegan y hay ganador', () => {
-  for (let i = 0; i < 4; i++) {
-    const r = driveRace({ type: 'drag', car: makeCar('chevy57', { fuel: 10 }), rival: rival(makeCar('tbird57')), bet: 10, seed: 3 + i });
+check('picada: los dos llegan a la meta y hay ganador', () => {
+  for (let i = 0; i < 3; i++) {
+    const r = driveRace({ type: 'drag', car: makeCar('chevy55', { fuel: 10 }), rival: rival(makeCar('ford55')), bet: 10, seed: 3 + i });
     const res = r.result;
     assert(res && ['win', 'lose'].includes(res.outcome), 'la picada no terminó: ' + (res && res.reason));
-    if (res.reason === 'finish') { num(res.time, 'tiempo'); num(res.rivalTime, 'tiempo del rival'); assert(res.time > 10 && res.time < 30, 'tiempo raro ' + res.time); }
+    if (res.reason === 'finish') { num(res.time, 'tiempo'); num(res.rivalTime, 'tiempo del rival'); assert(res.time > 20 && res.time < 50, 'tiempo raro ' + res.time); }
   }
 });
 
 check('carrera de ruta: se completa sin quedarse pegado', () => {
   let finished = 0;
   for (let i = 0; i < 4; i++) {
-    const r = driveRace({ type: 'road', car: makeCar('impala61', { fuel: 12 }), rival: rival(makeCar('chevy57')), bet: 25, seed: 100 + i * 17, police: 0 });
+    const r = driveRace({ type: 'road', car: makeCar('chevy58', { fuel: 14 }), rival: rival(makeCar('chevy55')), bet: 25, seed: 100 + i * 17, police: 0 });
     assert(r.result, 'la carrera no terminó');
     if (r.result.reason === 'finish') finished++;
   }
   assert(finished >= 3, `solo ${finished} de 4 carreras llegaron a la meta`);
 });
 
-check('la policía aparece y la carrera se anula si te pillan o te detienes', () => {
+check('la policía aparece y la carrera se anula si te pillan', () => {
   let cops = 0;
   for (let i = 0; i < 3; i++) {
-    const r = new Race({ type: 'road', car: makeCar('chevy49', { fuel: 12 }), rival: rival(makeCar('falcon60')), bet: 25, seed: 9 + i, police: 1, auto: true });
+    const r = new Race({ type: 'road', car: makeCar('chevy49', { fuel: 14 }), rival: rival(makeCar('valiant61')), bet: 25, seed: 9 + i, police: 1, auto: true });
     let n = 0;
     while (r.phase !== 'done' && n < 60 * 320) { r.update(1 / 60); if (r.cop) cops++; n++; }
     assert(r.result, 'no terminó');
@@ -201,141 +228,137 @@ check('la policía aparece y la carrera se anula si te pillan o te detienes', ()
   assert(cops > 0, 'la policía nunca apareció');
 });
 
-check('largar antes de la bandera es falta', () => {
-  const r = new Race({ type: 'drag', car: makeCar('chevy57', { fuel: 8 }), rival: rival(makeCar('chevy55')), bet: 10, seed: 1 });
+check('largar antes de la luz verde es falta', () => {
+  const r = new Race({ type: 'drag', car: makeCar('chevy55', { fuel: 8 }), rival: rival(makeCar('ford55')), bet: 10, seed: 1 });
   run('Input.read = () => ({ gas: true, brake: false, steer: 0, up: true, down: false, horn: false })');
-  for (let i = 0; i < 200 && r.phase !== 'done'; i++) r.update(1 / 60);
+  for (let i = 0; i < 300 && r.phase !== 'done'; i++) r.update(1 / 60);
   assert(r.result && r.result.reason === 'foul' && r.result.outcome === 'lose', 'la largada anticipada no se castigó');
 });
 
 check('raspar la caja a fondo la rompe', () => {
-  const v = new (get('Vehicle'))(carStats(makeCar('chevy57')));
-  v.s.auto = false; v.s.ratios = [2.54, 1.92, 1.51, 1]; v.launch();
+  const v = new (get('Vehicle'))(carStats(makeCar('vette56')));
+  v.launch();
   for (let i = 0; i < 12 && !v.broken; i++) { v.throttle = 1; v.shiftT = 0; v.gear = 1; v.shiftUp(); }
   assert(v.broken, 'la caja aguantó doce raspadas');
 });
 
-check('una noche completa en el drive-in con dinero, victorias y desgaste', () => {
-  newGame('Test', 31);
-  const S = state(), buyAd = get('buyAd'), goDiner = get('goDiner'), nextRival = get('nextRival'), raceOptions = get('raceOptions'), applyResult = get('applyResult'), endNight = get('endNight');
-  S.money = 5000;
-  assert(buyAd(S.paper.ads.findIndex(a => MODELS[a.car.model].fam)) === '', 'no se pudo comprar un auto');
-  const car = get('activeCar')(); car.fuel = 16;
-  assert(goDiner() === '', 'no se pudo ir al drive-in');
+check('una noche en Bob\'s: llegan rivales, se corre y se apuesta', () => {
+  newGame('Noche', 41);
+  const S = state(), raceOptions = get('raceOptions'), applyResult = get('applyResult');
+  const car = makeCar('chevy55', { fuel: 16 }); S.cars.push(car); S.active = car.id;
+  assert(get('goDiner')() === '', 'no se pudo ir a Bob\'s');
   let races = 0;
-  for (let k = 0; k < 4; k++) {
-    const cur = nextRival();
+  for (let k = 0; k < 3; k++) {
+    const cur = get('nextRival')();
     if (!cur) break;
     const opts = raceOptions(cur.id, k % 2 ? 'road' : 'drag', k % 2 ? 25 : 10);
     opts.police = 0;
-    const r = driveRace(opts);
-    const out = applyResult(opts, r.result);
+    const out = applyResult(opts, driveRace(opts).result);
     races++;
     assert(out && isFinite(S.money), 'el dinero quedó raro');
-    if (!S.night) break;
   }
-  assert(races > 0, 'nadie llegó al drive-in');
-  assert(S.wins + S.losses + S.history.filter(h => h.o === 'void').length === races, 'las cuentas de carreras no cuadran');
-  const day = S.day; endNight();
-  assert(S.day === day + 1 && S.paper.day === S.day, 'no pasó al otro día');
+  assert(races > 0, 'nadie llegó a Bob\'s');
+  assert(S.wins.drag + S.wins.road + S.wins.kicks + S.losses + S.history.filter(h => h.o === 'void').length === races, 'las cuentas de carreras no cuadran');
+  assert(get('callable')().length > 0, 'el tipo del poste no conoce a nadie');
+  const day = S.day; get('endNight')();
+  assert(S.day === day + 1 && !S.night && S.paper.day === S.day, 'no pasó al otro día');
 });
 
-check('apostar los papeles: si pierdes te quedas sin auto, si ganas te llevas el suyo', () => {
-  newGame('Test', 41);
+check('apostar los papeles: si ganas te llevas su auto, si pierdes te quedas sin el tuyo', () => {
+  newGame('Papeles', 51);
   const S = state(), applyResult = get('applyResult');
-  const mine = makeCar('chevy57'), theirs = makeCar('fury58');
+  const mine = makeCar('chevy55'), theirs = makeCar('ford57');
   S.cars.push(mine); S.active = mine.id; S.night = { min: 0, queue: [], cur: null, raced: [] };
-  const opts = { type: 'road', bet: 'pinks', car: mine, rival: { id: 'rita', name: 'Rita', car: theirs, skill: 0.8 } };
-  applyResult(opts, { outcome: 'win', reason: 'finish', engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
-  assert(S.cars.some(c => c.model === 'fury58'), 'no te llevaste el Fury');
-  const opts2 = Object.assign({}, opts, { rival: { id: 'vince', name: 'Vince', car: makeCar('dart62'), skill: 0.8 } });
-  applyResult(opts2, { outcome: 'lose', reason: 'finish', engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
-  assert(!S.cars.some(c => c.id === mine.id), 'perdiste los papeles pero conservas el auto');
+  const res = (outcome) => ({ outcome, reason: 'finish', engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
+  applyResult({ type: 'road', bet: 'pinks', car: mine, rival: { id: 'charlie', name: 'Charlie', car: theirs, skill: 0.8 } }, res('win'));
+  assert(S.cars.some(c => c.model === 'ford57'), 'no te llevaste el Ford');
+  applyResult({ type: 'road', bet: 'pinks', car: mine, rival: { id: 'lou', name: 'Lou', car: makeCar('ford55'), skill: 0.8 } }, res('lose'));
+  assert(!S.cars.includes(mine) && S.active === S.cars[0].id, 'perdiste los papeles y te quedaste con el auto');
 });
 
-check('sin auto y sin plata se acaba el juego', () => {
-  newGame('Test', 51);
-  const S = state(); S.money = 20; S.cars = [];
-  get('checkBroke')();
-  assert(S.over === 'broke', 'el juego siguió sin auto ni dinero');
-});
-
-check('sin plata para la multa: castigado cinco días', () => {
-  newGame('Test', 61);
-  const S = state(), applyResult = get('applyResult'), endNight = get('endNight');
-  const car = makeCar('chevy49'); S.cars.push(car); S.active = car.id; S.money = 5; S.night = { min: 0, queue: [], cur: null, raced: [] };
-  const out = applyResult({ type: 'road', bet: 25, car, rival: { id: 'eddie', name: 'Eddie', car: makeCar('falcon60'), skill: 0.5 } },
+check('sin auto y sin plata se acaba el juego; sin plata para la multa, castigado', () => {
+  newGame('Pobre', 61);
+  const S = state(); S.money = 20; get('checkBroke')();
+  assert(S.over === 'broke', 'sin auto ni plata el juego sigue');
+  newGame('Multa', 62);
+  const S2 = state(), car = makeCar('chevy49'); S2.cars.push(car); S2.active = car.id; S2.money = 30; S2.night = { min: 0, queue: [], cur: null, raced: [] };
+  get('applyResult')({ type: 'road', bet: 25, car, rival: { id: 'steve', name: 'Steve', car: makeCar('chevy38'), skill: 0.6 } },
     { outcome: 'void', reason: 'caught', fine: 75, engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
-  assert(out.jail, 'no hubo castigo');
-  endNight();
-  assert(S.day === 5 && S.money === 0, `el castigo no duró cinco días (día ${S.day})`);
+  assert(S2.over === 'jail', 'sin plata para la multa no pasó nada');
 });
 
-check('El Rey aparece un sábado con 10 victorias, y ganarle termina el verano', () => {
-  newGame('Test', 71);
-  const S = state(), nightQueue = get('nightQueue'), applyResult = get('applyResult');
-  S.wins = KING_WINS - 1;
-  S.day = 1;   // sábado 15 de junio
-  assert(get('isSaturday')(S.day), 'el 15 de junio de 1963 no es sábado');
-  assert(!nightQueue().includes('king'), 'El Rey apareció antes de tiempo');
-  S.wins = KING_WINS;
-  assert(nightQueue().includes('king'), 'El Rey no apareció');
-  S.day = 2;
-  assert(!nightQueue().includes('king'), 'El Rey apareció un domingo');
-  // un auto preparado para ganarle
-  const mine = buildCar({ model: 'corvette58', engine: 'gm409', intake: 'race', carbs: ['4R', '4R'], cam: 'full', exhaust: 'hdr', trans: 'man4cr', axle: '4.11', tires: 'wide' });
-  mine.timing = 10; S.cars.push(mine); S.active = mine.id; S.night = { min: 0, queue: [], cur: null, raced: [] };
-  const opts = { type: 'road', bet: 'pinks', car: mine, seed: 5, rival: { id: 'king', name: 'El Rey', look: KING.look, car: buildCar(KING.car), skill: KING.skill, king: true }, police: 0 };
-  const r = driveRace(opts);
-  assert(r.result, 'la carrera con El Rey no terminó');
-  applyResult(opts, { outcome: 'win', reason: 'finish', engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
-  assert(S.over === 'king' && S.kingBeaten, 'ganarle al Rey no terminó el juego');
-  assert(S.cars.some(c => c.model === 'vette63'), 'no te quedaste con el Corvette del Rey');
+check('El Rey llega con 6 picadas y 6 rutas ganadas, y ganarle termina el juego', () => {
+  newGame('Rey', 71);
+  const S = state(), car = buildCar({ model: 'vette61', engine: 'gm327', intake: '2x4' }); car.fuel = 16;
+  S.cars.push(car); S.active = car.id;
+  assert(!get('kingReady')(), 'El Rey apareció sin victorias');
+  S.wins.drag = 6; S.wins.road = 5;
+  assert(!get('kingReady')(), 'El Rey apareció con 5 rutas');
+  S.wins.road = 6;
+  assert(get('kingReady')(), 'El Rey no apareció con 6 y 6');
+  get('goDiner')();
+  const cur = get('nextRival')();
+  assert(cur && cur.id === 'king' && cur.car.model === 'vette63', 'El Rey no fue el primero en llegar');
+  assert(get('rivalAnswer')('king', 'road', 'pinks') === '', 'El Rey no aceptó');
+  const opts = get('raceOptions')('king', 'road', 'pinks');
+  assert(opts.police === 0 && opts.rival.king, 'la carrera con El Rey no es especial');
+  get('applyResult')(opts, { outcome: 'win', reason: 'finish', engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
+  assert(S.over === 'king' && S.kingBeaten && S.cars.some(c => c.model === 'vette63'), 'ganarle al Rey no terminó el juego');
+  assert(get('fameList')()[0].name === 'Rey', 'no quedaste en el muro de los Reyes');
 });
 
-check('sin tiempos (falta, choque, policía) no se muestra la tabla de tiempos', () => {
-  newGame('Tabla', 101);
-  const S = state(), Game = get('Game'), UI = get('UI'), uiEl = get('uiEl');
-  const car = makeCar('chevy57'); S.cars.push(car); S.active = car.id;
-  Game.raceOpts = { type: 'drag', bet: 10, car, rival: { id: 'slim', name: 'Jim', car: makeCar('chevy49'), skill: 0.6 } };
-  const base = { engineDmg: 0, transDmg: 0, body: 0, fuel: 0.1, tread: 0.02, fine: 0 };
-  Game.out = { res: Object.assign({ outcome: 'win', reason: 'rivalFoul', time: null, rivalTime: null }, base), lines: [], money: 10 };
-  Game.scene = 'result'; UI.render();
-  assert(!uiEl.innerHTML.includes('<table>'), 'la falta muestra una tabla de tiempos vacía');
-  Game.out = { res: Object.assign({ outcome: 'win', reason: 'finish', time: 17.2, rivalTime: 18.1, trap: 38, reaction: 0.3 }, base), lines: [], money: 10 };
-  UI.render();
-  assert(uiEl.innerHTML.includes('<table>'), 'una picada terminada no muestra los tiempos');
+check('el verano se acaba el 3 de septiembre', () => {
+  newGame('Verano', 81);
+  const S = state(), car = makeCar('chevy55'); S.cars.push(car); S.active = car.id;
+  for (let d = 0; d < get('SUMMER_DAYS'); d++) get('endNight')();
+  assert(S.over === 'summer', 'el verano no se acabó');
+  const end = get('dateOf')(S.day);
+  assert(end.getMonth() === 8 && end.getDate() === 3, 'el verano termina otro día: ' + end);
 });
 
-check('el guardado se recupera igual', () => {
-  newGame('Guardado', 81);
+check('el guardado y el libro de la policía se recuperan igual', () => {
+  newGame('Guardado', 91);
   const S = state(); S.money = 1234; S.cars.push(makeCar('tbird57')); S.active = S.cars[0].id;
   get('saveGame')();
   const before = JSON.stringify(S);
   run('S = null');
   assert(get('loadGame')(), 'no se pudo cargar');
   assert(JSON.stringify(get('S')) === before, 'lo cargado no es igual a lo guardado');
+  get('saveSlot')();
+  newGame('Otro', 92);
+  assert(get('savedDrivers')().includes('Guardado') && get('loadSlot')('Guardado') && get('S').money === 1234, 'el libro de la policía no guardó la partida');
 });
 
 check('todas las pantallas se dibujan sin errores', () => {
-  newGame('Pantallas', 91);
-  const S = state(), Game = get('Game'), UI = get('UI'), draw = get('draw'), update = get('update');
-  S.cars.push(makeCar('chevy57')); S.active = S.cars[0].id; S.bench.push(makePart('carb', '4R'));
-  for (const sc of ['title', 'garage', 'paper', 'shop', 'body', 'gas']) { Game.go(sc); draw(); update(1 / 60); }
-  for (const tab of ['cars', 'parts', 'sell']) { Game.paperTab = tab; Game.go('paper'); }
-  get('Mech').view = 'under'; Game.go('shop'); draw();
-  for (const m of ['license', 'how', 'cars']) { Game.modal = m; UI.render(); }
-  get('goDiner')(); Game.go('diner'); Game.arrive();
-  for (let i = 0; i < 300; i++) update(1 / 60);
-  draw();
-  Game.chal = { type: 'drag', bet: 0 }; UI.render();
-  Game.startRace(); Game.race = new Race(Object.assign({}, Game.raceOpts, { auto: true }));
-  for (let i = 0; i < 60 * 40 && !Game.race.over; i++) update(1 / 60);
-  draw();
-  Game.finishRace(); draw();
-  assert(Game.scene === 'result', 'no se mostraron los resultados');
-  for (const over of ['king', 'summer', 'broke']) { S.over = over; Game.go('end'); draw(); }
-  get('setLang')('en'); Game.go('garage'); get('setLang')('es');
+  newGame('Pantallas', 101);
+  const S = state(), car = makeCar('chevy55', { fuel: 10 });
+  S.cars.push(car); S.active = car.id; S.spares.push(makePart('carb', '4R'), makePart('engine', 'gm283'));
+  const go = (name, arg) => { Game.go(name, arg); frames(3); };
+  for (const sc of ['title', 'license', 'intro', 'how', 'fame', 'garage', 'paper', 'gas', 'cover']) go(sc);
+  go('paper', 'cars'); go('paper', 'parts'); go('seller', 2);
+  for (const sc of ['engine', 'trans', 'tires', 'tune', 'paint']) go(sc, { car });
+  go('engine', { car: makeCar('valiant61'), readOnly: true });
+  go('garage');
+  for (const d of ['sparesBox', 'carsBox', 'calendarBox', 'clockMenu', 'goOut']) { get(d)(); frames(2); Game.dialogs = []; }
+  get('carInfo')(car); frames(2); Game.dialogs = [];
+  go('cruise', { car, night: true, text: 'x', then: () => {} });
+  get('goDiner')(); go('diner');
+  for (let i = 0; i < 300 && get('SCENES').diner.state !== 'parked'; i++) frames(1);
+  assert(get('SCENES').diner.state === 'parked', 'ningún rival se estacionó en Bob\'s');
+  get('SCENES').diner.challenge(); frames(2); Game.dialogs = [];
+  get('SCENES').diner.callList(); frames(2); Game.dialogs = [];
+  const opts = get('raceOptions')(S.night.cur.id, 'drag', 10);
+  opts.auto = true;
+  go('race', opts);
+  const race = get('SCENES').race.race;
+  for (let i = 0; i < 60 * 80 && !race.over; i++) frames(1);
+  frames(3);
+  assert(race.over && Game.dialogs.length, 'no se mostró el resultado de la carrera');
+  get('SCENES').race.done(); frames(2);
+  assert(['diner', 'ticket', 'ending'].includes(Game.name), 'después de la carrera no se volvió a Bob\'s');
+  go('ticket', { fine: 75, car });
+  for (const over of ['king', 'summer', 'broke', 'jail']) { S.over = over; go('ending'); }
+  get('setLang')('en'); go('garage'); go('title'); get('setLang')('es');
 });
 
 if (failed) { console.log(`\n${failed} prueba(s) fallaron`); process.exit(1); }

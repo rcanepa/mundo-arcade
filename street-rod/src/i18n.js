@@ -21,299 +21,334 @@ function setLang(l, save = true) {
 
 const STR = {
   es: {
-    docTitle: 'Street Rod: Verano del 63', subtitle: 'Verano del \'63', langName: 'Español',
+    docTitle: 'Street Rod: Verano del 63', subtitle: "VERANO DEL '63",
+    ok: 'OK', yes: 'Sí', forget: 'Olvídalo', done: 'Listo', cancel: 'Cancelar', next: 'Sigue', none: 'nada', noThanks: 'No, gracias',
     months: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
     days: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
-    date: d => `${STR.es.days[d.getDay()]} ${d.getDate()} de ${STR.es.months[d.getMonth()]}`,
-    shortDate: d => `${d.getDate()} ${STR.es.months[d.getMonth()].slice(0, 3)}`,
-    menu: { cont: 'Continuar el verano', fresh: 'Nueva partida', how: 'Cómo se juega', lang: '🌐 English', more: '← Más juegos', music: on => (on ? '🎵 Música: sí' : '🔇 Música: no') },
-    intro: [
-      'Es junio de 1963 en San Lucas, California. Terminaron las clases y tienes $750 ahorrados.',
-      'Todas las noches los mejores autos del pueblo se juntan en el Lucky\'s Drive-In. Y el mejor de todos es el de El Rey.',
-      'Compra un auto en el diario, ármalo en tu garaje y gánale a todos. Tienes hasta que empiecen las clases, el 3 de septiembre.'
-    ],
-    license: 'LICENCIA DE CONDUCIR', state: 'ESTADO DE CALIFORNIA', yourName: 'Tu nombre', start: '¡Empezar el verano!',
-    defaultName: 'Johnny',
-    how: [
-      ['🗞️', 'El diario', 'Cada mañana trae autos usados y piezas. Las piezas de motor y caja solo calzan en autos de su misma marca (GM, Ford o Chrysler).'],
-      ['🔧', 'El taller', 'Abre el capó y haz clic en los pernos para sacar y poner piezas. El múltiple decide cuántos carburadores lleva.'],
-      ['🍔', 'El drive-in', 'De noche llegan los rivales. Elige picada (cuarto de milla) o carrera de ruta, y cuánto apostar. En la ruta puedes apostar los papeles del auto.'],
-      ['🏁', 'Manejar', '↑ acelerar · ↓ frenar · ← → doblar · ESPACIO suelta el embrague y sube cambio · Z baja cambio. ¡Suelta el acelerador al pasar el cambio o raspas la caja!'],
-      ['🚓', 'La policía', 'En la ruta te puede seguir la policía. Detente (multa de $20) o escapa: si te alcanzan son $75.'],
-      ['👑', 'El Rey', `Gana ${KING_WINS} carreras y El Rey te aceptará un desafío un sábado en la noche. Si le ganas, eres el nuevo Rey de la calle.`]
-    ],
-    hud: { day: 'Día', wins: 'Victorias', king: 'El Rey', money: 'Dinero', rep: 'Fama' },
-    garage: {
-      title: 'Tu garaje', noCar: 'No tienes auto. Busca uno en el diario.',
-      paper: 'Diario', shop: 'Taller', body: 'Pintura', gas: 'Bencinera', cars: 'Mis autos', diner: 'Ir al Drive-In', sleep: 'Dormir',
-      paperSub: 'Autos y piezas', shopSub: 'Armar el motor', bodySub: 'Pintura y estilo', gasSub: '31¢ el galón', carsSub: 'Elegir o vender', dinerSub: 'Carreras de noche', sleepSub: 'Pasar al otro día',
-      stats: { hp: 'Potencia', et: '¼ de milla', top: 'Vel. máx.', lb: 'Peso', value: 'Valor', fuel: 'Bencina' },
-      cond: { engine: 'Motor', trans: 'Caja', tires: 'Neumáticos', body: 'Carrocería' },
-      cantGo: 'Tu auto no está listo para salir', repair: 'Reparar', rebuild: c => `Reparar el motor (${money(c)})`, rebuildT: c => `Reparar la caja (${money(c)})`,
-      fixBody: c => `Arreglar la carrocería (${money(c)})`,
-      sleepAsk: '¿Dormir y saltarte el Drive-In de esta noche?'
+    date: d => `${STR.es.days[d.getDay()]} ${d.getDate()} de ${STR.es.months[d.getMonth()]}`.replace(/^./, c => c.toUpperCase()),
+    shortDate: d => `${d.getDate()} ${STR.es.months[d.getMonth()].slice(0, 3)} 1963`,
+    clock: min => clockText(min),
+    bankroll: m => `Dinero: ${m}`,
+    langSwitch: 'English',
+    musicLabel: on => (on ? 'Música: sí' : 'Música: no'),
+    musicToggled: on => (on ? 'Música encendida' : 'Música apagada'),
+    cruising: 'Paseando por el pueblo...', goingHome: 'De vuelta a casa...',
+    buyerOffer: m => `Un comprador pregunta: ¿me lo dejas en ${m}?`,
+    noMoreBuyers: 'No hay más compradores por hoy.',
+    cond: c => (c >= 0.9 ? 'como nuevo' : c >= 0.7 ? 'bueno' : c >= 0.5 ? 'regular' : c >= 0.25 ? 'malo' : 'hecho pedazos'),
+    slot: { engine: 'Motor', intake: 'Múltiple', carb: 'Carburador', trans: 'Caja', tires: 'Neumáticos' },
+    parts: {
+      six: '6 cil.',
+      engine: (F, kind, ci) => `${F}${kind} ${ci} pulg³`,
+      intake: (F, k) => `Múltiple ${F}${STR.es.parts.intakeShort[k]}`,
+      intakeShort: { '1x2': '2 bocas', '3x2': '3 × 2 bocas', '1x4': '4 bocas', '2x4': '2 × 4 bocas', race: 'de carrera' },
+      carb: { '2': 'Carburador de 2 bocas', '4': 'Carburador de 4 bocas', '4R': 'Carburador de carrera' },
+      carbShort: { '2': '2 bocas', '4': '4 bocas', '4R': 'carrera' },
+      trans: { auto: F => `Caja automática ${F}`, man3: F => `Caja de 3 cambios ${F}`, man4: F => `Caja de 4 cambios ${F}`, man4u: () => 'Caja de 4 universal', race4: F => `Caja de carrera ${F}` },
+      transShort: { auto: 'automático', man3: '3 cambios', man4: '4 cambios', man4u: '4 cambios', race4: 'caja de carrera' },
+      tires: { std: 'Neumáticos normales', ww: 'Neumáticos banda blanca', slick: 'Neumáticos de carrera' },
+      tiresShort: { std: 'normales', ww: 'banda blanca', slick: 'de carrera' }
     },
-    probs: {
-      'missing:engine': 'Falta el motor', 'missing:intake': 'Falta el múltiple de admisión', 'missing:carb': 'Faltan carburadores',
-      'missing:exhaust': 'Falta el escape', 'missing:trans': 'Falta la caja de cambios', 'missing:axle': 'Falta el diferencial',
-      'missing:tires': 'Faltan los neumáticos', loose: 'Hay pernos sueltos', wrecked: 'Está destrozado', fuel: 'No tiene bencina',
-      blown: 'El motor está reventado', broken: 'La caja está rota'
+    problem: (p, car) => ({
+      'missing:engine': 'no tiene motor', 'missing:intake': 'no tiene múltiple', 'missing:carb': 'faltan carburadores',
+      'missing:trans': 'no tiene caja', 'missing:tires': 'no tiene neumáticos', loose: 'hay pernos sueltos',
+      blown: 'el motor está reventado', broken: 'la caja está rota', wrecked: 'está destrozado', fuel: 'no tiene bencina',
+      roof: `le están sacando el techo (${car.mods.roofDays} días)`
+    }[p] || p),
+    why: {
+      type: 'Esa pieza no va aquí.', occupied: 'Ya hay una pieza puesta. Sácala primero.', family: 'Esa pieza es de otra marca: no calza.',
+      noEngine: 'Primero hay que poner un motor.', kind: 'Ese múltiple no sirve para este motor.', noIntake: 'Primero hay que poner el múltiple.',
+      noRoom: 'Ya no caben más carburadores en este múltiple.', carbType: 'Ese carburador no calza en este múltiple.', gone: 'Ya no está.'
+    },
+    intro: [
+      ['Verano de 1963. Terminaron las clases y tienes $750 en el bolsillo.', '', 'Cada noche los mejores autos del valle se juntan en Bob\'s Drive-In. El más rápido de todos es el Corvette negro de El Rey.'],
+      ['Busca un auto en el diario, ármalo en tu garaje y gánales a todos.', '', 'Cuando hayas ganado 6 picadas con apuesta y 6 carreras de ruta, El Rey vendrá a buscarte. Tienes hasta el 3 de septiembre.']
+    ],
+    how: [
+      ['EL GARAJE', '', 'Todo se hace con el mouse. Pasa el mouse por el garaje: abajo dice qué es cada cosa.', '', 'El diario trae autos usados y repuestos. El capó abre el motor; abajo del auto está la caja; la rueda trasera, los neumáticos. Las latas de pintura son para pintar y arreglar el auto, el estante guarda tus repuestos y el portón sale a la calle.'],
+      ['EL MOTOR', '', 'Con la llave sacas los pernos uno por uno. Sin pernos, la pieza sale y queda en el estante. Para poner una pieza: PIEZAS, elígela y aprieta sus pernos.', '', 'Las piezas de motor y caja son de una marca (GM, Ford o Chrysler) y solo calzan en esa marca. El múltiple decide cuántos carburadores lleva. AFINAR deja el encendido justo en el 0: se corre un poco después de cada carrera.'],
+      ['LAS CARRERAS', '', 'Mantén ↑ para acelerar y suelta el embrague con ESPACIO cuando el semáforo se ponga verde. ESPACIO sube un cambio y Z lo baja: suelta el acelerador al pasar el cambio o raspas la caja.', '', '← → para doblar y ↓ para frenar. Si la policía te sigue, detente (multa de $20) o escápate; si te alcanzan son $75.'],
+      ['BOB\'S DRIVE-IN', '', 'Haz clic en el auto del rival para desafiarlo: picada o carrera de ruta, y cuánto apostar. En la ruta puedes apostar los papeles del auto.', '', 'El tipo del poste llama a quien quieras. Antes de apostar, mira bajo el capó del rival. M: música · F: pantalla completa · Esc: pausa.']
+    ],
+    title: { cont: 'Seguir el verano', fresh: 'Nueva partida', how: 'Cómo se juega', fame: 'Reyes de la calle', more: '← Más juegos', credit: 'Basado en Street Rod (1989) · Mundo Arcade' },
+    license: { state: 'ESTADO DE CALIFORNIA', dmv: 'DEPARTAMENTO DE VEHÍCULOS MOTORIZADOS', title: 'LICENCIA DE CONDUCIR', name: 'NOMBRE', typeName: 'Escribe tu nombre', born: 'NACIMIENTO', city: 'CIUDAD', cls: 'CLASE', clsValue: '3 · AUTOS', expires: 'VENCE', photo: 'Clic para cambiar la foto' },
+    fame: { title: 'REYES DE LA CALLE', empty: 'Todavía nadie le ha ganado al Rey.', hours: h => `${h} horas` },
+    chp: { title: 'POLICÍA DE CAMINOS', saved: n => `El expediente de ${n} quedó guardado.`, load: 'Cargar', loaded: n => `Bienvenido de vuelta, ${n}.`, empty: 'No hay expedientes guardados.' },
+    g: {
+      hot: { engine: 'Motor', trans: 'Caja de cambios', tires: 'Neumáticos', car: 'Tu auto', paper: 'El diario', spares: 'Repuestos', paint: 'Pintura y carrocería', clock: 'Reloj', calendar: 'Calendario', keys: 'Tus autos', door: 'Salir' },
+      noCar: 'No tienes auto. Busca uno en el diario.', startTip: 'Mira el diario sobre el banco: ahí venden autos.',
+      roofWork: d => `SIN TECHO EN ${d} DÍAS`,
+      body: 'Carrocería', bodyFuel: (c, f, t) => `Carrocería: ${c} · Bencina: ${f} de ${t} galones`, weight: lb => `Peso: ${lb} libras`, problems: 'No anda:',
+      sparesTitle: 'Repuestos', noSpares: 'No tienes repuestos.', sellIt: 'Venderlo', sold: m => `Vendido en ${m}.`,
+      fits: f => (f === 'all' ? 'Calza en todos los autos' : `Solo para autos ${FAM_NAME[f]}`),
+      carsTitle: 'Tus autos', noCars: 'No tienes autos.', drive: 'Usar este', junk: 'Chatarra', junkAsk: m => `¿Lo mandas a la chatarra por ${m}?`, runs: 'Listo para salir',
+      daysLeft: n => `Quedan ${n} días de verano.`, record: (d, dn, r, rn) => `Picadas con apuesta: ${d} de ${dn} · Rutas: ${r} de ${rn}`, record2: (k, l) => `Por puro gusto: ${k} · Derrotas: ${l}`,
+      kingHint: 'Dicen que El Rey solo corre con los que ya les ganaron a todos.', kingReady: '¡El Rey te anda buscando en Bob\'s!',
+      save: 'Guardar partida', load: 'Cargar partida', sleep: 'Dormir hasta mañana', quit: 'Salir a la portada',
+      sleepAsk: '¿Dormir y saltarte Bob\'s esta noche?', newDay: '¡Buenos días! Llegó el diario.',
+      whereTo: '¿Adónde vas?', toBobs: 'Bob\'s Drive-In', toGus: 'Bencinera de Gus', wontStart: 'El auto no anda:', needGas: 'No te alcanza la bencina. Pasa donde Gus primero.',
+      pushing: 'Empujando el auto donde Gus...'
     },
     paper: {
-      name: 'La Gaceta de San Lucas', motto: 'El diario del valle desde 1921', price: '5¢',
-      cars: 'AUTOS USADOS', parts: 'REPUESTOS USADOS', shop: 'SPEED SHOP «EL PISTÓN»', shopSub: 'Piezas nuevas con garantía',
-      sell: 'VENDE LO TUYO', call: 'Llamar', buy: 'Comprar', sellBtn: 'Vender', only: 'Solo para mi auto', all: 'Todo',
-      noRoom: 'Tu garaje está lleno (3 autos). Vende uno primero.', noMoney: 'No te alcanza el dinero.',
-      bought: n => `¡Compraste ${n}!`, sold: (n, m) => `Vendiste ${n} por ${money(m)}.`,
-      offer: m => `Te ofrecen ${money(m)}`, nothing: 'No tienes nada que vender.', fits: 'Calza en tu auto', nofit: 'No calza en tu auto',
-      tel: 'Tel.', cond: 'Estado', good: ['como nuevo', 'buen estado', 'con detalles', 'para restaurar'],
-      ad: (m, extra) => `${m}. ${extra}`, kept: 'Llévalo a tu garaje', active: 'En uso', loose: 'Pieza suelta',
-      headlines: {
-        win: (n, r) => `${n} le gana a ${r} en la recta del aeródromo`,
-        lose: (n, r) => `${r} sigue invicto: ${n} no pudo con él`,
-        king: n => `¡El Rey acepta el desafío de ${n}! Este sábado en el Lucky's`,
-        rumor: 'Dicen que El Rey solo corre con los que han ganado varias carreras',
-        police: 'La policía promete mano dura con las carreras en la ruta del cerro',
-        weather: ['Ola de calor: 35 grados en el valle', 'Cielo despejado toda la semana', 'Noches tibias para ir al drive-in'],
-        local: ['Abre un nuevo boliche en la calle 9', 'Los Halcones ganan el campeonato de béisbol juvenil', 'Récord de ventas de radios a transistores', 'El cine Paramount estrena película de playa', 'Feria de la naranja este fin de semana', 'Nueva autopista unirá San Lucas con Los Ángeles']
-      }
-    },
-    parts: {
-      engine: 'Motor', intake: 'Múltiple', carb: 'Carburador', cam: 'Árbol de levas', exhaust: 'Escape', trans: 'Caja', axle: 'Diferencial', tires: 'Neumáticos',
-      kind: { 6: '6 cil.', F: 'Flathead V8', 8: 'V8' },
-      intakeName: k => `Múltiple ${k === 'race' ? 'de carrera 2×4' : k.replace('x', '×')}`,
-      carbName: k => (k === '2' ? 'Carburador de 2 bocas' : k === '4' ? 'Carburador de 4 bocas' : 'Carburador de carrera 4 bocas'),
-      camName: k => (k === 'r34' ? 'Árbol de levas ¾ carrera' : 'Árbol de levas de carrera'),
-      exhName: k => (k === 'hdr' ? 'Headers de competición' : 'Escape de fierro'),
-      transType: { auto2: 'automática 2 vel.', auto3: 'automática 3 vel.', man3: 'manual 3 vel.', man4: 'manual 4 vel.', man4cr: 'manual 4 vel. cerrada' },
-      axleName: k => `Diferencial ${k}`,
-      tireName: { std: 'Neumáticos normales', ww: 'Neumáticos banda blanca', wide: 'Neumáticos anchos', slick: 'Slicks de picada' },
-      fitsFor: 'Para', any: 'Cualquier auto', carbsNeed: (n, t) => `lleva ${n} carburador${n > 1 ? 'es' : ''} de ${t} bocas`,
-      descs: {
-        engine: 'Más cilindrada, más fuerza. Para cambiarlo saca primero el múltiple, el escape y el árbol.',
-        intake: 'Decide cuántos carburadores lleva el motor. Más carburadores = más potencia.',
-        carb: 'Los de carrera usan las mismas fijaciones que los de 4 bocas.',
-        cam: 'Más potencia arriba, pero el motor tironea abajo.',
-        exhaust: 'Los headers dejan respirar al motor.',
-        trans: 'Las manuales son más rápidas, pero hay que pasar bien los cambios.',
-        axle: 'Más alto = sale más rápido pero llega a menos velocidad máxima.',
-        tires: 'Los slicks agarran mucho en la recta; los anchos sirven para todo.'
-      }
-    },
-    shop: {
-      title: 'Taller', bay: 'Bajo el capó', under: 'Bajo el auto', bench: 'Tu banco de trabajo', empty: 'No tienes piezas sueltas. Cómpralas en el diario.',
-      help: 'Haz clic en una pieza del auto para soltar sus pernos y sacarla. Luego elige una pieza de tu banco para ponerla y aprieta sus pernos.',
-      blocked: list => `Primero saca: ${list}`, wontFit: { family: 'No calza: es de otra marca', mount: 'No calza en este motor', noEngine: 'Primero pon un motor', noIntake: 'Primero pon un múltiple', carbType: 'Este múltiple lleva otro tipo de carburador', noRoom: 'Este múltiple no lleva más carburadores', occupied: 'Ese lugar está ocupado: saca la pieza vieja primero', blocked: 'Primero saca el múltiple', type: 'Esa pieza no va ahí' },
-      tune: 'Afinar el encendido', tuneHelp: 'Más avance = más potencia… hasta que el motor empieza a cascabelear (y se gasta).',
-      dyno: 'Dinamómetro', ready: '¡Listo para correr!', tighten: 'Aprieta los pernos', loosen: 'Suelta los pernos', sellPart: 'Vender',
-      deg: '°', ping: '¡Cascabelea!'
-    },
-    body: {
-      title: 'Pintura y estilo', paint: 'Pintura', paintCost: (p, c) => `${p} · ${money(c)}`,
-      mods: { flames: 'Llamas', stripes: 'Franjas', pinstripe: 'Filetes a mano', nobump: 'Sacar parachoques', chop: 'Rebajar el techo', lowered: 'Rebajar la suspensión', scoop: 'Toma de aire' },
-      modDesc: { flames: 'Clásicas llamas pintadas a mano', stripes: 'Dos franjas a lo largo', pinstripe: 'Firuletes finos en el capó y la maleta', nobump: '70 libras menos', chop: 'Menos resistencia al aire', lowered: 'Mejor en las curvas', scoop: 'Se ve bravo' },
-      wheels: 'Llantas', wheelNames: { caps: 'Tapas de fábrica', moons: 'Tapas cromadas «luna»', mags: 'Llantas de magnesio' },
-      done: 'Hecho', have: 'Ya lo tiene', remove: 'Quitar'
-    },
-    gas: { title: 'Bencinera', hold: 'Mantén apretado para cargar', full: 'Estanque lleno', gallons: 'galones', total: 'Total', pay: 'Pagar e irse', wash: 'Lavar el auto ($1)' },
-    cars: { title: 'Mis autos', use: 'Usar este', using: 'En uso', sell: v => `Vender por ${money(v)}`, junk: v => `Chatarra por ${money(v)}`, last: 'Es tu único auto' },
-    diner: {
-      title: 'Lucky\'s Drive-In', arrives: 'Llega alguien…', closing: 'El drive-in está cerrando. ¡A casa!',
-      challenge: 'Desafiar', pass: 'Dejarlo pasar', home: 'Volver a casa',
-      type: 'Tipo de carrera', drag: 'Picada (¼ de milla)', road: 'Ruta del cerro', bet: 'Apuesta',
-      kicks: 'Por diversión', pinks: 'Los papeles', record: (w, l) => `Contigo: ${w} ganadas, ${l} perdidas`,
-      car: 'Maneja', go: '¡Vamos!', time: 'Hora',
-      noCar: 'Tu auto no puede correr así.', broke: 'No tienes ese dinero.',
-      lines: {
-        hi: ['¿Qué miras, novato?', 'Lindo auto. ¿Corre o solo se ve bonito?', 'Hace rato que nadie me gana.', '¿Quieres probar?', 'Mi auto está que vuela esta noche.', '¿Tienes hora? Porque es hora de correr.'],
-        yes: ['¡Trato hecho!', 'Vamos a la recta.', 'Prepárate para ver mis focos traseros.', '¡Esto va a ser fácil!'],
-        noPinks: ['¿Mis papeles? Ni lo sueñes.', 'No arriesgo mi auto por ti.', 'Tráeme algo mejor y hablamos.'],
-        noMoney: ['¿Tanta plata? Mejor no.', 'Mi papá me mata si pierdo eso.'],
-        scared: ['Con ese auto… no, gracias.', 'Hoy no, mi motor anda raro.']
+      name: 'DIARIO DEL VALLE', price: '10 centavos', usedCars: 'AUTOS USADOS', autoParts: 'REPUESTOS', front: 'Portada', close: 'Cerrar',
+      ads: n => `${n} avisos hoy`, partsSub: 'Nuevos y usados', talk: 'CHISMES',
+      headlines: ['OLA DE CALOR EN EL VALLE', 'ABRE LA NUEVA AUTOPISTA', 'LOS BEACH BOYS LLENAN EL AUDITORIO', 'EL PRECIO DE LA BENCINA NO SUBE', 'POLICÍA CONTRA LAS PICADAS', 'TORMENTA DE VERANO SORPRENDE AL PUEBLO', 'SE ESTRENA "LOS PÁJAROS" EN EL AUTOCINE', 'RÉCORD DE VENTAS DE CORVETTE'],
+      tips: [
+        'Dicen que El Rey solo acepta a los que ganaron 6 picadas con apuesta y 6 carreras de ruta.',
+        'Un mecánico jura que un motor bien afinado gana medio segundo. La lámpara de tiempo no miente.',
+        'Ojo con la caja: el que pasa los cambios a fondo termina raspándola, y una caja rota no anda.',
+        'Los neumáticos de carrera agarran mucho más en la partida, pero en las curvas no hacen milagros.',
+        'Un múltiple de 2 × 4 bocas despierta a cualquier V-8. Eso sí: necesita dos carburadores.',
+        'Sacarle los parachoques a un auto lo aliviana, pero en un choque lo pagas caro.',
+        'Gus cobra el doble si te llena el estanque él. Con la bomba tú mismo sale más barato.',
+        'El tipo del poste de Bob\'s conoce a todos: pídele que llame a quien quieras correr.',
+        'Antes de apostar, mira bajo el capó del rival. Así sabes con qué viene.',
+        'Correr de noche por la ruta es peligroso: hay tráfico y a veces aparece la policía.'
+      ],
+      adLine: (kind, ci, tr) => `${kind} ${ci}, ${tr}.`,
+      words: ['Buen precio.', 'Urgente.', 'Único dueño.', 'Lo vendo por viaje.', 'Llamar de noche.', 'Ver para creer.'],
+      cond: car => {
+        const c = Math.min(car.body, car.p.engine.c);
+        return c >= 0.85 ? 'Impecable.' : c >= 0.65 ? 'Anda bien.' : c >= 0.5 ? 'Necesita cariño.' : 'Para arreglar.';
       },
-      kingArrives: '¡Llegó El Rey!', kingLine: 'Me dicen que andas ganando carreras. Veamos si es verdad. Ruta del cerro, por los papeles.',
-      kingNotYet: n => `Te faltan ${n} victorias para que El Rey te tome en serio.`,
-      kingSat: 'El Rey solo aparece los sábados en la noche.'
+      soldStamp: 'VENDIDO', soldShort: 'vendido',
+      cat: { engine: 'Motores', intake: 'Múltiples', carb: 'Carburadores', trans: 'Cajas', tires: 'Neumáticos', used: 'Usados' },
+      forKind: I => (I.k[6] && I.k[8] ? 'para 6 cil. y V-8' : I.k[6] ? 'para 6 cilindros' : 'para V-8') + ` · ${I.n} carb.`,
+      buy: m => `Comprar ${m}`, buyAsk: (n, m) => `¿Comprar ${n} por ${m}?`, bought: 'Lo compraste: quedó en el estante de repuestos.',
+      seeIt: 'Verlo', yeah: 'Comprarlo', yours: '¡Es tuyo!', noMoney: 'No te alcanza la plata.', noRoom: n => `Ya tienes ${n} autos: vende uno primero.`
+    },
+    seller: {
+      hello: 'Es una joya. ¿Lo quieres?', asking: m => `Pide ${m}`, offer: 'Ofrecer menos', offerTitle: '¿Cuánto le ofreces?', offerBtn: 'Ofrecer',
+      deal: '¡Trato hecho!', noWay: m => `Ni hablar, chico. Son ${m}.`
+    },
+    paint: {
+      colors: m => `PINTURA ${m}`, stickers: 'CALCOMANÍAS',
+      sticker: { hotrod: 'Hot Rod', flames: 'Llamas', star: 'Estrella', checker: 'Cuadros', number: 'Número', lightning: 'Rayo' },
+      paintAsk: (c, m) => `¿Pintarlo ${c} por ${m}?`, stickAsk: (s, m) => `¿Poner la calcomanía ${s} por ${m}?`,
+      nobump: m => `Sin parachoques ${m}`, nobumpAsk: '¿Sacar los parachoques? El auto queda más liviano, pero los choques le duelen más.',
+      noroof: m => `Sacar techo ${m}`, noroofAsk: d => `¿Sacarle el techo? Demora ${d} días y en ese tiempo el auto no anda.`,
+      fix: m => `Arreglar choque ${m}`, fixAsk: m => `¿Arreglar la carrocería por ${m}?`, strip: 'Quitar calcomanías'
+    },
+    mech: {
+      tune: 'AFINAR', parts: 'PIEZAS', select: 'ELEGIR', loosen: 'sacar perno', tighten: 'poner perno', install: 'Ponerla',
+      blocked: p => `Primero saca: ${p.toLowerCase()}.`, removed: n => `Pieza sacada: ${n}. Quedó en el estante.`, tight: 'Pieza apretada.', boltIt: 'Ahora aprieta sus pernos.',
+      noneFit: 'No tienes repuestos de este tipo.', engineParts: 'Piezas de motor', transParts: 'Cajas de cambios', tireParts: 'Neumáticos',
+      rivalHood: 'BAJO EL CAPÓ DEL RIVAL', tuneHelp: 'Deja la marca blanca en el 0', tuned: '¡Afinado!'
+    },
+    gas: {
+      hello: '¿Qué va a ser, chico?', tank: (f, t) => `Bencina: ${f} / ${t}`, fill: m => `¡Llénelo, Gus! (${m})`, self: 'Bomba yo mismo (mantén)', pumping: 'Echando bencina...',
+      leave: 'Irse', full: '¡Ya está lleno, rápido!', broke: 'Se te acabó la plata, chico.', noMoney: 'Sin plata no hay bencina. ¡Fuera de mi vista, chico!',
+      thanks: m => `Son ${m}. ¡Gracias, chico!`
+    },
+    diner: {
+      goHome: 'Irse a casa', postGuy: 'El tipo del poste', challenge: n => `Desafiar a ${n}`, drag: 'Picada', road: 'Carrera de ruta', hood: 'Mirar el motor',
+      kicks: 'Por puro gusto', pinks: 'Los papeles', lookingFor: '¿A quién buscas?', call: 'Llamarlo', nobody: 'No queda nadie más por hoy.', calling: n => `¡Eh, ${n}! Te buscan.`,
+      hello: ['¿Qué miras?', '¿Te atreves con mi auto?', 'Linda noche para correr.', '¿Buscas pelea?', 'Este auto vuela, amigo.'],
+      yes: ['¡Hagámoslo!', '¡Trato hecho!', 'Vamos, te espero en la calle.', '¡Te voy a dejar atrás!'],
+      refuse: { broke: 'No tienes esa plata, chico.', noPinks: '¿Tu cacharro por mi auto? Ni lo sueñes.', noMoney: 'No apuesto tanto contigo.', scared: 'Nah, hoy no tengo ganas.' },
+      bye: 'Nos vemos.', closing: 'Bob\'s está cerrando. ¡Hasta mañana!', youBroke: 'No tienes esa plata.', homeAsk: '¿Irte a casa? Mañana llega el diario.',
+      kingHello: 'Así que tú eres el que anda ganándoles a todos.', kingOnlyPinks: 'Yo solo corro en la ruta, y por los papeles.', kingYes: 'Muy bien. Veamos qué tienes.'
     },
     race: {
-      drag: 'PICADA', road: 'RUTA', kicks: 'Por diversión', pinks: 'POR LOS PAPELES',
-      dragTitle: 'PICADA · CUARTO DE MILLA', dragPlace: 'La recta del viejo aeródromo', roadTitle: 'CARRERA DE RUTA', roadPlace: 'La ruta del cerro, hasta el estanque de agua',
-      hintStage: '↑ sube las vueltas · ESPACIO suelta el embrague cuando BAJE la bandera', hintAuto: '↑ sube las vueltas · ESPACIO suelta el freno cuando BAJE la bandera',
-      hintShift: 'Mira la luz roja del tacómetro: suelta ↑, toca ESPACIO, y vuelve a acelerar',
-      hintCops: 'Frena hasta parar (multa $20) o escápate a más de 400 metros',
-      go: '¡YA!', grind: '¡RASPASTE LA CAJA! Suelta el acelerador al cambiar', police: '¡LA POLICÍA!', lostCops: '¡Te escapaste de la policía!',
-      dry: '¡Te quedaste sin bencina!', won: '¡GANASTE!', lost: 'PERDISTE', voided: 'CARRERA ANULADA', continue: 'ENTER para seguir',
+      gear: g => `Cambio: ${g}`, ready: '¡Prepárate!', dragName: 'Picada', roadName: 'Carrera de ruta',
+      help: 'Mantén ↑ para acelerar · ESPACIO suelta el embrague con la luz verde y sube cambio · Z baja cambio · ← → doblar · ↓ frenar',
+      helpAuto: 'Mantén ↑ para acelerar · ESPACIO suelta el freno con la luz verde · ← → doblar · ↓ frenar',
+      go: '¡YA!', grind: '¡Raspaste la caja! Suelta el acelerador al pasar el cambio', police: '¡La policía! Detente o escápate', lostCops: 'Perdiste a la policía', dry: 'Te quedaste sin bencina',
+      won: '¡GANASTE!', lost: 'PERDISTE', voided: 'CARRERA ANULADA',
+      paused: 'PAUSA', resume: 'Seguir', giveUp: 'Rendirse',
+      keys1: '↑ acelerar · ↓ frenar · ← → doblar', keys2: 'ESPACIO sube cambio · Z baja cambio',
+      winTime: (t, mph) => `Tu tiempo ganador: ${t} seg., promedio ${mph} mph. ¡Felicitaciones!`,
+      loseTime: (n, t, me) => `${n} hizo ${t} seg. Tú, ${me} seg.`,
+      wonMoney: m => `Ganaste ${m}.`, wonPinks: c => `¡El ${c} ahora es tuyo!`, congrats: 'Buena carrera.',
+      lostMoney: m => `Perdiste ${m}.`, lostPinks: 'Perdiste los papeles: tu auto se va con él.', better: 'Mejor suerte la próxima.',
+      fine: m => `Multa por exceso de velocidad: ${m}.`,
       reasons: {
-        finish: '', foul: 'Largaste antes de la bandera', rivalFoul: 'Tu rival largó antes de la bandera', rivalCrash: '¡Tu rival chocó!', crash: '¡Chocaste!', blown: 'Reventaste el motor', broken: 'Se rompió la caja de cambios',
-        dry: 'Sin bencina', stopped: 'Te detuviste: multa de $20', caught: 'Te atrapó la policía: multa de $75'
-      }
+        foul: () => 'Saliste antes de la luz verde: pierdes.', rivalFoul: n => `${n} salió antes de la luz verde: ¡ganas!`,
+        crash: () => '¡Chocaste!', rivalCrash: n => `${n} chocó: ¡ganas!`, blown: () => '¡Reventaste el motor!', broken: () => '¡Se rompió la caja!',
+        dry: () => 'Te quedaste sin bencina.', giveUp: () => 'Te rendiste.', stopped: () => 'Te detuviste y la policía te multó.', caught: () => '¡La policía te alcanzó!'
+      },
+      rivalWins: ['¡Come mi polvo!', 'Mejor suerte la próxima, perdedor.', '¿Eso es todo lo que tienes?'],
+      rivalLoses: ['Buena carrera, chico.', 'Suerte de principiante.', 'La próxima no te va tan bien.'],
+      kingWins: 'Vuelve cuando seas grande, chico.', kingLoses: 'Nadie me había ganado... Las llaves son tuyas.'
     },
-    result: {
-      title: 'Resultado', you: 'Tú', time: 'Tiempo', trap: 'Velocidad final', reaction: 'Reacción', bet: 'Apuesta',
-      win: m => `Ganaste ${money(m)}`, lose: m => `Perdiste ${money(m)}`, kicks: 'Corrieron por diversión',
-      wonCar: n => `¡Te quedas con el ${n}!`, lostCar: n => `Perdiste tu ${n}…`, autoSold: (n, m) => `No cabía en tu garaje: lo vendiste por ${money(m)}`,
-      fine: m => `Multa: ${money(m)}`, jail: 'No pudiste pagar la multa: pasaste la noche en la comisaría y tus papás te castigaron 5 días.',
-      engineHurt: 'El motor quedó resentido', transHurt: 'La caja quedó dañada', blown: 'El motor está reventado: necesitas otro', broken: 'La caja está rota: necesitas otra',
-      crash: 'El auto quedó chocado', fix: c => `Arreglarlo (${money(c)})`, junk: v => `Venderlo como chatarra (${money(v)})`, noFix: 'Quedó tan mal que solo sirve como chatarra.',
-      next: 'Seguir', back: 'Volver al drive-in'
+    ticket: {
+      state: 'POLICÍA DE CAMINOS', title: 'ESTADO DE CALIFORNIA · CITACIÓN', name: 'CONDUCTOR', vehicle: 'VEHÍCULO', date: 'FECHA', violation: 'INFRACCIÓN', speeding: 'Exceso de velocidad',
+      fine: 'MULTA', signHere: 'FIRME AQUÍ', clickSign: 'Clic para firmar', paid: 'Multa pagada.', cantPay: 'No tienes cómo pagar...'
     },
     end: {
-      kingTitle: '¡ERES EL NUEVO REY DE LA CALLE!', kingText: n => `${n} le ganó a El Rey en la ruta del cerro y se quedó con su Corvette Sting Ray. Todo San Lucas habla de lo mismo.`,
-      headline: n => `¡HAY NUEVO REY! ${n.toUpperCase()} DESTRONA AL CAMPEÓN`,
-      summerOver: 'Se acabó el verano', summerText: 'Empezaron las clases y El Rey sigue siendo El Rey. Quizás el próximo verano…',
-      broke: 'Sin auto y sin dinero', brokeText: 'Te quedaste sin auto y sin plata para comprar otro. El verano terminó antes de tiempo.',
-      stats: (w, l, m) => `${w} carreras ganadas · ${l} perdidas · ${money(m)} en el bolsillo`,
-      again: 'Jugar otro verano', keep: 'Seguir paseando'
-    },
-    toast: { saved: 'Partida guardada', music: on => (on ? '🎵 Música: sí' : '🔇 Música: no') },
-    pause: { title: 'PAUSA', resume: 'Seguir', quit: 'Abandonar la carrera' }
+      kingTitle: '¡EL NUEVO REY!',
+      king: ['Le ganaste a El Rey en su propia ruta. Su Corvette negro es tuyo y desde esta noche todos en Bob\'s saben tu nombre.',
+        'Le ganaste a El Rey.', '', 'Durante años se hablará de la noche en que un chico de garaje dejó atrás al Corvette negro.', '', 'Tu nombre queda en el muro de los Reyes de la calle.'],
+      summer: ['Se acabó el verano.', '', 'Mañana empiezan las clases y El Rey sigue siendo El Rey.', '', 'Quizás el próximo verano...'],
+      broke: ['Te quedaste sin auto y sin plata.', '', 'Pasarás el resto del verano a pie, mirando las carreras desde la vereda de Bob\'s.'],
+      jail: ['No tenías con qué pagar la multa.', '', 'La policía llamó a tus papás y quedaste castigado el resto del verano. Adiós, carreras.'],
+      stats: (w, l, m, d) => `Victorias: ${w} · Derrotas: ${l} · Plata: ${m} · Días: ${d}`
+    }
   },
+
   en: {
-    docTitle: 'Street Rod: Summer of 63', subtitle: 'Summer of \'63', langName: 'English',
+    docTitle: 'Street Rod: Summer of 63', subtitle: "SUMMER OF '63",
+    ok: 'OK', yes: 'Yeah', forget: 'Forget it', done: 'Done', cancel: 'Cancel', next: 'Next', none: 'none', noThanks: 'No thanks',
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     date: d => `${STR.en.days[d.getDay()]}, ${STR.en.months[d.getMonth()]} ${d.getDate()}`,
-    shortDate: d => `${STR.en.months[d.getMonth()].slice(0, 3)} ${d.getDate()}`,
-    menu: { cont: 'Continue the summer', fresh: 'New game', how: 'How to play', lang: '🌐 Español', more: '← More games', music: on => (on ? '🎵 Music: on' : '🔇 Music: off') },
-    intro: [
-      'It\'s June 1963 in San Lucas, California. School\'s out and you\'ve saved $750.',
-      'Every night the hottest cars in town meet at Lucky\'s Drive-In. And the hottest of all belongs to The King.',
-      'Buy a car from the paper, build it in your garage and beat everyone. You have until school starts on September 3rd.'
-    ],
-    license: 'DRIVER LICENSE', state: 'STATE OF CALIFORNIA', yourName: 'Your name', start: 'Start the summer!',
-    defaultName: 'Johnny',
-    how: [
-      ['🗞️', 'The paper', 'Every morning brings used cars and parts. Engine and transmission parts only fit cars of the same make (GM, Ford or Chrysler).'],
-      ['🔧', 'The garage', 'Open the hood and click the bolts to remove and install parts. The intake decides how many carburetors you need.'],
-      ['🍔', 'The drive-in', 'At night the rivals show up. Pick a drag race (quarter mile) or a road race, and how much to bet. On the road you can race for pink slips.'],
-      ['🏁', 'Driving', '↑ gas · ↓ brake · ← → steer · SPACE drops the clutch and shifts up · Z shifts down. Lift off the gas when you shift or you\'ll grind the gears!'],
-      ['🚓', 'The police', 'On the road the cops may chase you. Pull over ($20 fine) or run: if they catch you it\'s $75.'],
-      ['👑', 'The King', `Win ${KING_WINS} races and The King will accept a challenge on a Saturday night. Beat him and you\'re the new King of the street.`]
-    ],
-    hud: { day: 'Day', wins: 'Wins', king: 'The King', money: 'Cash', rep: 'Rep' },
-    garage: {
-      title: 'Your garage', noCar: 'You don\'t have a car. Find one in the paper.',
-      paper: 'Paper', shop: 'Workshop', body: 'Paint', gas: 'Gas station', cars: 'My cars', diner: 'Go to the drive-in', sleep: 'Sleep',
-      paperSub: 'Cars and parts', shopSub: 'Build the engine', bodySub: 'Paint and style', gasSub: '31¢ a gallon', carsSub: 'Pick or sell', dinerSub: 'Night races', sleepSub: 'Skip to tomorrow',
-      stats: { hp: 'Power', et: '¼ mile', top: 'Top speed', lb: 'Weight', value: 'Value', fuel: 'Gas' },
-      cond: { engine: 'Engine', trans: 'Gearbox', tires: 'Tires', body: 'Body' },
-      cantGo: 'Your car isn\'t ready to go out', repair: 'Repair', rebuild: c => `Rebuild engine (${money(c)})`, rebuildT: c => `Rebuild gearbox (${money(c)})`,
-      fixBody: c => `Fix the body (${money(c)})`,
-      sleepAsk: 'Sleep and skip tonight\'s drive-in?'
+    shortDate: d => `${STR.en.months[d.getMonth()].slice(0, 3)} ${d.getDate()}, 1963`,
+    clock: min => { const h = (20 + Math.floor(min / 60)) % 24, m = String(min % 60).padStart(2, '0'); return `${h % 12 || 12}:${m} ${h >= 12 ? 'PM' : 'AM'}`; },
+    bankroll: m => `Bankroll: ${m}`,
+    langSwitch: 'Español',
+    musicLabel: on => (on ? 'Music: on' : 'Music: off'),
+    musicToggled: on => (on ? 'Music on' : 'Music off'),
+    cruising: 'Cruising in town...', goingHome: 'Heading home...',
+    buyerOffer: m => `A buyer asks: will you take ${m}?`,
+    noMoreBuyers: 'No more buyers today.',
+    cond: c => (c >= 0.9 ? 'like new' : c >= 0.7 ? 'good' : c >= 0.5 ? 'fair' : c >= 0.25 ? 'poor' : 'shot'),
+    slot: { engine: 'Engine', intake: 'Intake', carb: 'Carburetor', trans: 'Transmission', tires: 'Tires' },
+    parts: {
+      six: '6-cyl.',
+      engine: (F, kind, ci) => `${F}${kind}, ${ci} cu.in.`,
+      intake: (F, k) => `${F}${STR.en.parts.intakeShort[k]} intake`,
+      intakeShort: { '1x2': '2-barrel', '3x2': '3 × 2-barrel', '1x4': '4-barrel', '2x4': '2 × 4-barrel', race: 'racing' },
+      carb: { '2': '2-barrel carburetor', '4': '4-barrel carburetor', '4R': 'Racing carburetor' },
+      carbShort: { '2': '2-bbl', '4': '4-bbl', '4R': 'racing' },
+      trans: { auto: F => `${F} automatic`, man3: F => `${F} 3-speed`, man4: F => `${F} 4-speed`, man4u: () => 'Universal 4-speed', race4: F => `${F} racing 4-speed` },
+      transShort: { auto: 'automatic', man3: '3-speed', man4: '4-speed', man4u: '4-speed', race4: 'racing 4-speed' },
+      tires: { std: 'Standard tires', ww: 'Whitewall tires', slick: 'Racing slicks' },
+      tiresShort: { std: 'standard', ww: 'whitewalls', slick: 'racing slicks' }
     },
-    probs: {
-      'missing:engine': 'No engine', 'missing:intake': 'No intake manifold', 'missing:carb': 'Missing carburetors',
-      'missing:exhaust': 'No exhaust', 'missing:trans': 'No transmission', 'missing:axle': 'No rear axle',
-      'missing:tires': 'No tires', loose: 'There are loose bolts', wrecked: 'It\'s wrecked', fuel: 'Out of gas',
-      blown: 'The engine is blown', broken: 'The gearbox is broken'
+    problem: (p, car) => ({
+      'missing:engine': 'no engine', 'missing:intake': 'no intake', 'missing:carb': 'missing carburetors',
+      'missing:trans': 'no transmission', 'missing:tires': 'no tires', loose: 'loose bolts',
+      blown: 'blown engine', broken: 'broken transmission', wrecked: 'wrecked', fuel: 'out of gas',
+      roof: `roof being chopped (${car.mods.roofDays} days)`
+    }[p] || p),
+    why: {
+      type: "That part doesn't go here.", occupied: 'There is a part there already. Take it out first.', family: "That part is for another make: it won't fit.",
+      noEngine: 'Put an engine in first.', kind: "That intake doesn't fit this engine.", noIntake: 'Put an intake on first.',
+      noRoom: 'No more room for carburetors on this intake.', carbType: "That carburetor doesn't fit this intake.", gone: "It's gone."
+    },
+    intro: [
+      ["Summer of 1963. School's out and you've got $750 in your pocket.", '', "Every night the hottest cars in the valley meet at Bob's Drive-In. The fastest of them all is the King's black Corvette."],
+      ['Find a car in the paper, build it in your garage and beat everybody.', '', "Win 6 drag races for money and 6 road races and the King will come looking for you. You've got until September 3."]
+    ],
+    how: [
+      ['THE GARAGE', '', 'Everything is done with the mouse. Move it around the garage: the bar at the bottom says what each thing is.', '', 'The paper has used cars and parts. The hood opens the engine; under the car is the transmission; the rear wheel, the tires. The paint cans paint and fix the car, the shelf holds your spare parts and the door goes out to the street.'],
+      ['THE ENGINE', '', 'Click bolts with the wrench to take them out one by one. With no bolts left, the part comes out and goes on the shelf. To put a part in: PARTS, pick it and tighten its bolts.', '', 'Engine and transmission parts belong to a make (GM, Ford or Chrysler) and only fit that make. The intake decides how many carburetors it takes. TUNE puts the timing right on 0: it drifts a little after every race.'],
+      ['RACING', '', 'Hold ↑ to rev and drop the clutch with SPACE when the light turns green. SPACE shifts up and Z shifts down: lift off the gas when you shift or you will grind the gears.', '', '← → steer and ↓ brakes. If the police chase you, pull over ($20 fine) or lose them; if they catch you it is $75.'],
+      ["BOB'S DRIVE-IN", '', "Click the rival's car to challenge him: drag or road race, and how much to bet. On the road you can race for pink slips.", '', 'The guy on the post calls anyone you want. Before you bet, look under the hood. M: music · F: full screen · Esc: pause.']
+    ],
+    title: { cont: 'Continue summer', fresh: 'New game', how: 'How to play', fame: 'King Street Rodders', more: '← More games', credit: 'Based on Street Rod (1989) · Mundo Arcade' },
+    license: { state: 'STATE OF CALIFORNIA', dmv: 'DEPARTMENT OF MOTOR VEHICLES', title: "OPERATOR'S LICENSE", name: 'NAME', typeName: 'Type your name', born: 'BIRTH DATE', city: 'CITY', cls: 'CLASS', clsValue: '3 · CARS', expires: 'EXPIRES', photo: 'Click to change the photo' },
+    fame: { title: 'KING STREET RODDERS', empty: 'Nobody has beaten the King yet.', hours: h => `${h} hours` },
+    chp: { title: 'CALIFORNIA HIGHWAY PATROL', saved: n => `${n}'s record is on file.`, load: 'Load', loaded: n => `Welcome back, ${n}.`, empty: 'No records on file.' },
+    g: {
+      hot: { engine: 'Engine', trans: 'Transmission', tires: 'Tires', car: 'Your car', paper: 'Newspaper', spares: 'Spare parts', paint: 'Paint & body', clock: 'Clock', calendar: 'Calendar', keys: 'Your cars', door: 'Go out' },
+      noCar: "You don't have a car. Check the newspaper.", startTip: 'Check the newspaper on the bench: cars for sale.',
+      roofWork: d => `ROOF OFF IN ${d} DAYS`,
+      body: 'Body', bodyFuel: (c, f, t) => `Body: ${c} · Gas: ${f} of ${t} gallons`, weight: lb => `Weight: ${lb} lbs`, problems: "Won't run:",
+      sparesTitle: 'Spare parts', noSpares: 'No spare parts.', sellIt: 'Sell it', sold: m => `Sold for ${m}.`,
+      fits: f => (f === 'all' ? 'Fits every car' : `${FAM_NAME[f]} cars only`),
+      carsTitle: 'Your cars', noCars: 'No cars.', drive: 'Use this one', junk: 'Junk it', junkAsk: m => `Junk it for ${m}?`, runs: 'Ready to roll',
+      daysLeft: n => `${n} days of summer left.`, record: (d, dn, r, rn) => `Drags for money: ${d} of ${dn} · Road races: ${r} of ${rn}`, record2: (k, l) => `Just for kicks: ${k} · Losses: ${l}`,
+      kingHint: 'They say the King only races guys who already beat everybody.', kingReady: "The King is looking for you at Bob's!",
+      save: 'Save game', load: 'Load game', sleep: 'Sleep till tomorrow', quit: 'Quit to title',
+      sleepAsk: "Sleep and skip Bob's tonight?", newDay: 'Good morning! The paper is here.',
+      whereTo: 'Where to?', toBobs: "Bob's Drive-In", toGus: "Gus' Gas", wontStart: "The car won't run:", needGas: "Not enough gas. Go to Gus' first.",
+      pushing: "Pushing the car to Gus'..."
     },
     paper: {
-      name: 'The San Lucas Gazette', motto: 'The valley\'s newspaper since 1921', price: '5¢',
-      cars: 'USED CARS', parts: 'USED PARTS', shop: '«THE PISTON» SPEED SHOP', shopSub: 'New parts, guaranteed',
-      sell: 'SELL YOUR STUFF', call: 'Call', buy: 'Buy', sellBtn: 'Sell', only: 'Only for my car', all: 'Everything',
-      noRoom: 'Your garage is full (3 cars). Sell one first.', noMoney: 'You can\'t afford it.',
-      bought: n => `You bought ${n}!`, sold: (n, m) => `You sold ${n} for ${money(m)}.`,
-      offer: m => `They offer ${money(m)}`, nothing: 'You have nothing to sell.', fits: 'Fits your car', nofit: 'Doesn\'t fit your car',
-      tel: 'Tel.', cond: 'Condition', good: ['like new', 'good shape', 'some wear', 'project car'],
-      ad: (m, extra) => `${m}. ${extra}`, kept: 'Take it home', active: 'In use', loose: 'Loose part',
-      headlines: {
-        win: (n, r) => `${n} beats ${r} on the airfield straight`,
-        lose: (n, r) => `${r} still unbeaten: ${n} couldn't keep up`,
-        king: n => `The King accepts ${n}'s challenge! This Saturday at Lucky's`,
-        rumor: 'Word is The King only races those who have won a few',
-        police: 'Police promise a crackdown on racing on the hill road',
-        weather: ['Heat wave: 95 degrees in the valley', 'Clear skies all week long', 'Warm nights for the drive-in'],
-        local: ['New bowling alley opens on 9th Street', 'Hawks win the junior baseball title', 'Transistor radio sales hit a record', 'Paramount theater opens a new beach movie', 'Orange fair this weekend', 'New freeway will link San Lucas and Los Angeles']
-      }
-    },
-    parts: {
-      engine: 'Engine', intake: 'Intake', carb: 'Carburetor', cam: 'Camshaft', exhaust: 'Exhaust', trans: 'Gearbox', axle: 'Rear axle', tires: 'Tires',
-      kind: { 6: 'Six', F: 'Flathead V8', 8: 'V8' },
-      intakeName: k => (k === 'race' ? '2×4 racing intake' : `${k.replace('x', '×')} intake`),
-      carbName: k => (k === '2' ? '2-barrel carburetor' : k === '4' ? '4-barrel carburetor' : 'Racing 4-barrel carburetor'),
-      camName: k => (k === 'r34' ? '¾ race camshaft' : 'Full race camshaft'),
-      exhName: k => (k === 'hdr' ? 'Racing headers' : 'Cast-iron exhaust'),
-      transType: { auto2: '2-speed automatic', auto3: '3-speed automatic', man3: '3-speed manual', man4: '4-speed manual', man4cr: 'close-ratio 4-speed' },
-      axleName: k => `${k} rear axle`,
-      tireName: { std: 'Street tires', ww: 'Whitewall tires', wide: 'Wide tires', slick: 'Drag slicks' },
-      fitsFor: 'For', any: 'Any car', carbsNeed: (n, t) => `takes ${n} ${t}-barrel carburetor${n > 1 ? 's' : ''}`,
-      descs: {
-        engine: 'More inches, more power. To swap it, remove the intake, exhaust and cam first.',
-        intake: 'Decides how many carburetors the engine takes. More carbs = more power.',
-        carb: 'Racing carbs use the same mounting as 4-barrels.',
-        cam: 'More top-end power, but the engine stumbles down low.',
-        exhaust: 'Headers let the engine breathe.',
-        trans: 'Manuals are quicker, but you have to shift right.',
-        axle: 'Higher = quicker launch but lower top speed.',
-        tires: 'Slicks hook up on the strip; wide tires are good everywhere.'
-      }
-    },
-    shop: {
-      title: 'Workshop', bay: 'Under the hood', under: 'Under the car', bench: 'Your workbench', empty: 'No loose parts. Buy some in the paper.',
-      help: 'Click a part on the car to loosen its bolts and pull it. Then pick a part from your bench to put it in and tighten its bolts.',
-      blocked: list => `Remove first: ${list}`, wontFit: { family: 'Won\'t fit: it\'s another make', mount: 'Won\'t fit this engine', noEngine: 'Put an engine in first', noIntake: 'Put an intake in first', carbType: 'This intake takes another kind of carburetor', noRoom: 'This intake takes no more carburetors', occupied: 'That spot is taken: remove the old part first', blocked: 'Remove the intake first', type: 'That part doesn\'t go there' },
-      tune: 'Ignition timing', tuneHelp: 'More advance = more power… until the engine starts to ping (and wears out).',
-      dyno: 'Dyno', ready: 'Ready to race!', tighten: 'Tighten bolts', loosen: 'Loosen bolts', sellPart: 'Sell',
-      deg: '°', ping: 'Pinging!'
-    },
-    body: {
-      title: 'Paint and style', paint: 'Paint', paintCost: (p, c) => `${p} · ${money(c)}`,
-      mods: { flames: 'Flames', stripes: 'Stripes', pinstripe: 'Pinstriping', nobump: 'Shave the bumpers', chop: 'Chop the top', lowered: 'Lower it', scoop: 'Hood scoop' },
-      modDesc: { flames: 'Classic hand-painted flames', stripes: 'Two long side stripes', pinstripe: 'Fine scrolls on the hood and trunk', nobump: '70 pounds lighter', chop: 'Less drag', lowered: 'Better in the corners', scoop: 'Looks mean' },
-      wheels: 'Wheels', wheelNames: { caps: 'Stock hubcaps', moons: 'Chrome moon discs', mags: 'Mag wheels' },
-      done: 'Done', have: 'Already has it', remove: 'Remove'
-    },
-    gas: { title: 'Gas station', hold: 'Hold to pump', full: 'Tank full', gallons: 'gallons', total: 'Total', pay: 'Pay and go', wash: 'Wash the car ($1)' },
-    cars: { title: 'My cars', use: 'Drive this one', using: 'In use', sell: v => `Sell for ${money(v)}`, junk: v => `Scrap for ${money(v)}`, last: 'It\'s your only car' },
-    diner: {
-      title: 'Lucky\'s Drive-In', arrives: 'Someone\'s pulling in…', closing: 'The drive-in is closing. Time to go home!',
-      challenge: 'Challenge', pass: 'Let them go', home: 'Go home',
-      type: 'Race type', drag: 'Drag race (¼ mile)', road: 'Hill road', bet: 'Bet',
-      kicks: 'Just for kicks', pinks: 'Pink slips', record: (w, l) => `Against you: ${w} won, ${l} lost`,
-      car: 'Drives', go: 'Let\'s go!', time: 'Time',
-      noCar: 'Your car can\'t race like this.', broke: 'You don\'t have that money.',
-      lines: {
-        hi: ['What are you looking at, rookie?', 'Nice car. Does it run or just look pretty?', 'Nobody\'s beaten me in ages.', 'Wanna try?', 'My car is flying tonight.', 'Got the time? Because it\'s time to race.'],
-        yes: ['You\'re on!', 'To the strip.', 'Get ready to see my taillights.', 'This\'ll be easy!'],
-        noPinks: ['My pink slip? Dream on.', 'I\'m not risking my car for you.', 'Bring something better and we\'ll talk.'],
-        noMoney: ['That much? I\'ll pass.', 'My dad would kill me if I lost that.'],
-        scared: ['With that car… no thanks.', 'Not tonight, my engine\'s acting up.']
+      name: 'THE VALLEY NEWS', price: 'Ten cents', usedCars: 'USED CARS', autoParts: 'AUTO PARTS', front: 'Front page', close: 'Close',
+      ads: n => `${n} ads today`, partsSub: 'New and used', talk: 'STREET TALK',
+      headlines: ['HEAT WAVE HITS THE VALLEY', 'NEW FREEWAY OPENS', 'BEACH BOYS PACK THE AUDITORIUM', 'GAS PRICES HOLD STEADY', 'POLICE CRACK DOWN ON STREET RACING', 'SUMMER STORM SURPRISES TOWN', '"THE BIRDS" OPENS AT THE DRIVE-IN', 'CORVETTE SALES BREAK RECORD'],
+      tips: [
+        'Word is the King only races guys who won 6 drags for money and 6 road races.',
+        'A mechanic swears a well-tuned engine is worth half a second. The timing light never lies.',
+        'Easy on the gearbox: shift at full throttle and you grind it, and a broken transmission goes nowhere.',
+        'Racing slicks grip much better off the line, but they are no miracle in the curves.',
+        'A 2 × 4-barrel intake wakes up any V-8. It needs two carburetors, though.',
+        'Pulling the bumpers makes a car lighter, but a crash costs more.',
+        "Gus charges double to fill the tank himself. Pumping it yourself is cheaper.",
+        "The guy on the post at Bob's knows everybody: ask him to call whoever you want to race.",
+        "Before you bet, look under your rival's hood. Then you know what you're up against.",
+        'Road racing at night is dangerous: there is traffic and sometimes the police show up.'
+      ],
+      adLine: (kind, ci, tr) => `${kind} ${ci}, ${tr}.`,
+      words: ['Good price.', 'Must sell.', 'One owner.', 'Moving, must go.', 'Call evenings.', 'See to believe.'],
+      cond: car => {
+        const c = Math.min(car.body, car.p.engine.c);
+        return c >= 0.85 ? 'Mint.' : c >= 0.65 ? 'Runs good.' : c >= 0.5 ? 'Needs love.' : 'Fixer-upper.';
       },
-      kingArrives: 'The King is here!', kingLine: 'I hear you\'ve been winning races. Let\'s see if it\'s true. The hill road, for pink slips.',
-      kingNotYet: n => `You need ${n} more wins for The King to take you seriously.`,
-      kingSat: 'The King only shows up on Saturday nights.'
+      soldStamp: 'SOLD', soldShort: 'sold',
+      cat: { engine: 'Engines', intake: 'Intakes', carb: 'Carburetors', trans: 'Transmissions', tires: 'Tires', used: 'Used parts' },
+      forKind: I => (I.k[6] && I.k[8] ? 'for 6-cyl. and V-8' : I.k[6] ? 'for 6-cylinder' : 'for V-8') + ` · ${I.n} carb.`,
+      buy: m => `Buy ${m}`, buyAsk: (n, m) => `Buy the ${n} for ${m}?`, bought: 'Bought it: it is on the spare parts shelf.',
+      seeIt: 'See it', yeah: 'Buy it', yours: "It's yours!", noMoney: "You can't afford it.", noRoom: n => `You already have ${n} cars: sell one first.`
+    },
+    seller: {
+      hello: "She's a beauty. Want her?", asking: m => `Asking ${m}`, offer: 'Offer less', offerTitle: 'How much do you offer?', offerBtn: 'Offer',
+      deal: "It's a deal!", noWay: m => `No way, kid. It's ${m}.`
+    },
+    paint: {
+      colors: m => `PAINT ${m}`, stickers: 'DECALS',
+      sticker: { hotrod: 'Hot Rod', flames: 'Flames', star: 'Star', checker: 'Checkers', number: 'Number', lightning: 'Lightning' },
+      paintAsk: (c, m) => `Paint it ${c} for ${m}?`, stickAsk: (s, m) => `Put on the ${s} decal for ${m}?`,
+      nobump: m => `Pull bumpers ${m}`, nobumpAsk: 'Pull the bumpers? The car gets lighter, but crashes hurt more.',
+      noroof: m => `Chop the roof ${m}`, noroofAsk: d => `Chop the roof? It takes ${d} days and the car can't run meanwhile.`,
+      fix: m => `Fix body ${m}`, fixAsk: m => `Fix the body for ${m}?`, strip: 'Strip decals'
+    },
+    mech: {
+      tune: 'TUNE', parts: 'PARTS', select: 'SELECT', loosen: 'remove bolt', tighten: 'put bolt in', install: 'Put it in',
+      blocked: p => `Take out the ${p.toLowerCase()} first.`, removed: n => `Took out: ${n}. It's on the shelf.`, tight: 'All tight.', boltIt: 'Now tighten its bolts.',
+      noneFit: 'No spare parts of this kind.', engineParts: 'Engine parts', transParts: 'Transmissions', tireParts: 'Tires',
+      rivalHood: "UNDER THE RIVAL'S HOOD", tuneHelp: 'Line up the white mark with 0', tuned: 'Tuned!'
+    },
+    gas: {
+      hello: "What'll it be, kid?", tank: (f, t) => `Gas: ${f} / ${t}`, fill: m => `Fill it up, Gus! (${m})`, self: 'Self serve (hold)', pumping: 'Pumping...',
+      leave: 'Leave', full: "It's full, speedy!", broke: "You're out of money, kid.", noMoney: 'No money, no gas. Get out of my face, kiddo!',
+      thanks: m => `That's ${m}. Thanks, kid!`
+    },
+    diner: {
+      goHome: 'Go home', postGuy: 'The guy on the post', challenge: n => `Challenge ${n}`, drag: 'Drag race', road: 'Road race', hood: 'Look under the hood',
+      kicks: 'Just for kicks', pinks: 'Pink slips', lookingFor: 'Looking for...', call: 'Call him', nobody: 'Nobody else around tonight.', calling: n => `Hey, ${n}! Somebody wants you.`,
+      hello: ["What're you looking at?", 'Think you can take my car?', 'Nice night for a race.', 'Looking for trouble?', 'This baby flies, pal.'],
+      yes: ["Let's do it!", "You're on!", "See you on the street.", "I'll leave you in the dust!"],
+      refuse: { broke: "You don't have that kind of money, kid.", noPinks: 'Your heap for my car? Dream on.', noMoney: "I'm not betting that much with you.", scared: 'Nah, not tonight.' },
+      bye: 'See you around.', closing: "Bob's is closing. See you tomorrow!", youBroke: "You don't have that much money.", homeAsk: 'Go home? The paper comes in the morning.',
+      kingHello: "So you're the hotshot who's been beating everybody.", kingOnlyPinks: 'I only race on the road, for pink slips.', kingYes: "Fine. Let's see what you've got."
     },
     race: {
-      drag: 'DRAG', road: 'ROAD', kicks: 'Just for kicks', pinks: 'FOR PINK SLIPS',
-      dragTitle: 'DRAG RACE · QUARTER MILE', dragPlace: 'The old airfield straight', roadTitle: 'ROAD RACE', roadPlace: 'The hill road, to the water tower',
-      hintStage: '↑ revs the engine · SPACE drops the clutch when the flag comes DOWN', hintAuto: '↑ revs the engine · SPACE releases the brake when the flag comes DOWN',
-      hintShift: 'Watch the tach\'s red light: lift ↑, tap SPACE, and floor it again',
-      hintCops: 'Brake to a stop ($20 fine) or get 400 meters away',
-      go: 'GO!', grind: 'YOU GROUND THE GEARS! Lift off the gas to shift', police: 'THE COPS!', lostCops: 'You lost the cops!',
-      dry: 'You ran out of gas!', won: 'YOU WIN!', lost: 'YOU LOST', voided: 'RACE CALLED OFF', continue: 'ENTER to continue',
+      gear: g => `Gear: ${g}`, ready: 'Get ready!', dragName: 'Drag race', roadName: 'Road race',
+      help: 'Hold ↑ to rev · SPACE drops the clutch on green and shifts up · Z shifts down · ← → steer · ↓ brake',
+      helpAuto: 'Hold ↑ to rev · SPACE lets go of the brake on green · ← → steer · ↓ brake',
+      go: 'GO!', grind: 'You ground the gears! Lift off the gas when you shift', police: 'Police! Pull over or lose them', lostCops: 'You lost the police', dry: 'Out of gas',
+      won: 'YOU WON!', lost: 'YOU LOST', voided: 'RACE OFF',
+      paused: 'PAUSED', resume: 'Resume', giveUp: 'Give up',
+      keys1: '↑ gas · ↓ brake · ← → steer', keys2: 'SPACE shifts up · Z shifts down',
+      winTime: (t, mph) => `Your winning time ${t} sec., avg. speed ${mph} mph. Congratulations!`,
+      loseTime: (n, t, me) => `${n}'s time ${t} sec. Yours ${me} sec.`,
+      wonMoney: m => `You won ${m}.`, wonPinks: c => `The ${c} is yours now!`, congrats: 'Nice race.',
+      lostMoney: m => `You lost ${m}.`, lostPinks: 'You lost the pink slip: your car goes with him.', better: 'Better luck next time.',
+      fine: m => `Speeding ticket: ${m}.`,
       reasons: {
-        finish: '', foul: 'You jumped the flag', rivalFoul: 'Your rival jumped the flag', rivalCrash: 'Your rival crashed!', crash: 'You crashed!', blown: 'You blew the engine', broken: 'The gearbox broke',
-        dry: 'Out of gas', stopped: 'You pulled over: $20 fine', caught: 'The cops caught you: $75 fine'
-      }
+        foul: () => 'You jumped the light: you lose.', rivalFoul: n => `${n} jumped the light: you win!`,
+        crash: () => 'You crashed!', rivalCrash: n => `${n} crashed: you win!`, blown: () => 'You blew the engine!', broken: () => 'The transmission broke!',
+        dry: () => 'You ran out of gas.', giveUp: () => 'You gave up.', stopped: () => 'You pulled over and got a ticket.', caught: () => 'The police caught you!'
+      },
+      rivalWins: ['Eat my dust!', 'Better luck next time, chump.', "Is that all you've got?"],
+      rivalLoses: ['Nice driving, kid.', "Beginner's luck.", 'Next time you won\'t be so lucky.'],
+      kingWins: 'Come back when you grow up, kid.', kingLoses: 'Nobody ever beat me... The keys are yours.'
     },
-    result: {
-      title: 'Result', you: 'You', time: 'Time', trap: 'Top speed', reaction: 'Reaction', bet: 'Bet',
-      win: m => `You won ${money(m)}`, lose: m => `You lost ${money(m)}`, kicks: 'Raced just for kicks',
-      wonCar: n => `The ${n} is yours!`, lostCar: n => `You lost your ${n}…`, autoSold: (n, m) => `No room in your garage: you sold it for ${money(m)}`,
-      fine: m => `Fine: ${money(m)}`, jail: 'You couldn\'t pay the fine: you spent the night at the station and your folks grounded you for 5 days.',
-      engineHurt: 'The engine took a beating', transHurt: 'The gearbox got damaged', blown: 'The engine is blown: you need another one', broken: 'The gearbox is broken: you need another one',
-      crash: 'The car is wrecked', fix: c => `Fix it (${money(c)})`, junk: v => `Sell it for scrap (${money(v)})`, noFix: 'It\'s so bad it\'s only good for scrap.',
-      next: 'Continue', back: 'Back to the drive-in'
+    ticket: {
+      state: 'HIGHWAY PATROL', title: 'STATE OF CALIFORNIA · NOTICE TO APPEAR', name: 'DRIVER', vehicle: 'VEHICLE', date: 'DATE', violation: 'VIOLATION', speeding: 'Speeding',
+      fine: 'FINE', signHere: 'SIGN HERE', clickSign: 'Click to sign', paid: 'Fine paid.', cantPay: "You can't pay..."
     },
     end: {
-      kingTitle: 'YOU\'RE THE NEW KING OF THE STREET!', kingText: n => `${n} beat The King on the hill road and drove off in his Corvette Sting Ray. All of San Lucas is talking about it.`,
-      headline: n => `THERE'S A NEW KING! ${n.toUpperCase()} DETHRONES THE CHAMP`,
-      summerOver: 'Summer\'s over', summerText: 'School started and The King is still The King. Maybe next summer…',
-      broke: 'No car, no money', brokeText: 'You ended up with no car and no cash to buy another. Summer ended early.',
-      stats: (w, l, m) => `${w} races won · ${l} lost · ${money(m)} in your pocket`,
-      again: 'Play another summer', keep: 'Keep cruising'
-    },
-    toast: { saved: 'Game saved', music: on => (on ? '🎵 Music: on' : '🔇 Music: off') },
-    pause: { title: 'PAUSED', resume: 'Resume', quit: 'Quit the race' }
+      kingTitle: 'THE NEW KING!',
+      king: ["You beat the King on his own road. His black Corvette is yours, and from tonight everybody at Bob's knows your name.",
+        'You beat the King.', '', 'For years they will talk about the night a garage kid left the black Corvette behind.', '', 'Your name goes up on the wall of King Street Rodders.'],
+      summer: ['Summer is over.', '', 'School starts tomorrow and the King is still the King.', '', 'Maybe next summer...'],
+      broke: ["You're out of cars and out of money.", '', "You'll spend the rest of the summer on foot, watching the races from the curb at Bob's."],
+      jail: ["You couldn't pay the fine.", '', 'The police called your folks and you are grounded for the rest of the summer. So long, racing.'],
+      stats: (w, l, m, d) => `Wins: ${w} · Losses: ${l} · Money: ${m} · Days: ${d}`
+    }
   }
 };

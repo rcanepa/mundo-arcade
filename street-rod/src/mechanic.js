@@ -1,325 +1,359 @@
-// ===== El taller: el motor visto desde arriba (capó abierto) y el auto levantado visto desde abajo =====
-// Haz clic en una pieza: se sueltan sus pernos uno por uno y sale al banco. Una pieza recién puesta se aprieta igual.
-const BOLT_TIME = 0.14;
-const Mech = { view: 'bay', queue: [], busy: 0, hover: null, rects: [], lift: null, msg: null, t: 0, turning: null };
+// ===== El taller: el motor visto desde arriba, la caja desde abajo, las ruedas y la lámpara de tiempo =====
+// Como en el original: con la llave se sacan los pernos uno por uno; sin pernos, la pieza sale.
+const FAM_COLOR = { gm: PAL.o2, ford: PAL.u2, mopar: PAL.r3 };
+const BAY = { cx: 320, top: 70, bot: 330 };
 
-const ENGINE_COLOR = { gm216: '#4a6a8a', gm235: '#4a6a8a', olds303: '#3a7a4a', gm265: '#d2552a', gm283: '#d2552a', gm348: '#d2552a', gm327: '#d2552a', gm409: '#d2552a',
-  fd144: '#3a5fa8', fd223: '#3a5fa8', flat221: '#6a7a6a', flat255: '#6a7a6a', flat296: '#6a7a6a', fd292: '#3a5fa8', fd312: '#3a5fa8', fd390: '#3a5fa8', fd406: '#3a5fa8', fd427: '#3a5fa8',
-  mp170: '#3a8a8a', mp225: '#3a8a8a', mp318: '#c84a2a', mp361: '#c84a2a', mp383: '#c84a2a', mp413: '#e86a1a', mp426: '#e86a1a' };
-
-// Dónde va cada pieza en la vista, según el tipo de motor. Devuelve { slot: {x, y, w, h, bolts: [[x, y]...]} }
-function bayLayout(car) {
-  const eng = car.p.engine, kind = eng ? ENGINES[eng.k].kind : '8';
-  const L = {};
-  const boltsAround = (x, y, w, h, n) => {
-    const out = [];
-    if (n === 4) return [[x + 8, y + 8], [x + w - 8, y + 8], [x + 8, y + h - 8], [x + w - 8, y + h - 8]];
-    if (n === 2) return [[x + 10, y + h / 2], [x + w - 10, y + h / 2]];
-    for (let i = 0; i < n / 2; i++) { const yy = y + 12 + (h - 24) * i / (n / 2 - 1); out.push([x + 8, yy], [x + w - 8, yy]); }
-    return out;
-  };
-  if (kind === '6') {
-    L.engine = { x: 330, y: 170, w: 210, h: 420 };
-    L.cam = { x: 385, y: 128, w: 100, h: 40 };
-    L.intake = { x: 245, y: 250, w: 90, h: 260 };
-    L.exhaust = { x: 545, y: 210, w: 70, h: 340 };
-    const n = car.p.intake ? INTAKES[car.p.intake.k].n : 1;
-    const ys = n === 3 ? [290, 380, 470] : [380];
-    for (let i = 0; i < 3; i++) L['carb' + i] = i < ys.length ? { x: 170, y: ys[i] - 42, w: 84, h: 84 } : null;
-  } else {
-    L.engine = { x: 300, y: 170, w: 260, h: 420 };
-    L.cam = { x: 380, y: 128, w: 100, h: 40 };
-    L.intake = { x: 340, y: 210, w: 180, h: 330 };
-    L.exhaust = { x: 196, y: 210, w: 468, h: 340, split: 1 };
-    const n = car.p.intake ? INTAKES[car.p.intake.k].n : 1;
-    const ys = n === 3 ? [270, 375, 480] : n === 2 ? [315, 435] : [375];
-    for (let i = 0; i < 3; i++) L['carb' + i] = i < ys.length ? { x: 384, y: ys[i] - 46, w: 92, h: 92 } : null;
-  }
-  for (const sl of BAY_SLOTS) if (L[sl]) {
-    const r = L[sl];
-    r.bolts = sl === 'exhaust' && r.split ? [[r.x + 20, 250], [r.x + 20, 380], [r.x + 20, 510], [r.x + r.w - 20, 250], [r.x + r.w - 20, 380], [r.x + r.w - 20, 510]]
-      : sl === 'engine' ? [[r.x - 24, r.y + 60], [r.x + r.w + 24, r.y + 60], [r.x - 24, r.y + r.h - 60], [r.x + r.w + 24, r.y + r.h - 60]]
-      : boltsAround(r.x, r.y, r.w, r.h, SLOT_INFO[sl].bolts);
-  }
-  return L;
-}
-function underLayout() {
+// Dónde va cada cosa del motor según sea V-8 o de 6 cilindros
+function engineLayout(kind) {
+  const v8 = kind !== '6';
+  const ix = v8 ? 320 : 286;                       // eje del múltiple (el 6 lo tiene a un lado)
   return {
-    trans: { x: 380, y: 300, w: 100, h: 170, bolts: [[392, 312], [468, 312], [392, 458], [468, 458]] },
-    axle: { x: 170, y: 560, w: 520, h: 70, bolts: [[400, 572], [460, 572], [400, 618], [460, 618]] },
-    tires: { x: 110, y: 130, w: 640, h: 540, bolts: [[150, 200], [710, 200], [150, 600], [710, 600]], wheels: [[150, 200], [710, 200], [150, 600], [710, 600]] }
+    v8, ix,
+    mounts: [[196, 140], [444, 140], [196, 280], [444, 280]],
+    intake: { x: ix - (v8 ? 52 : 36), y: 104, w: v8 ? 104 : 72, h: 196 },
+    intakeBolts: v8 ? [[272, 116], [368, 116], [272, 202], [368, 202], [272, 288], [368, 288]] : [[254, 116], [318, 116], [254, 202], [318, 202], [254, 288], [318, 288]],
+    carbs: n => (n === 1 ? [[ix, 202]] : n === 2 ? [[ix, 158], [ix, 246]] : [[ix, 136], [ix, 202], [ix, 268]])
   };
 }
+const carbBolts = (cx, cy, r) => [[cx - r, cy - r], [cx + r, cy - r], [cx - r, cy + r], [cx + r, cy + r]];
 
-function mechLayout(car) { return Mech.view === 'bay' ? bayLayout(car) : underLayout(); }
-
-// ----- Dibujo -----
-function drawMechanic(g, car, t) {
-  Mech.t = t;
-  // fondo: piso del taller
-  const bg = g.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#3a3530'); bg.addColorStop(1, '#1e1b18');
-  g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  g.save(); g.globalCompositeOperation = 'lighter'; glow(g, 430, 360, 520, '#ffe0a8', 0.16); g.restore();
-  if (!car) return;
-  Mech.rects = [];
-  if (Mech.view === 'bay') drawBay(g, car, t); else drawUnder(g, car, t);
-  // pieza que va saliendo hacia el banco
-  if (Mech.lift) {
-    const L = Mech.lift, k = clamp((t - L.t) / 0.6, 0, 1);
-    g.save(); g.globalAlpha = 1 - k; g.translate(L.x + (1000 - L.x) * k * k, L.y - 120 * k);
-    g.fillStyle = '#9aa2ac'; roundRect(g, -30, -20, 60, 40, 8); g.fill(); g.restore();
-    if (k >= 1) Mech.lift = null;
-  }
-  // nombre de la pieza bajo el mouse
-  if (Mech.hover && car.p[Mech.hover.sl] && !Mech.queue.length) {
-    const p = car.p[Mech.hover.sl], text = partName(p);
-    g.font = font(15, 'bold', FONT_SANS);
-    const w = g.measureText(text).width + 24, x = clamp(Mech.hover.x + 16, 8, 860 - w), y = Mech.hover.y - 40;
-    g.fillStyle = 'rgba(10,10,14,0.85)'; roundRect(g, x, y, w, 30, 15); g.fill();
-    g.fillStyle = '#ffd23a'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(text, x + 12, y + 15);
-  }
-}
-
-function boltsOf(car, sl, r) {
-  const tight = car.tight[sl] || 0;
-  r.bolts.forEach(([bx, by], i) => {
-    const turning = Mech.turning && Mech.turning.sl === sl && Mech.turning.i === i;
-    drawBolt(Mech.g, bx, by, i < tight, turning ? Mech.t : null);
+function bayBackground(color) {
+  return pxBackground('bay:' + color, g => {
+    const ramp = paintRamp(color);
+    g.fillStyle = PAL.g1; g.fillRect(0, 0, PW, PH);
+    g.fillStyle = PAL.k; for (let y = 0; y < 380; y += 3) for (let x = (y % 6) ? 0 : 1; x < PW; x += 3) g.fillRect(x, y, 1, 1);
+    // guardabarros a los lados (color del auto)
+    for (const [x, w] of [[0, 92], [548, 92]]) {
+      g.fillStyle = ramp.md; g.fillRect(x, 0, w, 380);
+      g.fillStyle = ramp.lt; g.fillRect(x + (x ? 10 : w - 30), 0, 14, 380);
+      g.fillStyle = ramp.hi; g.fillRect(x + (x ? 14 : w - 26), 0, 3, 380);
+      g.fillStyle = ramp.dk; g.fillRect(x ? x : w - 6, 0, 6, 380);
+    }
+    // pasos de rueda dentro del motor
+    for (const x of [92, 470]) { g.fillStyle = PAL.k; g.beginPath(); g.ellipse(x + 39, 88, 40, 58, 0, 0, TAU); g.fill(); g.fillStyle = PAL.g2; g.beginPath(); g.ellipse(x + 39, 90, 30, 46, 0, 0, TAU); g.fill(); }
+    // radiador y parrilla arriba
+    g.fillStyle = PAL.g6; g.fillRect(92, 0, 456, 10);
+    g.fillStyle = PAL.g2; g.fillRect(120, 10, 400, 34);
+    g.fillStyle = PAL.g3; for (let x = 124; x < 516; x += 4) g.fillRect(x, 12, 1, 30);
+    g.fillStyle = PAL.g5; g.fillRect(120, 10, 400, 3); g.fillRect(304, 2, 32, 10); g.fillStyle = PAL.g6; g.fillRect(310, 2, 20, 4);
+    // batería y cilindro de freno
+    g.fillStyle = PAL.k; g.fillRect(470, 180, 54, 40); g.fillStyle = PAL.g2; g.fillRect(472, 182, 50, 8);
+    g.fillStyle = PAL.r3; g.fillRect(478, 176, 8, 6); g.fillStyle = PAL.g4; g.fillRect(508, 176, 8, 6);
+    g.fillStyle = PAL.g4; g.fillRect(110, 300, 34, 22); g.fillStyle = PAL.g6; g.fillRect(114, 296, 26, 6);
+    // muro de fuego abajo
+    g.fillStyle = PAL.k; g.fillRect(92, 336, 456, 44);
+    g.fillStyle = PAL.g2; g.fillRect(92, 336, 456, 4);
+    g.fillStyle = PAL.g3; for (let x = 110; x < 540; x += 30) g.fillRect(x, 350, 12, 3);
   });
 }
-function drawBolt(g, x, y, tight, spinT) {
-  g.save(); g.translate(x, y);
-  if (!tight) { g.fillStyle = 'rgba(255,80,60,0.35)'; g.beginPath(); g.arc(0, 0, 13, 0, TAU); g.fill(); }
-  g.rotate(spinT !== null ? spinT * 18 : 0.3);
-  g.fillStyle = tight ? '#b9c0c8' : '#e8e0c8';
-  g.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; g.lineTo(Math.cos(a) * 8, Math.sin(a) * 8); } g.closePath(); g.fill();
-  g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.2; g.stroke();
-  g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(0, 0, 3, 0, TAU); g.fill();
-  if (spinT !== null) {
-    g.fillStyle = '#7a828c'; roundRect(g, -6, -56, 12, 50, 5); g.fill();
-    g.fillStyle = '#c22a2a'; roundRect(g, -7, -90, 14, 40, 6); g.fill();
-  }
-  g.restore();
-}
-function region(sl, r) { Mech.rects.push({ sl, x: r.x, y: r.y, w: r.w, h: r.h }); }
-function selGlow(g, sl, r) {
-  if (Mech.hover && Mech.hover.sl === sl) {
-    g.save(); g.strokeStyle = '#ffd23a'; g.lineWidth = 3; g.setLineDash([8, 6]); roundRect(g, r.x - 6, r.y - 6, r.w + 12, r.h + 12, 12); g.stroke(); g.restore();
-  }
-}
-function emptySlot(g, r, label) {
-  g.save(); g.strokeStyle = 'rgba(255,255,255,0.25)'; g.setLineDash([6, 6]); g.lineWidth = 2; roundRect(g, r.x, r.y, r.w, r.h, 10); g.stroke();
-  g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = font(13, 'bold', FONT_SANS); g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(label, r.x + r.w / 2, r.y + r.h / 2); g.restore();
-}
 
-function drawBay(g, car, t) {
-  Mech.g = g;
-  const P = L().parts, Lay = bayLayout(car);
-  // vano del motor
-  g.fillStyle = '#16140f'; roundRect(g, 120, 60, 620, 640, 40); g.fill();
-  // tapabarros a los lados, del color del auto
-  for (const x of [40, 740]) {
-    const fg = g.createLinearGradient(x, 0, x + 80, 0);
-    fg.addColorStop(0, css(shade(car.color, x < 400 ? -0.4 : 0.15))); fg.addColorStop(1, css(shade(car.color, x < 400 ? 0.15 : -0.4)));
-    g.fillStyle = fg; roundRect(g, x, 40, 80, 680, 30); g.fill();
-  }
-  // radiador y ventilador
-  g.fillStyle = '#2a2a2a'; g.fillRect(170, 66, 520, 52);
-  g.strokeStyle = '#444'; g.lineWidth = 1; for (let x = 176; x < 686; x += 6) { g.beginPath(); g.moveTo(x, 70); g.lineTo(x, 114); g.stroke(); }
-  g.fillStyle = '#9aa2ac'; g.fillRect(410, 60, 40, 10);
-  // batería y cilindro de freno
-  g.fillStyle = '#1a1a1a'; roundRect(g, 620, 600, 90, 70, 6); g.fill(); g.fillStyle = '#c22a2a'; g.fillRect(630, 606, 14, 10); g.fillStyle = '#333'; g.fillRect(686, 606, 14, 10);
-  g.fillStyle = '#5a5a60'; roundRect(g, 160, 610, 70, 50, 10); g.fill();
-  // pared de fuego
-  g.fillStyle = css(shade(car.color, -0.5)); g.fillRect(120, 640, 620, 60);
-  const eng = car.p.engine;
-  // motor
-  const E = Lay.engine;
-  if (eng) {
-    const col = ENGINE_COLOR[eng.k] || '#666', kind = ENGINES[eng.k].kind;
-    g.fillStyle = css(shade(col, -0.35)); roundRect(g, E.x, E.y, E.w, E.h, 18); g.fill();
-    g.fillStyle = '#1a1a1a'; roundRect(g, E.x - 30, E.y + 40, 30, 40, 6); g.fill(); roundRect(g, E.x + E.w, E.y + 40, 30, 40, 6); g.fill();
-    g.fillStyle = '#222'; g.beginPath(); g.arc(E.x + E.w / 2, E.y - 10, 44, 0, TAU); g.fill();
-    g.strokeStyle = '#555'; g.lineWidth = 6; for (let i = 0; i < 4; i++) { const a = t * 0 + i * TAU / 4; g.beginPath(); g.moveTo(E.x + E.w / 2, E.y - 10); g.lineTo(E.x + E.w / 2 + Math.cos(a) * 40, E.y - 10 + Math.sin(a) * 40); g.stroke(); }
-    // tapas de válvulas
-    const vc = (x, y, w, h) => {
-      const vg = g.createLinearGradient(x, 0, x + w, 0); vg.addColorStop(0, css(shade(col, -0.2))); vg.addColorStop(0.4, css(shade(col, 0.25))); vg.addColorStop(1, css(shade(col, -0.3)));
-      g.fillStyle = vg; roundRect(g, x, y, w, h, 14); g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.18)'; for (let yy = y + 30; yy < y + h - 20; yy += 26) g.fillRect(x + 10, yy, w - 20, 3);
+// El motor completo (sirve también para mirar bajo el capó del rival). Devuelve los pernos con su posición.
+function drawEngineBay(g, car) {
+  g.drawImage(bayBackground(car.color), 0, 0);
+  const p = car.p, bolts = [];
+  const kind = p.engine ? ENGINES[p.engine.k].kind : (ENGINES[MODELS[car.model].stock.engine].kind);
+  const Lo = engineLayout(kind);
+  // soportes del motor (se ven siempre)
+  for (const [x, y] of Lo.mounts) { g.fillStyle = PAL.g3; g.fillRect(x - 14, y - 10, 28, 20); g.fillStyle = PAL.g2; g.fillRect(x - 14, y + 6, 28, 4); }
+  if (p.engine) {
+    const fam = ENGINES[p.engine.k].fam, col = FAM_COLOR[fam], ramp = paintRamp(col);
+    // bloque, ventilador y poleas
+    g.fillStyle = PAL.g2; g.fillRect(212, 84, 216, 236);
+    g.fillStyle = PAL.g3; g.fillRect(212, 84, 216, 4);
+    g.fillStyle = PAL.g4; g.beginPath(); g.arc(320, 64, 18, 0, TAU); g.fill();
+    g.fillStyle = PAL.k; for (let a = 0; a < 4; a++) { g.save(); g.translate(320, 64); g.rotate(a * Math.PI / 2 + 0.4); g.fillRect(-4, -34, 8, 30); g.restore(); }
+    g.fillStyle = PAL.g6; g.beginPath(); g.arc(320, 64, 6, 0, TAU); g.fill();
+    g.strokeStyle = PAL.k; g.lineWidth = 4; g.beginPath(); g.moveTo(300, 70); g.lineTo(262, 92); g.moveTo(340, 70); g.lineTo(378, 92); g.stroke();
+    // múltiples de escape a los costados
+    g.fillStyle = PAL.b2;
+    for (const x of Lo.v8 ? [196, 428] : [404]) { g.fillRect(x, 110, 16, 190); for (let i = 0; i < (Lo.v8 ? 4 : 6); i++) g.fillRect(x + (x < 300 ? 10 : -6), 120 + i * (Lo.v8 ? 48 : 30), 12, 14); }
+    // tapas de válvulas del color de la marca
+    const cover = (x, w) => {
+      g.fillStyle = ramp.dk; g.fillRect(x, 98, w, 212);
+      g.fillStyle = ramp.md; g.fillRect(x + 2, 98, w - 6, 208);
+      g.fillStyle = ramp.lt; g.fillRect(x + 6, 102, 4, 200);
+      for (let y = 112; y < 300; y += 46) { g.fillStyle = PAL.g6; g.fillRect(x + w / 2 - 3, y, 6, 6); g.fillStyle = PAL.g3; g.fillRect(x + w / 2 - 1, y + 2, 2, 2); }
+      ptext(g, FAM_NAME[fam], x + w / 2, 196, PAL.w, 1, { align: 'center' });
     };
-    if (kind === '6') vc(E.x + 25, E.y + 10, E.w - 50, E.h - 20);
-    else if (kind === 'F') { for (const x of [E.x - 6, E.x + E.w - 62]) { g.fillStyle = '#7a8a7a'; roundRect(g, x, E.y + 20, 68, E.h - 40, 10); g.fill(); g.fillStyle = '#c9ccd2'; for (let yy = E.y + 40; yy < E.y + E.h - 30; yy += 34) { g.beginPath(); g.arc(x + 20, yy, 5, 0, TAU); g.arc(x + 48, yy, 5, 0, TAU); g.fill(); } } }
-    else { vc(E.x - 6, E.y + 20, 64, E.h - 40); vc(E.x + E.w - 58, E.y + 20, 64, E.h - 40); }
-    g.fillStyle = '#ddd'; g.font = font(15, 'bold', FONT_SANS); g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.save(); g.translate(E.x + E.w / 2, E.y + E.h - 20); g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillText(String(ENGINES[eng.k].ci), 0, 0); g.restore();
-    // levas: se ven cuando no hay múltiple
-    if (!car.p.intake) {
-      g.fillStyle = '#2a2622'; roundRect(g, E.x + 50, E.y + 30, E.w - 100, E.h - 60, 10); g.fill();
-      g.fillStyle = '#8a8478'; for (let yy = E.y + 50; yy < E.y + E.h - 40; yy += 30) { g.beginPath(); g.arc(E.x + E.w / 2 - 22, yy, 7, 0, TAU); g.arc(E.x + E.w / 2 + 22, yy, 7, 0, TAU); g.fill(); }
+    if (Lo.v8) { cover(214, 46); cover(380, 46); } else cover(334, 64);
+    // pernos del motor (en los soportes)
+    Lo.mounts.forEach(([x, y], i) => bolts.push({ sl: 'engine', i, x, y }));
+    if (p.intake) {
+      const I = Lo.intake, alu = p.intake.k === 'race';
+      g.fillStyle = alu ? PAL.g5 : PAL.g3; g.fillRect(I.x, I.y, I.w, I.h);
+      g.fillStyle = alu ? PAL.w : PAL.g4; g.fillRect(I.x, I.y, I.w, 3); g.fillRect(I.x, I.y, 3, I.h);
+      g.fillStyle = alu ? PAL.g4 : PAL.g2; g.fillRect(I.x + I.w - 3, I.y, 3, I.h); g.fillRect(I.x, I.y + I.h - 3, I.w, 3);
+      // runners hacia las culatas
+      g.fillStyle = alu ? PAL.g6 : PAL.g4;
+      for (let k = 0; k < 4; k++) { const y = I.y + 24 + k * 44; g.fillRect(I.x - (Lo.v8 ? 10 : 0), y, 10, 14); if (Lo.v8) g.fillRect(I.x + I.w, y, 10, 14); else g.fillRect(I.x + I.w, y, 14, 14); }
+      Lo.intakeBolts.forEach(([x, y], i) => bolts.push({ sl: 'intake', i, x, y }));
+      const n = INTAKES[p.intake.k].n;
+      Lo.carbs(n).forEach(([cx, cy], k) => {
+        const sl = 'carb' + k, c = p[sl], r = n === 3 ? 13 : 15;
+        // base del carburador (siempre se ve si el múltiple está puesto)
+        g.fillStyle = PAL.g2; g.fillRect(cx - r - 3, cy - r - 3, 2 * r + 6, 2 * r + 6);
+        if (c) {
+          const race = c.k === '4R', big = c.k !== '2';
+          g.fillStyle = PAL.g4; g.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+          if (race) {
+            // carburador de carrera: cornetas cromadas abiertas
+            for (const [dx, dy] of [[-7, -7], [7, -7], [-7, 7], [7, 7]]) { g.fillStyle = PAL.w; g.beginPath(); g.arc(cx + dx, cy + dy, 6, 0, TAU); g.fill(); g.fillStyle = PAL.k; g.beginPath(); g.arc(cx + dx, cy + dy, 3, 0, TAU); g.fill(); }
+          } else {
+            // filtro de aire redondo y cromado con su mariposa
+            const ar = big ? r + 11 : r + 6;
+            g.fillStyle = PAL.g2; g.beginPath(); g.arc(cx, cy, ar + 1, 0, TAU); g.fill();
+            g.fillStyle = PAL.g5; g.beginPath(); g.arc(cx, cy, ar, 0, TAU); g.fill();
+            g.fillStyle = PAL.w; g.beginPath(); g.arc(cx - ar * 0.3, cy - ar * 0.3, ar * 0.45, 0, TAU); g.fill();
+            g.fillStyle = PAL.g6; g.beginPath(); g.arc(cx, cy, ar * 0.7, 0, TAU); g.fill();
+            g.fillStyle = PAL.g3; g.fillRect(cx - 7, cy - 2, 14, 4); g.fillStyle = PAL.g4; g.fillRect(cx - 2, cy - 2, 4, 4);
+          }
+        }
+        carbBolts(cx, cy, r + 1).forEach(([x, y], i) => bolts.push({ sl, i, x, y, hidden: !c }));
+      });
+    } else {
+      // sin múltiple: se ven las lumbreras del bloque
+      const I = Lo.intake;
+      g.fillStyle = PAL.k; g.fillRect(I.x + 6, I.y + 6, I.w - 12, I.h - 12);
+      g.fillStyle = PAL.g3; for (let k = 0; k < 4; k++) { g.fillRect(I.x + 10, I.y + 24 + k * 44, 12, 12); g.fillRect(I.x + I.w - 22, I.y + 24 + k * 44, 12, 12); }
+      Lo.intakeBolts.forEach(([x, y], i) => bolts.push({ sl: 'intake', i, x, y, hidden: true }));
     }
-  } else emptySlot(g, E, P.engine);
-  region('engine', E); selGlow(g, 'engine', E);
-  if (eng) boltsOf(car, 'engine', E);
-  // tapa de distribución / árbol de levas
-  const C = Lay.cam;
-  if (car.p.cam) { g.fillStyle = car.p.cam.k === 'full' ? '#c22a2a' : '#e8b030'; roundRect(g, C.x, C.y, C.w, C.h, 10); g.fill(); g.fillStyle = '#fff'; g.font = font(11, 'bold', FONT_SANS); g.fillText(car.p.cam.k === 'full' ? 'RACE' : '3/4', C.x + C.w / 2, C.y + C.h / 2); }
-  else if (eng) { g.fillStyle = '#5a5a60'; roundRect(g, C.x, C.y, C.w, C.h, 10); g.fill(); g.fillStyle = '#aaa'; g.font = font(10, 'bold', FONT_SANS); g.fillText('STOCK', C.x + C.w / 2, C.y + C.h / 2); }
-  if (eng) { region('cam', C); selGlow(g, 'cam', C); if (car.p.cam) boltsOf(car, 'cam', C); }
-  // escape
-  const X = Lay.exhaust;
-  if (car.p.exhaust) {
-    const hdr = car.p.exhaust.k === 'hdr';
-    const tubes = (x0, dir) => {
-      for (let i = 0; i < (ENGINES[(eng || { k: 'gm283' }).k].kind === '6' ? 6 : 4); i++) {
-        const y = 230 + i * (ENGINES[(eng || { k: 'gm283' }).k].kind === '6' ? 52 : 80);
-        g.strokeStyle = hdr ? chromeGrad(g, y - 10, y + 10) : '#4a3a30'; g.lineWidth = hdr ? 14 : 22; g.lineCap = 'round';
-        g.beginPath(); g.moveTo(x0, y); g.quadraticCurveTo(x0 + dir * 40, y + 10, x0 + dir * 40, 580); g.stroke();
-      }
-    };
-    if (X.split) { tubes(X.x + 60, -1); tubes(X.x + X.w - 60, 1); } else tubes(X.x + 10, 1);
-    boltsOf(car, 'exhaust', X);
-  } else if (eng) emptySlot(g, X.split ? { x: X.x, y: X.y, w: 60, h: X.h } : X, '');
-  if (eng) { region('exhaust', X.split ? { x: X.x, y: X.y, w: 90, h: X.h } : X); Mech.rects.push({ sl: 'exhaust', x: X.x + X.w - 90, y: X.y, w: 90, h: X.h }); selGlow(g, 'exhaust', X.split ? { x: X.x, y: X.y, w: X.w, h: X.h } : X); }
-  // múltiple de admisión
-  const I = Lay.intake;
-  if (car.p.intake) {
-    const ig = g.createLinearGradient(I.x, 0, I.x + I.w, 0);
-    const race = car.p.intake.k === 'race';
-    ig.addColorStop(0, race ? '#8a8f96' : '#6a6e74'); ig.addColorStop(0.5, race ? '#d8dde2' : '#9aa0a8'); ig.addColorStop(1, race ? '#7a7f86' : '#5a5e64');
-    g.fillStyle = ig; roundRect(g, I.x, I.y, I.w, I.h, 16); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2; for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(I.x + 10, I.y + I.h * i / 4); g.lineTo(I.x + I.w - 10, I.y + I.h * i / 4); g.stroke(); }
-    boltsOf(car, 'intake', I);
-  } else if (eng) emptySlot(g, I, P.intake);
-  if (eng) { region('intake', I); selGlow(g, 'intake', I); }
-  // carburadores con sus filtros de aire
-  for (let i = 0; i < 3; i++) {
-    const sl = 'carb' + i, R = Lay[sl];
-    if (!R || !car.p.intake || i >= carbCount(car)) continue;
-    const c = car.p[sl];
-    if (c) {
-      const four = c.k !== '2', r = four ? 44 : 34, cx = R.x + R.w / 2, cy = R.y + R.h / 2;
-      g.fillStyle = '#7a6a50'; roundRect(g, cx - r * 0.7, cy - r * 0.7, r * 1.4, r * 1.4, 6); g.fill();
-      const ag = g.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
-      ag.addColorStop(0, '#ffffff'); ag.addColorStop(0.5, '#c4ccd4'); ag.addColorStop(0.85, '#6c757d'); ag.addColorStop(1, '#e6ebef');
-      g.fillStyle = ag; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
-      if (c.k === '4R') { g.strokeStyle = '#c22a2a'; g.lineWidth = 5; g.beginPath(); g.arc(cx, cy, r - 6, 0, TAU); g.stroke(); }
-      g.fillStyle = '#d0d6dc'; g.beginPath(); g.arc(cx, cy, 8, 0, TAU); g.fill();
-      g.fillStyle = 'rgba(0,0,0,0.5)'; g.font = font(11, 'bold', FONT_SANS); g.fillText(c.k === '2' ? '2' : '4', cx, cy + r * 0.55);
-      boltsOf(car, sl, R);
-    } else emptySlot(g, R, '');
-    region(sl, R); selGlow(g, sl, R);
-  }
-}
-
-function drawUnder(g, car, t) {
-  Mech.g = g;
-  const Lay = underLayout(), P = L().parts;
-  // el auto visto desde abajo
-  g.fillStyle = css(shade(car.color, -0.6)); roundRect(g, 120, 60, 620, 640, 80); g.fill();
-  g.fillStyle = '#1a1816'; roundRect(g, 150, 90, 560, 580, 60); g.fill();
-  g.fillStyle = '#2c2a26'; g.fillRect(300, 80, 26, 600); g.fillRect(534, 80, 26, 600);
-  // cárter del motor
-  g.fillStyle = car.p.engine ? '#3a3a3e' : 'rgba(255,255,255,0.05)'; roundRect(g, 360, 110, 140, 170, 20); g.fill();
-  // tubos de escape
-  g.strokeStyle = '#4a4a4e'; g.lineWidth = 12;
-  for (const x of [330, 530]) { g.beginPath(); g.moveTo(x, 260); g.lineTo(x, 520); g.quadraticCurveTo(x, 560, x + (x < 430 ? -40 : 40), 690); g.stroke(); }
-  g.fillStyle = '#5a5a5e'; roundRect(g, 314, 380, 32, 90, 12); g.fill(); roundRect(g, 514, 380, 32, 90, 12); g.fill();
-  // caja de cambios
-  const T = Lay.trans;
-  if (car.p.trans) {
-    const auto = TRANS[car.p.trans.k].auto;
-    g.fillStyle = auto ? '#8a8f96' : '#9aa0a8'; roundRect(g, T.x, T.y, T.w, T.h, 18); g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.25)'; for (let y = T.y + 30; y < T.y + T.h - 20; y += 22) g.fillRect(T.x + 14, y, T.w - 28, 4);
-    g.fillStyle = '#333'; g.font = font(12, 'bold', FONT_SANS); g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(TRANS_NAME[car.p.trans.f][car.p.trans.k].split(' ')[0], T.x + T.w / 2, T.y + T.h / 2);
-    boltsOf(car, 'trans', T);
-  } else emptySlot(g, T, P.trans);
-  region('trans', T); selGlow(g, 'trans', T);
-  // cardán
-  g.fillStyle = '#5a5a5e'; g.fillRect(418, 470, 24, 100);
-  // diferencial y eje trasero
-  const A = Lay.axle;
-  if (car.p.axle) {
-    g.fillStyle = '#4a4a50'; roundRect(g, A.x, A.y + 22, A.w, 26, 13); g.fill();
-    g.fillStyle = '#5a5a60'; g.beginPath(); g.arc(430, A.y + 35, 52, 0, TAU); g.fill();
-    g.fillStyle = '#ddd'; g.font = font(16, 'bold', FONT_SANS); g.fillText(car.p.axle.k, 430, A.y + 35);
-    boltsOf(car, 'axle', A);
-  } else emptySlot(g, A, P.axle);
-  region('axle', { x: 370, y: A.y - 20, w: 120, h: 110 }); selGlow(g, 'axle', { x: 370, y: A.y - 20, w: 120, h: 110 });
-  // ruedas
-  const tire = car.p.tires;
-  for (const [i, [wx, wy]] of Lay.tires.wheels.entries()) {
-    const r = { x: wx - 44, y: wy - 80, w: 88, h: 160 };
-    if (tire) {
-      const wide = tire.k === 'slick' || tire.k === 'wide';
-      g.fillStyle = '#121214'; roundRect(g, r.x - (wide && wy > 400 ? 8 : 0), r.y, r.w + (wide && wy > 400 ? 16 : 0), r.h, 24); g.fill();
-      g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 2;
-      if (tire.k !== 'slick') for (let y = r.y + 12; y < r.y + r.h - 8; y += 14) { g.beginPath(); g.moveTo(r.x + 8, y); g.lineTo(r.x + r.w - 8, y); g.stroke(); }
-      if (tire.k === 'ww') { g.fillStyle = '#efece2'; g.fillRect(wx < 430 ? r.x + r.w - 10 : r.x + 2, r.y + 20, 8, r.h - 40); }
-      drawBolt(g, wx, wy, i < (car.tight.tires || 0), Mech.turning && Mech.turning.sl === 'tires' && Mech.turning.i === i ? t : null);
-    } else emptySlot(g, r, '');
-    region('tires', r);
-    if (Mech.hover && Mech.hover.sl === 'tires') selGlow(g, 'tires', r);
-  }
-}
-
-// ----- Interacción -----
-function mechHit(x, y) { for (let i = Mech.rects.length - 1; i >= 0; i--) { const r = Mech.rects[i]; if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.sl; } return null; }
-// Clic en una pieza: si está apretada se desarma y sale; si está suelta se aprieta.
-function mechClick(car, sl) {
-  if (!sl || Mech.queue.length) return null;
-  const p = car.p[sl];
-  if (!p) return null;
-  const n = SLOT_INFO[sl].bolts, tight = car.tight[sl] || 0;
-  if (tight >= n) {
-    const b = blockers(car, sl);
-    if (b.length) return { blocked: b };
-    for (let i = n - 1; i >= 0; i--) Mech.queue.push({ sl, op: 'loosen', i });
-    Mech.queue.push({ sl, op: 'remove' });
   } else {
-    for (let i = tight; i < n; i++) Mech.queue.push({ sl, op: 'tighten', i });
+    // sin motor: el hueco y la caja al fondo
+    g.fillStyle = PAL.k; g.fillRect(230, 100, 180, 220);
+    g.fillStyle = PAL.g2; g.beginPath(); g.moveTo(270, 330); g.lineTo(370, 330); g.lineTo(350, 300); g.lineTo(290, 300); g.fill();
+    Lo.mounts.forEach(([x, y], i) => bolts.push({ sl: 'engine', i, x, y, hidden: true }));
   }
-  Mech.busy = 0;
-  return { ok: true };
-}
-// Avanza la animación de los pernos. Devuelve true si algo cambió (para refrescar la pantalla).
-function mechUpdate(car, dt) {
-  if (!Mech.queue.length) { Mech.turning = null; return false; }
-  Mech.busy += dt;
-  const job = Mech.queue[0];
-  Mech.turning = job.op === 'remove' ? null : job;
-  if (Mech.busy < (job.op === 'remove' ? 0.2 : BOLT_TIME)) return false;
-  Mech.busy = 0;
-  Mech.queue.shift();
-  if (job.op === 'loosen') { loosenBolt(car, job.sl); Sound.sfx.ratchet(); }
-  else if (job.op === 'tighten') { tightenBolt(car, job.sl); Sound.sfx.ratchet(); if (car.tight[job.sl] >= SLOT_INFO[job.sl].bolts) _etCache.clear(); }
-  else if (job.op === 'remove') {
-    const r = mechLayout(car)[job.sl] || { x: 430, y: 400, w: 0, h: 0 };
-    if (removePart(car, job.sl)) { Mech.lift = { x: r.x + r.w / 2, y: r.y + r.h / 2, t: Mech.t }; Sound.sfx.clunk(); }
+  // los pernos: tuerca hexagonal si está puesto, agujero si no
+  for (const b of bolts) {
+    if (b.hidden) continue;
+    b.on = boltOn(car, b.sl, b.i);
+    if (b.on) { g.fillStyle = PAL.k; g.fillRect(b.x - 5, b.y - 5, 10, 10); g.fillStyle = PAL.g5; g.fillRect(b.x - 4, b.y - 4, 8, 8); g.fillStyle = PAL.w; g.fillRect(b.x - 4, b.y - 4, 8, 2); g.fillStyle = PAL.g3; g.fillRect(b.x - 1, b.y - 1, 3, 3); }
+    else { g.fillStyle = PAL.g4; g.fillRect(b.x - 3, b.y - 3, 6, 6); g.fillStyle = PAL.k; g.fillRect(b.x - 2, b.y - 2, 4, 4); }
   }
-  return !Mech.queue.length || job.op === 'remove';
+  return bolts.filter(b => !b.hidden);
 }
 
-// Gráfico del dinamómetro: potencia y torque según las rpm
-function drawDyno(g, car, w, h) {
-  g.clearRect(0, 0, w, h);
-  g.fillStyle = '#10141a'; g.fillRect(0, 0, w, h);
-  if (!car || !car.p.engine) return;
-  const s = carStats(car), veh = new Vehicle(s), top = s.red + 800;
-  g.strokeStyle = 'rgba(120,255,170,0.12)'; g.lineWidth = 1;
-  for (let r = 1000; r < top; r += 1000) { const x = r / top * w; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
-  const maxHp = s.hp * 1.05;
-  const curve = (fn, col) => {
-    g.strokeStyle = col; g.lineWidth = 2.5; g.beginPath();
-    for (let x = 0; x <= w; x += 3) { const rpm = Math.max(IDLE, x / w * top), y = h - 8 - fn(rpm) / maxHp * (h - 22); x ? g.lineTo(x, y) : g.moveTo(x, y); }
-    g.stroke();
-  };
-  curve(rpm => veh.torque(rpm) * rpm * TAU / 60 / 745.7 / NET, '#ffd23a');
-  curve(rpm => veh.torque(rpm) * 0.7376 * 0.75, '#5fe8ff');
-  g.fillStyle = 'rgba(212,42,30,0.25)'; g.fillRect(s.red / top * w, 0, w, h);
-  g.fillStyle = '#ffd23a'; g.font = font(12, 'bold', FONT_SANS); g.textAlign = 'left'; g.fillText(`${Math.round(s.hp)} HP`, 8, 16);
-  g.fillStyle = '#5fe8ff'; g.fillText(LANG === 'es' ? 'torque' : 'torque', 8, 32);
-  g.fillStyle = 'rgba(255,255,255,0.6)'; g.textAlign = 'right'; g.fillText(`${Math.round(s.red)} rpm`, w - 6, 16);
+// Lo común de las tres vistas del taller: pernos, botones rojos y lista de repuestos
+function boltClicks(g, car, bolts) {
+  const T = L();
+  for (const b of bolts) {
+    if (!UI.over(b.x - 8, b.y - 8, 16, 16)) continue;
+    g.strokeStyle = PAL.y3; g.lineWidth = 1; g.strokeRect(b.x - 7.5, b.y - 7.5, 15, 15);
+    if (UI.hot(b.x - 8, b.y - 8, 16, 16, T.slot[SLOT_INFO[b.sl].t] + (b.on ? ' · ' + T.mech.loosen : ' · ' + T.mech.tighten), 'wrench')) {
+      if (b.on) {
+        const bl = blockers(car, b.sl);
+        if (bl.length) { Sound.sfx.nope(); Game.tell(T.mech.blocked(T.slot[SLOT_INFO[bl[0]].t])); return; }
+        loosenBolt(car, b.sl, b.i); Sound.sfx.ratchet();
+        if (!car.tight[b.sl]) {
+          const part = car.p[b.sl];
+          removePart(car, b.sl); Sound.sfx.clunk();
+          Game.tell(T.mech.removed(partName(part)));
+        }
+      } else { tightenBolt(car, b.sl, b.i); Sound.sfx.ratchet(); if (car.tight[b.sl] === allBolts(b.sl)) Game.tell(T.mech.tight); }
+      saveGame();
+      return;
+    }
+  }
 }
+// Lista de repuestos que se pueden poner en esta vista
+function installBox(car, types, title) {
+  const T = L();
+  listBox(title, () => S.spares.filter(p => types.includes(p.t)).map(p => ({ label: partName(p), right: Math.round(p.c * 100) + '%', p })), [
+    { label: T.mech.install, fn: (i, it) => {
+      const r = installPart(car, it.p.id);
+      if (!r.sl) { Sound.sfx.nope(); say(T.why[r.why] || T.why.type); return; }
+      Sound.sfx.clunk(); Game.tell(T.mech.boltIt); saveGame();
+    } },
+    { label: T.forget, need: false, fn: () => {} }
+  ], { empty: T.mech.noneFit, info: (g, it, x, y) => ptext(g, T.g.fits(partFam(it.p)), x, y, PAL.e4, 1) });
+}
+// Los botones rojos de la derecha (TUNE / PARTS / DONE en el original)
+function redButtons(g, items) {
+  items.forEach(([label, fn, dis], i) => { if (UI.button(g, 548, 214 + i * 40, 88, 36, label, { style: 'red', disabled: dis })) fn(); });
+}
+// Cartel de abajo con lo que tiene puesto el auto en esta vista
+function partsCaption(g, car, slots) {
+  g.fillStyle = PAL.k; g.fillRect(0, 344, 540, 36);
+  slots.forEach((sl, i) => ptext(g, slotLine(car, sl), 8, 346 + i * 12, PAL.g6, 1));
+}
+
+SCENES.engine = {
+  music: 'garage',
+  enter(o) { this.car = o.car; this.ro = !!o.readOnly; this.back = o.back || (() => Game.go('garage')); Sound.sfx.hood(); },
+  key(code) { if (code === 'Escape') this.back(); },
+  draw(g) {
+    const T = L(), car = this.car;
+    const bolts = drawEngineBay(g, car);
+    // nombres de las piezas (abajo)
+    g.fillStyle = PAL.k; g.fillRect(0, 344, 540, 36);
+    const p = car.p, n = carbCount(car);
+    ptext(g, `${T.slot.engine}: ${p.engine ? partName(p.engine) + ' (' + Math.round(p.engine.c * 100) + '%)' : T.none}`, 8, 346, PAL.g6, 1);
+    ptext(g, `${T.slot.intake}: ${p.intake ? T.parts.intakeShort[p.intake.k] : T.none}` + (n ? ` · ${T.slot.carb}: ${[0, 1, 2].slice(0, n).map(i => (p['carb' + i] ? T.parts.carbShort[p['carb' + i].k] : '—')).join(' + ')}` : ''), 8, 358, PAL.g6, 1);
+    if (this.ro) {
+      ptext(g, T.mech.rivalHood, 320, 6, PAL.y3, 2, { align: 'center', shadow: PAL.k });
+      redButtons(g, [[T.done, this.back]]);
+      return;
+    }
+    if (!Game.dialogs.length) boltClicks(g, car, bolts);
+    redButtons(g, [
+      [T.mech.tune, () => Game.go('tune', { car }), !p.engine],
+      [T.mech.parts, () => installBox(car, ['engine', 'intake', 'carb'], T.mech.engineParts)],
+      [T.done, this.back]
+    ]);
+  }
+};
+
+// La caja de cambios vista desde abajo del auto
+SCENES.trans = {
+  music: 'garage',
+  enter(o) { this.car = o.car; },
+  key(code) { if (code === 'Escape') Game.go('garage'); },
+  draw(g) {
+    const T = L(), car = this.car, p = car.p.trans;
+    g.drawImage(underBackground(), 0, 0);
+    const bolts = [[196, 150], [196, 250], [252, 128], [252, 272]].map(([x, y], i) => ({ sl: 'trans', i, x, y }));
+    if (p) {
+      const race = p.k === 'race4', auto = TRANS[p.k].auto;
+      // campana, caja y cola
+      g.fillStyle = PAL.k; g.fillRect(176, 118, 6, 164);
+      g.fillStyle = race ? PAL.g6 : PAL.g5; g.beginPath(); g.moveTo(182, 120); g.lineTo(264, 150); g.lineTo(264, 250); g.lineTo(182, 280); g.fill();
+      g.fillStyle = race ? PAL.w : PAL.g6; g.beginPath(); g.moveTo(182, 120); g.lineTo(264, 150); g.lineTo(264, 156); g.lineTo(182, 128); g.fill();
+      g.fillStyle = race ? PAL.g5 : PAL.g4; g.fillRect(264, 150, 150, 100);
+      g.fillStyle = race ? PAL.w : PAL.g5; for (let x = 274; x < 410; x += 14) g.fillRect(x, 154, 3, 92);
+      g.fillStyle = race ? PAL.g6 : PAL.g4; g.fillRect(414, 172, 60, 56); g.fillStyle = PAL.g5; g.fillRect(414, 172, 60, 3);
+      if (auto) { g.fillStyle = PAL.g2; g.beginPath(); g.ellipse(340, 200, 60, 40, 0, 0, TAU); g.fill(); g.fillStyle = PAL.g3; g.beginPath(); g.ellipse(340, 200, 54, 34, 0, 0, TAU); g.fill(); for (let a = 0; a < 10; a++) { g.fillStyle = PAL.g5; g.fillRect(340 + Math.cos(a / 10 * TAU) * 56 - 1, 200 + Math.sin(a / 10 * TAU) * 37 - 1, 3, 3); } }
+      else { g.strokeStyle = PAL.g6; g.lineWidth = 3; g.beginPath(); g.moveTo(330, 250); g.lineTo(330, 290); g.lineTo(380, 300); g.moveTo(360, 250); g.lineTo(360, 280); g.stroke(); }
+      ptext(g, FAM_NAME[p.f] || 'ALL', 340, 160, PAL.k, 1, { align: 'center' });
+      bolts.forEach(b => { b.on = boltOn(car, 'trans', b.i); });
+    } else {
+      g.fillStyle = PAL.k; g.beginPath(); g.ellipse(200, 200, 30, 60, 0, 0, TAU); g.fill();
+      bolts.forEach(b => { b.on = false; });
+    }
+    for (const b of bolts) {
+      if (!p) { g.fillStyle = PAL.g4; g.fillRect(b.x - 3, b.y - 3, 6, 6); g.fillStyle = PAL.k; g.fillRect(b.x - 2, b.y - 2, 4, 4); continue; }
+      if (b.on) { g.fillStyle = PAL.k; g.fillRect(b.x - 5, b.y - 5, 10, 10); g.fillStyle = PAL.g5; g.fillRect(b.x - 4, b.y - 4, 8, 8); g.fillStyle = PAL.w; g.fillRect(b.x - 4, b.y - 4, 8, 2); }
+      else { g.fillStyle = PAL.g4; g.fillRect(b.x - 3, b.y - 3, 6, 6); g.fillStyle = PAL.k; g.fillRect(b.x - 2, b.y - 2, 4, 4); }
+    }
+    partsCaption(g, car, ['trans']);
+    if (p && !Game.dialogs.length) boltClicks(g, car, bolts);
+    redButtons(g, [[T.mech.select, () => installBox(car, ['trans'], T.mech.transParts)], [T.done, () => Game.go('garage')]]);
+  }
+};
+function underBackground() {
+  return pxBackground('under', g => {
+    g.fillStyle = PAL.g1; g.fillRect(0, 0, PW, PH);
+    g.fillStyle = PAL.k; for (let y = 0; y < 380; y += 2) for (let x = (y % 4) ? 0 : 1; x < PW; x += 2) if ((x * 7 + y * 3) % 5 === 0) g.fillRect(x, y, 1, 1);
+    // largueros del chasis
+    for (const y of [90, 300]) { g.fillStyle = PAL.g2; g.fillRect(0, y, PW, 18); g.fillStyle = PAL.g3; g.fillRect(0, y, PW, 3); }
+    // cárter del motor a la izquierda
+    g.fillStyle = PAL.g2; g.fillRect(0, 130, 176, 140); g.fillStyle = PAL.g3; g.fillRect(0, 130, 176, 3); g.fillRect(0, 267, 176, 3);
+    g.fillStyle = PAL.g3; for (let x = 10; x < 170; x += 22) { g.fillRect(x, 134, 4, 4); g.fillRect(x, 262, 4, 4); }
+    g.fillStyle = PAL.g4; g.fillRect(110, 192, 14, 14); g.fillStyle = PAL.g5; g.fillRect(112, 194, 6, 4);
+    // escapes
+    g.fillStyle = PAL.b2; g.fillRect(0, 118, PW, 10); g.fillRect(0, 272, PW, 10);
+    g.fillStyle = PAL.b3; g.fillRect(0, 118, PW, 2); g.fillRect(0, 272, PW, 2);
+    g.fillStyle = PAL.g3; g.fillRect(520, 110, 80, 26); g.fillRect(520, 264, 80, 26);
+    // cardán hacia atrás
+    g.fillStyle = PAL.g4; g.fillRect(474, 190, 170, 20); g.fillStyle = PAL.g6; g.fillRect(474, 192, 170, 3);
+  });
+}
+
+// Las ruedas: los cuatro neumáticos son un juego; se cambian sacando las 5 tuercas
+SCENES.tires = {
+  music: 'garage',
+  enter(o) { this.car = o.car; },
+  key(code) { if (code === 'Escape') Game.go('garage'); },
+  draw(g) {
+    const T = L(), car = this.car, p = car.p.tires, ramp = paintRamp(car.color);
+    g.drawImage(garageBackground(), 0, 0);
+    g.fillStyle = PAL.k; g.globalAlpha = 0.55; g.fillRect(0, 0, PW, PH); g.globalAlpha = 1;
+    // el guardabarros encima de la rueda
+    g.fillStyle = ramp.md; g.beginPath(); g.moveTo(40, 0); g.lineTo(540, 0); g.lineTo(540, 120); g.arc(290, 200, 186, -0.2, Math.PI + 0.2, true); g.lineTo(40, 120); g.fill();
+    g.fillStyle = ramp.lt; g.fillRect(40, 20, 500, 6);
+    g.fillStyle = PAL.k; g.beginPath(); g.arc(290, 200, 190, Math.PI, TAU); g.fill();
+    const cx = 290, cy = 210, bolts = [];
+    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * TAU / 5; bolts.push({ sl: 'tires', i, x: Math.round(cx + Math.cos(a) * 34), y: Math.round(cy + Math.sin(a) * 34) }); }
+    if (p) {
+      const slick = p.k === 'slick';
+      g.fillStyle = PAL.g1; g.beginPath(); g.arc(cx, cy, 160, 0, TAU); g.fill();
+      if (!slick) { g.fillStyle = PAL.g2; for (let a = 0; a < 48; a++) { const t = a / 48 * TAU; g.fillRect(cx + Math.cos(t) * 154 - 2, cy + Math.sin(t) * 154 - 2, 4, 4); } }
+      else { g.fillStyle = PAL.g3; g.beginPath(); g.arc(cx - 40, cy - 60, 100, Math.PI * 1.1, Math.PI * 1.5); g.lineTo(cx - 40, cy - 60); g.fill(); g.fillStyle = PAL.g1; g.beginPath(); g.arc(cx, cy, 140, 0, TAU); g.fill(); ptext(g, 'RACING', cx, cy - 134, PAL.w, 2, { align: 'center' }); }
+      if (p.k === 'ww') { g.fillStyle = PAL.w; g.beginPath(); g.arc(cx, cy, 118, 0, TAU); g.fill(); g.fillStyle = PAL.g1; g.beginPath(); g.arc(cx, cy, 98, 0, TAU); g.fill(); }
+      // la llanta: rojo o del color del auto, con su centro
+      g.fillStyle = slick ? PAL.g5 : ramp.md; g.beginPath(); g.arc(cx, cy, 90, 0, TAU); g.fill();
+      g.strokeStyle = slick ? PAL.w : ramp.lt; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, 82, Math.PI * 1.05, Math.PI * 1.55); g.stroke();
+      g.strokeStyle = ramp.dk; g.beginPath(); g.arc(cx, cy, 82, Math.PI * 0.1, Math.PI * 0.6); g.stroke();
+      if (slick) for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + 0.6; g.fillStyle = PAL.g3; g.beginPath(); g.arc(cx + Math.cos(a) * 62, cy + Math.sin(a) * 62, 14, 0, TAU); g.fill(); }
+      g.fillStyle = PAL.g4; g.beginPath(); g.arc(cx, cy, 50, 0, TAU); g.fill();
+      g.fillStyle = PAL.g5; g.beginPath(); g.arc(cx, cy, 44, 0, TAU); g.fill();
+      g.fillStyle = PAL.g3; g.beginPath(); g.arc(cx, cy, 14, 0, TAU); g.fill();
+      if (p.c < 0.4) { g.fillStyle = PAL.g3; for (let i = 0; i < 8; i++) g.fillRect(cx - 150 + i * 6, cy + 40 - i * 9, 4, 3); }
+      for (const b of bolts) {
+        b.on = boltOn(car, 'tires', b.i);
+        if (b.on) { g.fillStyle = PAL.k; g.fillRect(b.x - 6, b.y - 6, 12, 12); g.fillStyle = PAL.g6; g.fillRect(b.x - 5, b.y - 5, 10, 10); g.fillStyle = PAL.w; g.fillRect(b.x - 5, b.y - 5, 10, 3); g.fillStyle = PAL.g4; g.fillRect(b.x - 2, b.y - 2, 4, 4); }
+        else { g.fillStyle = PAL.g5; g.fillRect(b.x - 2, b.y - 2, 4, 4); }
+      }
+    } else {
+      // sin neumáticos: el tambor de freno con sus pernos
+      g.fillStyle = PAL.b2; g.beginPath(); g.arc(cx, cy, 92, 0, TAU); g.fill();
+      g.fillStyle = PAL.b3; g.beginPath(); g.arc(cx, cy, 80, 0, TAU); g.fill();
+      g.fillStyle = PAL.g3; g.beginPath(); g.arc(cx, cy, 50, 0, TAU); g.fill();
+      for (const b of bolts) { g.fillStyle = PAL.g6; g.fillRect(b.x - 2, b.y - 2, 4, 4); }
+      g.fillStyle = PAL.g2; g.fillRect(cx - 50, cy + 150, 100, 30);
+    }
+    partsCaption(g, car, ['tires']);
+    if (p && !Game.dialogs.length) boltClicks(g, car, bolts);
+    redButtons(g, [[T.mech.select, () => installBox(car, ['tires'], T.mech.tireParts)], [T.done, () => Game.go('garage')]]);
+  }
+};
+
+// Afinar con la lámpara de tiempo: la marca blanca de la polea tiene que quedar en el 0
+SCENES.tune = {
+  music: 'garage',
+  enter(o) { this.car = o.car; this.spin = 0; },
+  key(code) {
+    if (code === 'Escape') this.done();
+    if (code === 'ArrowLeft') this.turn(-1);
+    if (code === 'ArrowRight') this.turn(1);
+  },
+  turn(d) { this.car.tune = clamp(Math.round(this.car.tune || 0) + d, -12, 12); _etCache.clear(); Sound.sfx.click(); },
+  done() { saveGame(); Game.go('engine', { car: this.car }); },
+  update(dt) { this.spin += dt * 40; },
+  draw(g) {
+    const T = L(), car = this.car;
+    const cx = 290, cy = 210, R = 120;
+    g.fillStyle = PAL.k; g.fillRect(0, 0, PW, PH);
+    const flash = Math.floor(Game.t * 6) % 2 === 0;
+    // el frente del motor en penumbra
+    g.fillStyle = PAL.g1; g.fillRect(60, 30, 460, 330);
+    g.fillStyle = PAL.g2; g.fillRect(80, 40, 420, 20);
+    // la polea: con el destello de la lámpara se ve quieta; entre destellos, borrosa
+    g.fillStyle = flash ? PAL.g4 : PAL.g2; g.beginPath(); g.arc(cx, cy, R + 8, 0, TAU); g.fill();
+    g.fillStyle = flash ? PAL.g3 : PAL.g1; g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.fill();
+    g.fillStyle = flash ? PAL.g5 : PAL.g2; g.beginPath(); g.arc(cx, cy, 40, 0, TAU); g.fill();
+    g.fillStyle = PAL.k; g.beginPath(); g.arc(cx, cy, 14, 0, TAU); g.fill();
+    g.strokeStyle = PAL.k; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R - 14, 0, TAU); g.stroke();
+    for (let i = 0; i < 3; i++) { const a = i / 3 * TAU + 0.5; g.fillStyle = PAL.k; g.fillRect(cx + Math.cos(a) * 27 - 3, cy + Math.sin(a) * 27 - 3, 6, 6); }
+    // escala de grados arriba de la polea
+    g.fillStyle = PAL.g5; g.fillRect(cx - 110, cy - R - 40, 220, 26);
+    for (let d = -10; d <= 10; d += 2) {
+      const x = cx + d * 10;
+      g.fillStyle = PAL.k; g.fillRect(x - 1, cy - R - 26, 2, d === 0 ? 12 : 7);
+      if (d % 4 === 0 || d === 0) ptext(g, String(Math.abs(d)), x, cy - R - 38, d === 0 ? PAL.r3 : PAL.k, 1, { align: 'center' });
+    }
+    // la marca: con destello, queda donde está el encendido; sin destello, gira
+    const off = clamp(car.tune || 0, -12, 12);
+    const a = flash ? -Math.PI / 2 + off * 10 / R : this.spin;
+    g.save(); g.translate(cx, cy); g.rotate(a + Math.PI / 2);
+    g.fillStyle = flash ? PAL.w : PAL.g3; g.fillRect(-2, -R, 4, 26);
+    g.restore();
+    // la lámpara de tiempo (pistola) y su luz
+    if (flash) { g.fillStyle = 'rgba(255,240,138,0.25)'; g.beginPath(); g.moveTo(124, 316); g.lineTo(cx - 60, cy - R + 30); g.lineTo(cx + 40, cy - R - 10); g.fill(); }
+    g.fillStyle = PAL.r3; g.beginPath(); g.moveTo(120, 300); g.lineTo(40, 320); g.lineTo(50, 350); g.lineTo(128, 330); g.fill();
+    g.fillStyle = PAL.r2; g.fillRect(62, 336, 18, 40);
+    g.fillStyle = flash ? PAL.y3 : PAL.g3; g.beginPath(); g.arc(124, 316, 12, 0, TAU); g.fill();
+    ptext(g, T.mech.tuneHelp, cx, 8, PAL.y3, 2, { align: 'center' });
+    if (Math.round(off) === 0) ptext(g, T.mech.tuned, cx, 366, PAL.e3, 2, { align: 'center' });
+    redButtons(g, [['◄', () => this.turn(-1)], ['►', () => this.turn(1)], [T.done, () => this.done()]]);
+  }
+};

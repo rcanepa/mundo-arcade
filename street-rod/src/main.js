@@ -1,157 +1,169 @@
-// ===== Entrada (mouse, teclado, control y pantalla táctil), pantalla y bucle principal =====
-const KEYS = {
-  gas: ['ArrowUp', 'KeyW'], brake: ['ArrowDown', 'KeyS'], left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'],
-  up: ['Space', 'KeyX', 'ShiftRight'], down: ['KeyZ', 'KeyC', 'ShiftLeft'], horn: ['KeyH']
-};
-const BLOCK_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'Backspace']);
-const IS_TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+// ===== Street Rod 3D: el arranque, el paso de una pantalla a otra y el ciclo de cada cuadro =====
+import { stage, MOBILE } from './stage.js';
+import { Race } from './race.js';
+import { Sound } from './audio.js';
+import { initInput, readInput, edges, buildTouch } from './input.js';
+import { buildHud, updateHud } from './hud.js';
+import * as G from './game.js';
+import * as UI from './screens.js';
+import { L, LANG, setLang } from './i18n.js';
+import { rivalById } from './data.js';
+import { makeSpec } from './physics.js';
 
-// Botones táctiles de la carrera (se dibujan en la pantalla del juego)
-const TOUCH_BTNS = {
-  left: [8, 300, 64, 64, '◄'], right: [80, 300, 64, 64, '►'],
-  down: [470, 230, 52, 52, '-'], up: [530, 230, 52, 52, '+'],
-  brake: [500, 300, 64, 64, 'B'], gas: [570, 300, 64, 64, 'A']
-};
+const $ = id => document.getElementById(id);
+const STEP = 1 / 120;
+const sound = new Sound();
+try { sound.muted = localStorage.getItem('streetrod3d.mute') === '1'; } catch (e) { /* nada */ }
+let mode = 'title', race = null, info = null, paused = false, resultAt = 0, resultShown = false, acc = 0;
+try { stage.cam = localStorage.getItem('streetrod3d.cam') || 'chase'; } catch (e) { stage.cam = 'chase'; }
+const kingCar = () => G.rivalCar(rivalById('king'));
+const showHud = on => { $('hud').classList.toggle('hidden', !on); $('touch').classList.toggle('hidden', !(on && MOBILE)); };
 
-const Input = {
-  down: new Set(), edges: new Set(), touch: {}, pointers: new Map(), padPrev: {},
-  has(name) { return KEYS[name].some(c => this.down.has(c)); },
-  pad() {
-    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
-    const p = pads[0];
-    if (!p) return null;
-    const b = i => !!p.buttons[i] && (p.buttons[i].pressed || p.buttons[i].value > 0.3);
-    const ax = p.axes[0] || 0;
-    const s = { gas: b(7) || b(12), brake: b(6) || b(13), steer: Math.abs(ax) > 0.2 ? ax : (b(15) ? 1 : 0) - (b(14) ? 1 : 0), up: b(0) || b(5), down: b(2) || b(4), horn: b(3), pause: b(9) };
-    const prev = this.padPrev; this.padPrev = s;
-    return Object.assign({}, s, { upEdge: s.up && !prev.up, downEdge: s.down && !prev.down, hornEdge: s.horn && !prev.horn, pauseEdge: s.pause && !prev.pause });
+const app = {
+  muted: () => sound.muted,
+  toggleSound() { sound.toggle(); try { localStorage.setItem('streetrod3d.mute', sound.muted ? '1' : '0'); } catch (e) { /* nada */ } },
+  toggleLang() { setLang(LANG === 'es' ? 'en' : 'es'); document.documentElement.lang = LANG; this.title(); },
+  title() { mode = 'title'; race = null; showHud(false); sound.silence(); stage.setTitle(kingCar()); UI.title(app); },
+  cont() { if (!G.load()) return this.title(); if (G.S.over) this.ending(); else if (G.S.night) this.bobs(); else this.garage(); },
+  license() { UI.license(app); },
+  newGame(name) { G.newGame(name); UI.pages(L().intro, 0, () => this.garage()); },
+  garage() { mode = 'garage'; race = null; showHud(false); sound.silence(); this.refreshGarage(); UI.garage(app); },
+  refreshGarage() { const d = G.dateOf(G.S.day); stage.setGarage(G.activeCar(), L().months[d.getUTCMonth()].toUpperCase(), d.getUTCDate()); },
+  bobs() {
+    if (!G.S.night) { const r = G.startNight(); if (r) { UI.toast(L().bobs.why.noCar, 'bad'); return this.garage(); } }
+    mode = 'bobs'; race = null; showHud(false); sound.silence();
+    stage.setBobs(G.activeCar(), G.S.night.present.map(id => ({ id, state: G.rivalCar(rivalById(id)) })));
+    UI.bobs(app);
   },
-  // Lo que pide el jugador este instante en la carrera
-  read() {
-    const p = this.pad(), t = this.touch;
-    const r = {
-      gas: this.has('gas') || !!t.gas, brake: this.has('brake') || !!t.brake,
-      steer: (this.has('right') || t.right ? 1 : 0) - (this.has('left') || t.left ? 1 : 0),
-      up: KEYS.up.some(c => this.edges.has(c)) || this.edges.has('touchUp'), down: KEYS.down.some(c => this.edges.has(c)) || this.edges.has('touchDown'),
-      horn: this.edges.has('KeyH')
-    };
-    if (p) {
-      r.gas = r.gas || p.gas; r.brake = r.brake || p.brake; if (p.steer) r.steer = p.steer;
-      r.up = r.up || p.upEdge; r.down = r.down || p.downEdge; r.horn = r.horn || p.hornEdge;
-      if (p.pauseEdge) Game.key('Escape');
-    }
-    r.steer = clamp(r.steer, -1, 1);
-    this.edges.clear();
-    return r;
+  focus(id) { stage.focus(id); },
+  home() { G.endNight(); UI.clearPick(); if (G.S.over) this.ending(); else this.garage(); },
+  race(id, type, bet, pink) {
+    const r = rivalById(id), me = G.activeCar();
+    if (!me || G.challenge(r, type, bet, pink)) return;
+    const world = stage.useWorld(type === 'drag' ? 'drag' : 'road'), rv = G.rivalCar(r);
+    race = new Race(type, world, { car: stage.car('me', me), spec: makeSpec(me, { auto: G.S.autoShift }) }, { car: stage.car('rv:' + id, rv), spec: makeSpec(rv, { auto: type !== 'drag' }), skill: r.skill });
+    info = { rival: r, bet, pink, free: false };
+    startRace();
   },
-  // Qué botones táctiles están apretados según los dedos en la pantalla
-  syncTouch() {
-    const t = {};
-    for (const [x, y] of this.pointers.values()) {
-      for (const k in TOUCH_BTNS) {
-        const [bx, by, bw, bh] = TOUCH_BTNS[k];
-        if (x >= bx - 6 && x < bx + bw + 6 && y >= by - 6 && y < by + bh + 6) t[k] = 1;
-      }
+  testDrive() {
+    const me = G.activeCar(); if (!me) return;
+    race = new Race('free', stage.useWorld('road'), { car: stage.car('me', me), spec: makeSpec(me, { auto: G.S.autoShift }) }, null);
+    info = { free: true };
+    startRace();
+  },
+  afterRace() { race = null; if (G.S.over) return this.ending(); if (info && info.free) return this.garage(); this.bobs(); },
+  ending() { mode = 'ending'; race = null; showHud(false); sound.silence(); stage.setTitle(G.S.over === 'king' ? kingCar() : G.activeCar() || kingCar()); UI.ending(app); },
+  resume() { paused = false; UI.clear(); },
+  quitRace() {
+    paused = false;
+    if (info.free) return this.garage();
+    resultShown = true; race.phase = 'done';
+    const out = G.applyResult({ rivalId: info.rival.id, bet: info.bet, pink: info.pink, win: false });
+    sound.silence();
+    UI.result(app, { title: L().race.lost, win: false, rows: [] }, out, info.rival.name);
+  }
+};
+
+function startRace() {
+  mode = 'race'; paused = false; resultAt = 0; resultShown = false; acc = 0;
+  UI.clear(); stage.setRace(race);
+  buildHud(race); showHud(true);
+  if (MOBILE) buildTouch($('touch'), race.kind === 'drag');
+  sound.init(); edges.clear();
+}
+// sonidos y avisos de lo que pasó en la carrera
+function raceEvents() {
+  const T = L().race;
+  for (const [r, e] of race.events) {
+    if (e === 'hit' && r === race.me) sound.thump(0.6);
+    if (r !== race.me) continue;
+    if (e === 'perfect') { race.say(T.perfect, 0.9, 'good'); sound.beep(1320, 0.08, 0.12, 'sine'); }
+    if (e === 'early') race.say(T.early, 0.8, 'warn');
+    if (e === 'shift') sound.thump(0.25);
+    if (e === 'nitro') { race.say(T.nitro, 0.9, 'go'); sound.thump(0.7); }
+  }
+}
+function showResult() {
+  resultShown = true;
+  if (info.free) return;
+  const out = G.applyResult({ rivalId: info.rival.id, bet: info.bet, pink: info.pink, win: race.result.win });
+  UI.result(app, race.result, out, info.rival.name);
+}
+
+// ----- teclas especiales -----
+initInput(code => {
+  sound.init();
+  if (code === 'Escape' && mode === 'race' && !resultShown) {
+    if (info.free) return app.garage();
+    paused = !paused; if (paused) { sound.silence(); UI.pause(app); } else UI.clear();
+  }
+  if (code === 'KeyC' && mode === 'race') { stage.cam = stage.cam === 'chase' ? 'hood' : 'chase'; try { localStorage.setItem('streetrod3d.cam', stage.cam); } catch (e) { /* nada */ } }
+  if (code === 'KeyM') app.toggleSound();
+  if (code === 'KeyR' && mode === 'race' && race.kind !== 'drag' && !resultShown) {
+    const v = race.me.v, q = race.track.query(v.x, v.z, -1), p = race.track.at(q.s);
+    v.reset(p.x, p.y, p.z, Math.atan2(p.tx, p.tz)); race.me.hint = -1;
+  }
+});
+document.addEventListener('pointerdown', () => sound.init(), { once: true });
+UI.onAction(() => sound.beep(660, 0.04, 0.05, 'sine'));
+
+// ----- etiquetas con los nombres sobre los autos en Bob's -----
+const tags = new Map();
+function labels() {
+  const list = mode === 'bobs' ? stage.labels() : [], seen = new Set();
+  for (const l of list) {
+    let el = tags.get(l.id);
+    if (!el) { el = document.createElement('button'); el.className = 'tag3d'; el.dataset.a = 'pick'; el.dataset.v = l.id; el.textContent = rivalById(l.id).name; $('labels').appendChild(el); tags.set(l.id, el); }
+    el.style.transform = `translate(${l.x.toFixed(0)}px, ${l.y.toFixed(0)}px) translate(-50%, -100%)`;
+    seen.add(l.id);
+  }
+  for (const [id, el] of tags) if (!seen.has(id)) { el.remove(); tags.delete(id); }
+}
+
+// ----- el ciclo -----
+let last = performance.now();
+function frame(now, once) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (mode === 'race' && race && !paused) {
+    const inp = readInput();
+    acc += dt;
+    let first = true;
+    while (acc >= STEP) {
+      race.step(STEP, first ? inp : Object.assign({}, inp, { launch: false, up: false, down: false, nitro: false }));
+      if (first) edges.clear();
+      first = false; acc -= STEP;
     }
-    if (t.up && !this.touch.up) this.edges.add('touchUp');
-    if (t.down && !this.touch.down) this.edges.add('touchDown');
-    this.touch = t;
-  }
-};
-const touchControls = () => IS_TOUCH && Game.name === 'race';
-function drawTouchControls(g) {
-  for (const k in TOUCH_BTNS) {
-    const [x, y, w, h, label] = TOUCH_BTNS[k], on = Input.touch[k];
-    g.fillStyle = on ? 'rgba(255,211,107,0.75)' : 'rgba(255,255,255,0.18)'; g.beginPath(); g.arc(x + w / 2, y + h / 2, w / 2, 0, TAU); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.5; g.stroke();
-    ptext(g, label, x + w / 2, y + h / 2 - 12, on ? '#1c1408' : '#ffffff', 2, { align: 'center', weight: 800 });
-  }
+    raceEvents();
+    for (const r of race.racers) r.car.sync(r.v, dt);
+    updateHud(race, info.rival && info.rival.name);
+    sound.update([{ rpm: race.me.v.rpmShown, gas: race.me.v.gas, slip: race.me.v.slip, speed: race.me.v.speed }, race.rv ? { rpm: race.rv.v.rpmShown, gas: race.rv.v.gas, dist: Math.hypot(race.rv.v.x - race.me.v.x, race.rv.v.z - race.me.v.z) } : null]);
+    if (race.phase === 'done' && !resultShown) { if (!resultAt) resultAt = race.t + 1.4; if (race.t > resultAt) showResult(); }
+  } else { readInput(); edges.clear(); acc = 0; }
+  stage.frame(dt);
+  if (race) race.events.length = 0;
+  labels();
+  if (!once) requestAnimationFrame(frame);
 }
 
-// ----- Pantalla: 640×400 unidades, agrandada a todo lo que dé la ventana y dibujada en alta resolución -----
-const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
-const nameEl = document.getElementById('name');
-function resize() {
-  const s = Math.min(innerWidth / PW, innerHeight / PH);
-  const w = Math.floor(PW * s), h = Math.floor(PH * s);
-  Object.assign(canvas.style, { width: w + 'px', height: h + 'px', left: Math.floor((innerWidth - w) / 2) + 'px', top: Math.floor((innerHeight - h) / 2) + 'px' });
-  // píxeles reales por unidad: los de la pantalla (con retina), en pasos de medio, entre 1 y 4
-  const r = clamp(Math.ceil(s * Math.min(2, window.devicePixelRatio || 1) * 2) / 2, 1, 4);
-  if (r !== RES || canvas.width !== PW * r) { setRes(r); canvas.width = PW * r; canvas.height = PH * r; }
-}
-addEventListener('resize', resize);
-
-function toggleFullscreen() {
-  const d = document, el = d.documentElement;
-  try {
-    if (!(d.fullscreenElement || d.webkitFullscreenElement)) (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-    else (d.exitFullscreen || d.webkitExitFullscreen).call(d);
-  } catch (e) { /* el navegador no lo permite */ }
-}
-
-addEventListener('keydown', e => {
-  Sound.init();
-  const typing = e.target === nameEl;
-  if (BLOCK_KEYS.has(e.code) && !typing) e.preventDefault();
-  Input.down.add(e.code);
-  if (e.repeat || e.metaKey || e.ctrlKey) return;
-  Input.edges.add(e.code);
-  if (typing) { if (e.code === 'Enter' || e.code === 'NumpadEnter') UI.key('Enter'); return; }
-  if (e.code === 'KeyM' && Game.name !== 'race') { Game.tell(L().musicToggled(Sound.toggleMusic())); return; }
-  if (e.code === 'KeyF' && Game.name !== 'license') { toggleFullscreen(); return; }
-  UI.key(e.code === 'NumpadEnter' ? 'Enter' : e.code);
-  Game.key(e.code);
-});
-addEventListener('keyup', e => Input.down.delete(e.code));
-addEventListener('blur', () => { Input.down.clear(); Game.key('blur'); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { Input.down.clear(); Game.key('blur'); } });
-
-// ----- Mouse y dedos: se pasan a coordenadas de la pantalla de 640×400 -----
-const toGame = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * PW, (e.clientY - r.top) / r.height * PH]; };
-canvas.addEventListener('pointermove', e => {
-  const [x, y] = toGame(e);
-  UI.mouse = e.pointerType === 'mouse';
-  UI.pointer(x, y);
-  if (Input.pointers.has(e.pointerId)) { Input.pointers.set(e.pointerId, [x, y]); Input.syncTouch(); }
-});
-canvas.addEventListener('pointerdown', e => {
-  Sound.init();
-  const [x, y] = toGame(e);
-  UI.mouse = e.pointerType === 'mouse';
-  if (e.pointerType !== 'mouse') { try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* nada */ } }
-  if (touchControls() && !Game.dialogs.length) {
-    Input.pointers.set(e.pointerId, [x, y]); Input.syncTouch();
-    if (Object.keys(Input.touch).length) return;
-  }
-  UI.press(x, y);
-});
-const lift = e => {
-  if (Input.pointers.delete(e.pointerId)) Input.syncTouch();
-  UI.release();
-  if (e.pointerType !== 'mouse') UI.pointer(-1, -1);
-};
-canvas.addEventListener('pointerup', lift);
-canvas.addEventListener('pointercancel', lift);
-canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') UI.pointer(-1, -1); });
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-// ----- Bucle principal: la lógica a 60 pasos por segundo, el dibujo en cada cuadro -----
-const STEP = 1 / 60;
-let last = performance.now(), acc = 0;
-function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000);
-  last = now;
-  acc += dt;
-  let n = 0;
-  while (acc >= STEP && n < 6) { Game.update(STEP); acc -= STEP; n++; }
-  if (n >= 6) acc = 0;
-  Game.sounds();
-  Game.draw(ctx);
-  requestAnimationFrame(frame);
-}
-
-resize();
-setLang(LANG, false);
-Game.go(COVER ? 'cover' : 'title');
-loadCarArt();
+stage.init($('c'));
+document.documentElement.lang = LANG;
+app.title();
+// ?cover: la portada para el catálogo del sitio (sin menú, con la cámara quieta)
+if (/[?&]cover\b/.test(location.search)) { UI.clear(); stage.setCover({ model: 'starliner', color: '#c8202a', decal: 'flames', num: 0, up: { engine: 3, intake: 2, exhaust: 2, trans: 0, tires: 2, susp: 1, weight: 0, nitro: 0 }, cond: 1 }, kingCar()); }
 requestAnimationFrame(frame);
+
+// Para probar sin el navegador al frente: avanzar a mano y dibujar un cuadro
+window.__sr = {
+  app, G, stage, get race() { return race; },
+  tick() { frame(performance.now(), true); },
+  sim(sec, fn) {
+    const n = Math.round(sec / STEP), base = { gas: 0, brake: 0, steer: 0, analog: false, hand: false, launch: false, up: false, down: false, nitro: false };
+    for (let i = 0; i < n && race; i++) {
+      race.step(STEP, Object.assign({}, base, fn ? fn(race, i) : {}));
+      if (i % 4 === 3) { for (const r of race.racers) r.car.sync(r.v, STEP * 4); stage.effects(STEP * 4); race.events.length = 0; }
+      if (race.phase === 'done' && !resultShown) showResult();
+    }
+    if (race) { for (const r of race.racers) r.car.sync(r.v, 0.016); updateHud(race, info.rival && info.rival.name); }
+    return race;
+  }
+};

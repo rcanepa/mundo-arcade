@@ -121,6 +121,61 @@ test('los papeles: si ganas te llevas su auto, si pierdes te quedas sin el tuyo'
   G.applyResult({ rivalId: G.S.night.present[0], pink: true, win: false });
   ok(!G.S.cars.includes(mine) && G.S.cars.length === 1 && G.activeCar(), 'perdí el mío y quedo con el ganado');
 });
+test('sin plata igual se puede correr: por el honor, o apostando desde $10', () => {
+  G.newGame('PRUEBA', 31); G.buyCar(0, 0); G.startNight();
+  const r = D.rivalById(G.S.night.present[0]);
+  G.S.money = 0;
+  ok(G.challenge(r, 'drag', 0, false) === '' && G.challenge(r, 'road', 0, false) === '', 'por el honor siempre');
+  ok(G.challenge(r, 'drag', 10, false) === 'money', 'sin plata no se apuesta');
+  G.S.money = 12; ok(G.challenge(r, 'drag', 10, false) === '', '$10 alcanza');
+  const res = G.applyResult({ rivalId: r.id, bet: 0, win: true });
+  ok(res.money === 0 && G.S.beaten.includes(r.id), 'por el honor no paga, pero cuenta como victoria');
+});
+test('cada mañana Gus paga el turno en la bencinera', () => {
+  G.newGame('PRUEBA', 32); const m = G.S.money;
+  ok(G.endNight() === D.WAGE && G.S.money === m + D.WAGE);
+});
+test('los rivales arriesgan su auto aunque el suyo sea algo más lento', () => {
+  G.newGame('PRUEBA', 33); G.S.money = 5000; G.buyCar(0, 0);
+  const car = G.activeCar(); car.model = 'sprite'; car.up = D.noUpgrades(); car.cond = 1;
+  car.up.intake = 1; car.up.exhaust = 1;
+  G.startNight(); G.S.night.present = ['steve', 'ralph'];
+  const steve = D.rivalById('steve'), mine = G.carStats(car).et, his = G.carStats(G.rivalCar(steve)).et;
+  ok(his > mine && his < mine + 0.6, 'el de Steve es un poco más lento');
+  ok(G.challenge(steve, 'road', 0, true) === '', 'igual acepta los papeles');
+  car.up = { engine: 3, intake: 2, exhaust: 2, trans: 2, tires: 2, susp: 2, weight: 2, nitro: 0 };
+  ok(G.challenge(steve, 'road', 0, true) === 'scared', 'contra un auto mucho más rápido no');
+  ok(G.challenge(steve, 'drag', 0, false) === '', 'pero por el honor sí');
+});
+test('los rivales que se acercan proponen carreras que se pueden correr', () => {
+  G.newGame('PRUEBA', 34); G.buyCar(0, 0); G.startNight();
+  for (const money of [0, 15, 80, 600]) {
+    G.S.money = money;
+    for (let k = 0; k < 20; k++) {
+      const p = G.proposal();
+      if (!p) continue;
+      ok(G.challenge(D.rivalById(p.id), p.type, p.bet, false) === '', 'propuesta que el mismo rival rechazaría');
+      ok(p.bet <= money, 'apuesta más de lo que tengo');
+    }
+  }
+});
+test('la Copa de Bob\'s: los sábados, tres picadas, premio y trofeo', () => {
+  G.newGame('PRUEBA', 35); G.buyCar(0, 0); G.S.money = 500;
+  ok(G.isSaturday(), 'el 15 de junio de 1963 fue sábado');
+  G.startNight();
+  const cls = G.cupClass(), fee = D.CUP[cls].fee;
+  ok(G.cupStatus() === '' && G.startCup() === '' && G.S.money === 500 - fee, 'inscripción');
+  ok(G.S.night.cup.ids.length === 3 && new Set(G.S.night.cup.ids).size === 3, 'tres rivales distintos');
+  ok(G.cupRival() && !G.cupRival().boss && !G.cupRival().king, 'sin jefes ni El Rey');
+  let out; for (let k = 0; k < 3; k++) out = G.cupResult(true);
+  ok(out.done && out.champion && out.prize === D.CUP[cls].prize && G.S.trophies.includes(cls), 'campeón con premio y trofeo');
+  ok(G.cupStatus() === 'done', 'una copa por noche');
+  G.endNight(); G.startNight(); ok(G.cupStatus() === 'closed', 'el domingo no hay copa');
+  G.S.day = 7; G.endNight(); G.S.day = 6; G.endNight(); G.startNight();
+  ok(G.isSaturday() && G.startCup() === '', 'el sábado siguiente sí');
+  G.cupResult(true); G.cupResult(true); out = G.cupResult(false);
+  ok(out.done && !out.champion && out.prize === D.CUP[cls].second, 'perder la final paga el segundo premio');
+});
 test('sin auto y sin plata se acaba el verano; y se acaba el 3 de septiembre', () => {
   G.newGame('PRUEBA', 13); G.buyCar(0, 0); G.S.money = 0; G.startNight();
   G.applyResult({ rivalId: G.S.night.present[0], pink: true, win: false });

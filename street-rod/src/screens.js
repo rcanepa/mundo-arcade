@@ -1,6 +1,6 @@
 // ===== Pantallas (HTML encima del 3D): portada, garaje, diario, taller, pintura, Bob's, resultados y finales =====
 import { L } from './i18n.js';
-import { MODELS, UPGRADES, UP_KEYS, COLORS, DECALS, PAINT_PRICE, DECAL_PRICE, CLASS_BET, rivalById } from './data.js';
+import { MODELS, UPGRADES, UP_KEYS, COLORS, DECALS, PAINT_PRICE, DECAL_PRICE, BETS, CUP, rivalById } from './data.js';
 import * as G from './game.js';
 import { makeSpec, topSpeed } from './physics.js';
 import { carPhoto, portrait } from './photo.js';
@@ -89,6 +89,8 @@ export function garage(app) {
         <span>${T.cond}</span>${bar(car.cond, car.cond < 0.8 ? 'warn' : '')}
       </div>${car.cond < 0.8 ? `<p class="warnp">${T.worn}</p>` : ''}`;
   }
+  const tr = G.S.trophies || [];
+  if (tr.length) info += `<p class="trophies">🏆 ${L().cup.trophies}: ${['D', 'C', 'B', 'A', 'S'].filter(c => tr.includes(c)).map(c => `${c} ×${tr.filter(x => x === c).length}`).join(' · ')}</p>`;
   render(topbar(dateLine()) + `<div class="panel side">
       <h2>${T.title}</h2>${info}
       <div class="grid2">${btn('paper', '📰 ' + T.paper)}${btn('shop', '🔧 ' + T.shop, { off: !car })}${btn('paint', '🎨 ' + T.paint, { off: !car })}${btn('cars', '🚗 ' + T.cars, { off: !G.S.cars.length })}${btn('test', '🏁 ' + T.test, { off: !car })}${btn('menu', T.menu)}</div>
@@ -171,7 +173,7 @@ export function myCars(app) {
 }
 
 // ----- Bob's Drive-In -----
-const pickState = { id: null, type: 'drag', bet: 50, pink: false };
+const pickState = { id: null, type: 'drag', bet: 25, pink: false };
 export function bobs(app, sel) {
   const T = L().bobs, N = G.S.night, me = G.activeCar();
   if (sel !== undefined) { pickState.id = sel; pickState.pink = false; }
@@ -183,27 +185,40 @@ export function bobs(app, sel) {
       <span><b>${esc(r.name)}</b>${r.king ? `<em class="king">${T.king}</em>` : r.boss ? `<em class="boss">${T.boss}</em>` : ''}<small>${carName(G.rivalCar(r))} ${badge(st.cls)}</small><small>${T.record(rec.w, rec.l)}</small></span></button>`;
   }).join('');
   const over = G.nightOver() || !N.present.length;
+  // la copa de los sábados
+  const CT = L().cup, cs = G.cupStatus();
+  let cup = '';
+  if (cs !== 'closed' && me) {
+    const cls = G.cupClass(), C = CUP[cls];
+    cup = `<div class="cupbox"><b>🏆 ${CT.title}</b><small>${CT.tonight(cls)}</small><small>${CT.terms(money(C.fee), money(C.prize))}</small>
+      ${cs ? `<small class="why">${CT.why[cs] || ''}</small>` : btn('cup', CT.enter, { cls: 'go small' })}</div>`;
+  }
   let card = '';
   if (pickState.id && !over) {
     const r = rivalById(pickState.id), rc = G.rivalCar(r), st = G.carStats(rc), P = pickState;
     if (r.king) { P.type = 'road'; P.pink = true; }
     if (P.type === 'drag') P.pink = false;
-    const maxBet = Math.min(CLASS_BET[r.cls], G.S.money), bets = [25, 50, 100, 250, 500, 1000, 1500].filter(b => b <= CLASS_BET[r.cls]);
-    if (P.bet > maxBet) P.bet = bets.filter(b => b <= maxBet).pop() || 0;
+    const top = G.maxBet(r), pinkOk = G.acceptsPink(r);
+    const bets = BETS.filter(b => b <= top);
+    if (!P.pink && P.bet > Math.min(top, G.S.money)) P.bet = bets.filter(b => b <= G.S.money).pop() || 0;
     const why = G.challenge(r, P.type, P.bet, P.pink), W = T.why;
-    const reason = !why ? '' : typeof W[why] === 'function' ? W[why](why === 'tooMuch' ? money(CLASS_BET[r.cls]) : r.cls) : W[why];
+    const reason = !why ? '' : typeof W[why] === 'function' ? W[why](why === 'tooMuch' ? money(top) : r.cls) : W[why];
     const d = st.et - mySt.et, cmp = Math.abs(d) < 0.1 ? T.even : d < 0 ? T.faster((-d).toFixed(2)) : T.slower(d.toFixed(2));
     const line = r.king ? T.kingHi : T.hi[(G.S.day + r.id.length) % T.hi.length];
+    const terms = r.king ? '' : `<p class="terms">${T.terms(T.both, top ? money(top) : 0, pinkOk)}</p>`;
     card = `<div class="panel rcard"><div class="rhead"><img src="${portrait(r.look, r.shades, 160)}" alt=""><div><h2>${esc(r.name)}</h2><p class="quote">“${line}”</p></div></div>
       <img class="rcar" src="${carPhoto(rc, 360, 190, -0.75)}" alt="">
-      <div class="carname">${carName(rc)} ${badge(st.cls)}</div><p class="cmp ${d < -0.1 ? 'bad' : d > 0.1 ? 'good' : ''}">${cmp}</p>
+      <div class="carname">${carName(rc)} ${badge(st.cls)}</div><p class="cmp ${d < -0.1 ? 'bad' : d > 0.1 ? 'good' : ''}">${cmp}</p>${terms}
       <div class="seg">${btn('type', '🏁 ' + T.drag, { v: 'drag', cls: P.type === 'drag' ? 'on' : '', off: r.king })}${btn('type', '🛣️ ' + T.road, { v: 'road', cls: P.type === 'road' ? 'on' : '' })}</div>
-      ${r.king ? '' : `<label class="lab">${T.bet}</label><div class="seg wrap">${bets.map(b => btn('bet', money(b), { v: b, cls: !P.pink && P.bet === b ? 'on' : '', off: b > G.S.money })).join('')}${P.type === 'road' ? btn('pink', '📄 ' + T.pink, { cls: P.pink ? 'on' : '' }) : ''}</div>`}
-      ${r.king ? `<p class="pinknote">📄 ${T.pink}</p>` : ''}
+      ${r.king ? `<p class="pinknote">📄 ${T.pink}</p>` : `<label class="lab">${T.bet}</label><div class="seg wrap">
+        ${btn('bet', T.honor, { v: 0, cls: !P.pink && P.bet === 0 ? 'on' : '' })}
+        ${bets.map(b => btn('bet', money(b), { v: b, cls: !P.pink && P.bet === b ? 'on' : '', off: b > G.S.money })).join('')}
+        ${P.type === 'road' ? btn('pink', '📄 ' + T.pink, { cls: P.pink ? 'on' : '', off: !pinkOk }) : ''}</div>`}
       ${btn('go', T.go, { cls: 'go wide', off: !!why })}${why ? `<p class="why">${reason}</p>` : ''}
       ${btn('unpick', L().back, { cls: 'ghost wide' })}</div>`;
   }
   render(topbar(`${T.title} · ${clock(N.time)}`) + `<div class="panel side bobsp ${card ? 'haspick' : ''}"><h2>${T.title}</h2><small class="muted">${T.tonight} · ${clock(N.time)}</small>
+      ${over ? '' : cup}
       <div class="rivals">${over ? `<p class="muted">${N.time >= 25 * 60 ? T.closing : T.empty}</p>` : list}</div>
       ${btn('home', '🏠 ' + T.home, { cls: over ? 'go wide' : 'wide' })}</div>${card}`, {
     pick: id => { app.focus(id); bobs(app, id); },
@@ -212,16 +227,40 @@ export function bobs(app, sel) {
     bet: v => { pickState.bet = +v; pickState.pink = false; bobs(app); },
     pink: () => { pickState.pink = !pickState.pink; bobs(app); },
     go: () => app.race(pickState.id, pickState.type, pickState.pink ? 0 : pickState.bet, pickState.pink),
+    cup: () => app.cup(),
     home: () => app.home()
   });
   app.focus(pickState.id);
 }
 export function clearPick() { pickState.id = null; }
+// Un rival se acerca a desafiarte
+export function offer(app, p) {
+  const T = L().offer, r = rivalById(p.id), rc = G.rivalCar(r), st = G.carStats(rc);
+  const box = document.createElement('div');
+  box.className = 'panel offerp';
+  box.innerHTML = `<div class="rhead"><img src="${portrait(r.look, r.shades, 120)}" alt=""><div><small class="muted">${T.comes(esc(r.name))}</small>
+    <h2>“${T[p.type](p.bet ? money(p.bet) : 0)}”</h2><small>${carName(rc)} ${badge(st.cls)}</small></div></div>
+    <div class="row2"><button class="btn go" data-o="yes">${T.yes}</button><button class="btn" data-o="no">${T.no}</button></div>`;
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-o]'); if (!b) return;
+    box.remove();
+    if (b.dataset.o === 'yes') app.race(p.id, p.type, p.bet, false);
+  });
+  $('ui').appendChild(box);
+  app.focus(p.id);
+}
 
 // ----- resultado de la carrera -----
-export function result(app, R, out, rivalName) {
-  const T = L().result, TR = L().race, lines = [];
+export function result(app, R, out, rivalName, cup) {
+  const T = L().result, TR = L().race, CT = L().cup, lines = [];
+  if (cup) {
+    if (!cup.done) lines.push(CT.passed(cup.round + 1));
+    else if (cup.champion) lines.push(CT.champion(cup.cls, money(cup.prize)));
+    else if (cup.prize) lines.push(CT.second(money(cup.prize)));
+    else lines.push(CT.out);
+  }
   if (out) {
+    if (!out.money && !out.gotCar && !out.lostCar) lines.push(R.win ? T.honorWin : T.honorLose);
     if (out.money > 0) lines.push(T.money(money(out.money)));
     if (out.money < 0) lines.push(T.lose(money(-out.money)));
     if (out.gotCar && out.sold) lines.push(T.soldCar(carName(out.gotCar), money(out.sold)));
@@ -233,7 +272,7 @@ export function result(app, R, out, rivalName) {
   render(`<div class="panel resultp"><h2 class="${R.win ? 'win' : 'lose'}">${R.title}</h2>
       <table><thead><tr><th></th><th>${TR.you}</th><th>${esc(rivalName || '')}</th></tr></thead><tbody>${R.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>
       ${lines.map(l => `<p class="resline">${l}</p>`).join('')}
-      ${btn('back', out ? T.back : L().back, { cls: 'go wide' })}</div>`, { back: () => app.afterRace() });
+      ${btn('back', cup && !cup.done ? CT.next : out || cup ? T.back : L().back, { cls: 'go wide' })}</div>`, { back: () => app.afterRace() });
 }
 export function ending(app) {
   const S = G.S, E = L().end[S.over] || L().end.summer;

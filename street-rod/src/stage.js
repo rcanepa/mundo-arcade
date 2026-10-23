@@ -97,15 +97,23 @@ export const stage = {
     this.showCars([['c1', hero, -2.4, 0, -2.6, 0], ['c2', king, 2.4, 0, -2.3, 0]]);
     for (const lane of [-1, 1]) for (const k of ['pre', 'stage', 'a1', 'a2']) w.tree.set(lane, k, true);
   },
-  setGarage(state, dateText, dayNum) {
+  setGarage(state, dateText, dayNum, trophies = 0) {
     this.mode = 'garage'; this.race = null;
     const w = this.useWorld('garage');
     w.setDate(dateText, dayNum);
+    // los trofeos de la Copa, en fila sobre el banco
+    if (!w.cups) { w.cups = new THREE.Group(); w.group.add(w.cups); }
+    if (w.cups.children.length !== Math.min(trophies, 8)) {
+      w.cups.clear();
+      const gold = this.goldMat || (this.goldMat = new THREE.MeshStandardMaterial({ color: 0xf2c14e, metalness: 1, roughness: 0.22 }));
+      const cupG = new THREE.LatheGeometry([[0, 0], [0.09, 0], [0.09, 0.03], [0.03, 0.05], [0.025, 0.14], [0.07, 0.18], [0.1, 0.3], [0.095, 0.31]].map(([x, y]) => new THREE.Vector2(x, y)), 20);
+      for (let i = 0; i < Math.min(trophies, 8); i++) { const c = new THREE.Mesh(cupG, gold); c.position.set(-4.0 + i * 0.36, 0.96, -9.5 / 2 + 0.35); w.cups.add(c); }
+    }
     this.showCars(state ? [['me', state, 0, 0, 0.3, 0.55]] : []);
     this.target = state ? this.cars.get('me') : null;
   },
   setBobs(me, rivals) {     // rivals: [{ id, state }]
-    this.mode = 'bobs'; this.race = null; this.focusId = null;
+    this.mode = 'bobs'; this.race = null; this.focusId = null; this.camState.snap = true;
     const w = this.useWorld('bobs'), list = [];
     if (me) list.push(['me', me, w.mySpot[0], 0, w.mySpot[1], w.mySpot[2]]);
     rivals.forEach((r, i) => { const s = w.spots[[1, 3, 4, 2, 0, 5][i]]; list.push(['rv:' + r.id, r.state, s[0], 0, s[1], s[2]]); this.spots[r.id] = s; });
@@ -144,11 +152,11 @@ export const stage = {
         this.lookShift(p.set(0, 0.7, 0.3), innerWidth > 820 ? -1.9 : 0);
       } else if (this.mode === 'bobs') {
         const w = this.world, s = this.focusId && this.spots[this.focusId];
-        const want = s ? new THREE.Vector3(s[0] + 4.2, 1.7, s[1] + 6.2) : new THREE.Vector3(-5 + Math.sin(C.orbit * 0.07) * 2.5, 2.9, 15);
+        const want = s ? new THREE.Vector3(s[0] + 2.2, 1.55, s[1] + 6.6) : new THREE.Vector3(-5 + Math.sin(C.orbit * 0.07) * 2.5, 2.9, 15);
         const look = s ? new THREE.Vector3(s[0], 0.9, s[1]) : new THREE.Vector3(1, 1.5, -6);
-        C.pos.lerp(want, Math.min(1, dt * 2.5)); if (C.pos.lengthSq() < 1) C.pos.copy(want);
-        C.look.lerp(look, Math.min(1, dt * 3)); if (C.look.lengthSq() < 0.1) C.look.copy(look);
-        cam.position.copy(C.pos); this.lookShift(C.look.clone(), innerWidth > 820 ? (s ? 1.4 : -2.5) : 0);
+        if (C.snap) { C.pos.copy(want); C.look.copy(look); C.snap = false; }
+        C.pos.lerp(want, Math.min(1, dt * 2.5)); C.look.lerp(look, Math.min(1, dt * 3));
+        cam.position.copy(C.pos); this.lookShift(C.look.clone(), innerWidth > 820 && !s ? -2.5 : 0);
         void w;
       } else if (this.mode === 'cover') {
         cam.position.set(-4.7, 1.05, 6.0); cam.lookAt(0.4, 0.95, -2.4);

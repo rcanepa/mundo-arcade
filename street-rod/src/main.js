@@ -9,6 +9,7 @@ import * as UI from './screens.js';
 import { L, LANG, setLang } from './i18n.js';
 import { rivalById } from './data.js';
 import { makeSpec } from './physics.js';
+import { money } from './util.js';
 
 const $ = id => document.getElementById(id);
 const STEP = 1 / 120;
@@ -28,15 +29,24 @@ const app = {
   license() { UI.license(app); },
   newGame(name) { G.newGame(name); UI.pages(L().intro, 0, () => this.garage()); },
   garage() { mode = 'garage'; race = null; showHud(false); sound.silence(); this.refreshGarage(); UI.garage(app); },
-  refreshGarage() { const d = G.dateOf(G.S.day); stage.setGarage(G.activeCar(), L().months[d.getUTCMonth()].toUpperCase(), d.getUTCDate()); },
-  bobs() {
+  refreshGarage() { const d = G.dateOf(G.S.day); stage.setGarage(G.activeCar(), L().months[d.getUTCMonth()].toUpperCase(), d.getUTCDate(), (G.S.trophies || []).length); },
+  bobs(offerChance = 0.55) {
     if (!G.S.night) { const r = G.startNight(); if (r) { UI.toast(L().bobs.why.noCar, 'bad'); return this.garage(); } }
     mode = 'bobs'; race = null; showHud(false); sound.silence();
     stage.setBobs(G.activeCar(), G.S.night.present.map(id => ({ id, state: G.rivalCar(rivalById(id)) })));
     UI.bobs(app);
+    // a veces un rival se acerca a desafiarte
+    if (Math.random() < offerChance) { const p = G.proposal(); if (p) setTimeout(() => { if (mode === 'bobs') UI.offer(app, p); }, 900); }
+  },
+  cup() { if (G.startCup()) return this.bobs(0); this.cupRace(); },
+  cupRace() {
+    const r = G.cupRival(), me = G.activeCar(), rv = G.rivalCar(r);
+    race = new Race('drag', stage.useWorld('drag'), { car: stage.car('me', me), spec: makeSpec(me, { auto: G.S.autoShift }) }, { car: stage.car('rv:' + r.id, rv), spec: makeSpec(rv, { auto: false }), skill: r.skill });
+    info = { rival: r, bet: 0, pink: false, free: false, cup: G.S.night.cup.round + 1 };
+    startRace();
   },
   focus(id) { stage.focus(id); },
-  home() { G.endNight(); UI.clearPick(); if (G.S.over) this.ending(); else this.garage(); },
+  home() { const wage = G.endNight(); UI.clearPick(); if (G.S.over) return this.ending(); this.garage(); if (wage) UI.toast(L().garage.wage(money(wage)), 'good'); },
   race(id, type, bet, pink) {
     const r = rivalById(id), me = G.activeCar();
     if (!me || G.challenge(r, type, bet, pink)) return;
@@ -51,15 +61,22 @@ const app = {
     info = { free: true };
     startRace();
   },
-  afterRace() { race = null; if (G.S.over) return this.ending(); if (info && info.free) return this.garage(); this.bobs(); },
+  afterRace() {
+    race = null;
+    if (G.S.over) return this.ending();
+    if (info && info.free) return this.garage();
+    if (info && info.cup && G.S.night && G.S.night.cup) return this.cupRace();
+    this.bobs(info && info.cup ? 0 : 0.35);
+  },
   ending() { mode = 'ending'; race = null; showHud(false); sound.silence(); stage.setTitle(G.S.over === 'king' ? kingCar() : G.activeCar() || kingCar()); UI.ending(app); },
   resume() { paused = false; UI.clear(); },
   quitRace() {
     paused = false;
     if (info.free) return this.garage();
     resultShown = true; race.phase = 'done';
-    const out = G.applyResult({ rivalId: info.rival.id, bet: info.bet, pink: info.pink, win: false });
     sound.silence();
+    if (info.cup) return UI.result(app, { title: L().race.lost, win: false, rows: [] }, null, info.rival.name, G.cupResult(false));
+    const out = G.applyResult({ rivalId: info.rival.id, bet: info.bet, pink: info.pink, win: false });
     UI.result(app, { title: L().race.lost, win: false, rows: [] }, out, info.rival.name);
   }
 };
@@ -86,6 +103,7 @@ function raceEvents() {
 function showResult() {
   resultShown = true;
   if (info.free) return;
+  if (info.cup) return UI.result(app, race.result, null, info.rival.name, G.cupResult(race.result.win));
   const out = G.applyResult({ rivalId: info.rival.id, bet: info.bet, pink: info.pink, win: race.result.win });
   UI.result(app, race.result, out, info.rival.name);
 }
@@ -135,7 +153,7 @@ function frame(now, once) {
     }
     raceEvents();
     for (const r of race.racers) r.car.sync(r.v, dt);
-    updateHud(race, info.rival && info.rival.name);
+    updateHud(race, info.rival && (info.cup ? L().cup.round(info.cup) + ' · ' + info.rival.name : info.rival.name));
     sound.update([{ rpm: race.me.v.rpmShown, gas: race.me.v.gas, slip: race.me.v.slip, speed: race.me.v.speed }, race.rv ? { rpm: race.rv.v.rpmShown, gas: race.rv.v.gas, dist: Math.hypot(race.rv.v.x - race.me.v.x, race.rv.v.z - race.me.v.z) } : null]);
     if (race.phase === 'done' && !resultShown) { if (!resultAt) resultAt = race.t + 1.4; if (race.t > resultAt) showResult(); }
   } else { readInput(); edges.clear(); acc = 0; }

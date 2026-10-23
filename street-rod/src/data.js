@@ -1,162 +1,114 @@
-// ===== Datos del verano de 1963: los autos del diario, los repuestos, los colores y los rivales de Bob's =====
-// Como en el original, las piezas de motor y caja son de una marca (GM, Ford o Chrysler) y solo calzan en esa marca.
-const FAMS = ['gm', 'ford', 'mopar'];
-const FAM_NAME = { gm: 'GM', ford: 'Ford', mopar: 'Chrysler' };
+// ===== Datos del juego: los autos inventados, las mejoras del taller, los rivales y las categorías =====
 
-// Motores. hp = potencia con su carburación de referencia (V-8: un carburador de 4 bocas; 6 cilindros: uno de 2).
-// rpm = donde da su máxima potencia; red = zona roja; lb = peso.
-const ENGINES = {
-  gm216:  { fam: 'gm', kind: '6', ci: 216, hp: 95, rpm: 3600, red: 4300, lb: 520, price: 140 },
-  gm235:  { fam: 'gm', kind: '6', ci: 235, hp: 130, rpm: 4200, red: 4800, lb: 530, price: 190 },
-  gm268:  { fam: 'gm', kind: '8', ci: 268, hp: 125, rpm: 3800, red: 4400, lb: 640, price: 170 },
-  gm265:  { fam: 'gm', kind: '8', ci: 265, hp: 185, rpm: 4600, red: 5400, lb: 560, price: 260 },
-  gm303:  { fam: 'gm', kind: '8', ci: 303, hp: 165, rpm: 3800, red: 4600, lb: 640, price: 230 },
-  gm283:  { fam: 'gm', kind: '8', ci: 283, hp: 220, rpm: 4800, red: 5700, lb: 570, price: 345 },
-  gm348:  { fam: 'gm', kind: '8', ci: 348, hp: 270, rpm: 5000, red: 5800, lb: 660, price: 460 },
-  gm327:  { fam: 'gm', kind: '8', ci: 327, hp: 300, rpm: 5600, red: 6400, lb: 575, price: 560 },
-  gm409:  { fam: 'gm', kind: '8', ci: 409, hp: 370, rpm: 5600, red: 6300, lb: 680, price: 820 },
-  fd201:  { fam: 'ford', kind: '4', ci: 201, hp: 40, rpm: 2200, red: 2900, lb: 380, price: 60 },
-  fd223:  { fam: 'ford', kind: '6', ci: 223, hp: 137, rpm: 4200, red: 4800, lb: 510, price: 180 },
-  fd221:  { fam: 'ford', kind: '8', ci: 221, hp: 100, rpm: 3600, red: 4300, lb: 560, price: 150 },
-  fd239:  { fam: 'ford', kind: '8', ci: 239, hp: 110, rpm: 3800, red: 4400, lb: 565, price: 165 },
-  fd256:  { fam: 'ford', kind: '8', ci: 256, hp: 170, rpm: 4400, red: 5200, lb: 610, price: 230 },
-  fd272:  { fam: 'ford', kind: '8', ci: 272, hp: 185, rpm: 4400, red: 5200, lb: 615, price: 250 },
-  fd292:  { fam: 'ford', kind: '8', ci: 292, hp: 200, rpm: 4600, red: 5400, lb: 620, price: 290 },
-  fd312:  { fam: 'ford', kind: '8', ci: 312, hp: 245, rpm: 4800, red: 5600, lb: 625, price: 380 },
-  fd390:  { fam: 'ford', kind: '8', ci: 390, hp: 300, rpm: 4800, red: 5700, lb: 650, price: 500 },
-  fd406:  { fam: 'ford', kind: '8', ci: 406, hp: 385, rpm: 5800, red: 6300, lb: 660, price: 800 },
-  fd427:  { fam: 'ford', kind: '8', ci: 427, hp: 410, rpm: 6000, red: 6600, lb: 670, price: 990 },
-  mp170:  { fam: 'mopar', kind: '6', ci: 170, hp: 101, rpm: 4400, red: 5000, lb: 450, price: 130 },
-  mp230:  { fam: 'mopar', kind: '6', ci: 230, hp: 103, rpm: 3600, red: 4200, lb: 520, price: 110 },
-  mp225:  { fam: 'mopar', kind: '6', ci: 225, hp: 145, rpm: 4000, red: 4800, lb: 470, price: 190 },
-  mp270:  { fam: 'mopar', kind: '8', ci: 270, hp: 190, rpm: 4400, red: 5200, lb: 600, price: 250 },
-  mp318:  { fam: 'mopar', kind: '8', ci: 318, hp: 230, rpm: 4400, red: 5400, lb: 600, price: 320 },
-  mp361:  { fam: 'mopar', kind: '8', ci: 361, hp: 265, rpm: 4400, red: 5400, lb: 640, price: 400 },
-  mp383:  { fam: 'mopar', kind: '8', ci: 383, hp: 330, rpm: 4800, red: 5700, lb: 650, price: 540 },
-  mp413:  { fam: 'mopar', kind: '8', ci: 413, hp: 390, rpm: 5400, red: 6000, lb: 680, price: 850 },
-  mp426:  { fam: 'mopar', kind: '8', ci: 426, hp: 415, rpm: 5600, red: 6200, lb: 690, price: 1000 }
+// Cada auto: su forma (la usa car.js para armarlo) y su mecánica de fábrica.
+// Forma: len/wid = largo y ancho; wb = entre ejes; fo = de la punta al eje delantero; clr = altura del piso; tire/tireW = rueda.
+//   nose/belt/deck/tail = alturas de la trompa, el capó, la maleta y la cola; fin = aletas; brows = cejas sobre los focos.
+//   hood = largo del capó; rake/roofLen/rrake = parabrisas, techo y luneta; roof = alto del techo.
+//   pF/pR = qué tan cuadrada es la planta adelante y atrás; nTop = redondez de los hombros; tumble = cuánto se angosta arriba.
+// Mecánica: torque (Nm) en peak rpm, corte en red; gears = caja de fábrica; final = diferencial; mu = agarre de las gomas.
+// pot = cuánto rinden las mejoras de motor y alivianado en este auto (los baratos tienen techo: para subir hay que cambiar de auto).
+export const MODELS = {
+  sprite: {
+    brand: 'Sprite', name: 'Sprite Deluxe', year: 1960, price: 420, tier: 0.8, pot: 0.45, cyl: 6,
+    mass: 1180, cda: 0.78, torque: 205, peak: 2400, red: 4600, gears: [2.8, 1.6, 1.0], final: 3.4, mu: 0.92, lat: 1.04,
+    shape: { len: 4.45, wid: 1.78, wb: 2.68, fo: 0.78, clr: 0.27, tire: 0.32, tireW: 0.2, nose: 0.6, belt: 0.86, deck: 0.86, tail: 0.66, fin: 0.06, brows: 0.04,
+      hood: 1.32, rake: 0.5, roofLen: 1.15, roof: 1.38, rrake: 0.55, pF: 5, pR: 6, nTop: 2.8, tumble: 0.12, ww: false, cover: false, rims: '#e8e4da' }
+  },
+  bantam: {
+    brand: 'Bantam', name: 'Bantam Business Coupé', year: 1946, price: 360, tier: 0.75, pot: 0.5, cyl: 6,
+    mass: 1360, cda: 1.0, torque: 250, peak: 2200, red: 4200, gears: [2.8, 1.6, 1.0], final: 3.9, mu: 0.9, lat: 0.96,
+    shape: { len: 4.6, wid: 1.82, wb: 2.85, fo: 0.72, clr: 0.32, tire: 0.38, tireW: 0.2, nose: 0.78, belt: 1.02, deck: 0.92, tail: 0.56, fin: 0, brows: 0.08,
+      hood: 1.5, rake: 0.42, roofLen: 0.75, roof: 1.6, rrake: 1.1, pF: 2.6, pR: 2.8, nTop: 1.9, tumble: 0.16, ww: true, cover: false, rims: '#1c1c22' }
+  },
+  marquis: {
+    brand: 'Marquis', name: 'Marquis Fastback', year: 1949, price: 480, tier: 0.85, pot: 0.45, cyl: 8,
+    mass: 1590, cda: 1.0, torque: 300, peak: 2300, red: 4300, gears: [2.6, 1.55, 1.0], final: 3.7, mu: 0.92, lat: 0.95,
+    shape: { len: 5.0, wid: 1.92, wb: 3.0, fo: 0.88, clr: 0.3, tire: 0.38, tireW: 0.22, nose: 0.68, belt: 0.95, deck: 0.82, tail: 0.6, fin: 0, brows: 0.06,
+      hood: 1.55, rake: 0.5, roofLen: 0.7, roof: 1.52, rrake: 1.7, pF: 3.0, pR: 2.6, nTop: 2.0, tumble: 0.14, ww: true, cover: true }
+  },
+  vandal: {
+    brand: 'Vandal', name: 'Vandal Coupé', year: 1955, price: 950, tier: 1, pot: 0.5, cyl: 8,
+    mass: 1520, cda: 0.92, torque: 370, peak: 2800, red: 5000, gears: [2.5, 1.5, 1.0], final: 3.55, mu: 0.95, lat: 1.0,
+    shape: { len: 4.72, wid: 1.92, wb: 2.84, fo: 0.82, clr: 0.27, tire: 0.37, tireW: 0.27, nose: 0.6, belt: 0.88, deck: 0.86, tail: 0.62, fin: 0, brows: 0.02,
+      hood: 1.78, rake: 0.46, roofLen: 1.0, roof: 1.36, rrake: 0.8, pF: 3.6, pR: 4.5, nTop: 2.4, tumble: 0.1, ww: false, cover: false, rims: '#c8202a' }
+  },
+  starliner: {
+    brand: 'Comet', name: 'Comet Starliner', year: 1957, price: 1250, tier: 1.1, pot: 0.5, cyl: 8,
+    mass: 1640, cda: 0.95, torque: 410, peak: 2900, red: 5000, gears: [2.45, 1.5, 1.0], final: 3.55, mu: 0.95, lat: 1.0,
+    shape: { len: 5.05, wid: 1.96, wb: 2.95, fo: 0.98, clr: 0.3, tire: 0.36, tireW: 0.24, nose: 0.62, belt: 0.92, deck: 0.93, tail: 0.66, fin: 0.16, brows: 0.05,
+      hood: 1.62, rake: 0.55, roofLen: 1.1, roof: 1.42, rrake: 0.62, pF: 4.5, pR: 6, nTop: 2.4, tumble: 0.1, ww: true, cover: true, spear: true, sweep: '#f1ede2', dagmars: true }
+  },
+  monarch: {
+    brand: 'Monarch', name: 'Monarch Eldorado', year: 1959, price: 1750, tier: 1.25, pot: 0.45, cyl: 8,
+    mass: 2050, cda: 1.05, torque: 560, peak: 2800, red: 4800, gears: [2.4, 1.48, 1.0], final: 3.2, mu: 0.95, lat: 0.92,
+    shape: { len: 5.6, wid: 2.02, wb: 3.3, fo: 1.05, clr: 0.28, tire: 0.38, tireW: 0.25, nose: 0.66, belt: 0.92, deck: 0.9, tail: 0.66, fin: 0.3, brows: 0.06,
+      hood: 1.85, rake: 0.55, roofLen: 1.25, roof: 1.4, rrake: 0.6, pF: 6, pR: 7, nTop: 2.6, tumble: 0.1, ww: true, cover: true, spear: true, dagmars: true }
+  },
+  hornet: {
+    brand: 'Hornet', name: 'Hornet GT', year: 1963, price: 2400, tier: 1.4, pot: 0.85, cyl: 8,
+    mass: 1620, cda: 0.9, torque: 520, peak: 3300, red: 5600, gears: [2.2, 1.64, 1.28, 1.0], final: 3.55, mu: 1.0, lat: 1.04,
+    shape: { len: 5.0, wid: 1.94, wb: 2.9, fo: 0.92, clr: 0.27, tire: 0.36, tireW: 0.27, nose: 0.66, belt: 0.86, deck: 0.86, tail: 0.68, fin: 0.02, brows: 0.02,
+      hood: 1.95, rake: 0.6, roofLen: 1.0, roof: 1.33, rrake: 0.75, pF: 8, pR: 9, nTop: 3.4, tumble: 0.08, ww: false, cover: false, rims: '#9aa0aa', stripes: '#f2efe6' }
+  },
+  viper: {
+    brand: 'Viper', name: 'Viper Sport', year: 1963, price: 3600, tier: 1.6, pot: 1.0, cyl: 8,
+    mass: 1420, cda: 0.74, torque: 480, peak: 3600, red: 6000, gears: [2.2, 1.64, 1.28, 1.0], final: 3.7, mu: 1.05, lat: 1.12,
+    shape: { len: 4.48, wid: 1.86, wb: 2.5, fo: 0.95, clr: 0.24, tire: 0.34, tireW: 0.25, nose: 0.52, belt: 0.76, deck: 0.8, tail: 0.66, fin: 0, brows: 0.07,
+      hood: 1.9, rake: 0.62, roofLen: 0.55, roof: 1.22, rrake: 1.2, pF: 2.4, pR: 3.4, nTop: 2.2, tumble: 0.12, ww: false, cover: false, rims: '#c8ccd2' }
+  }
 };
+export const MODEL_KEYS = Object.keys(MODELS);
+export const COLORS = ['#c8202a', '#1a8a8a', '#f2efe6', '#16161c', '#2c4a9a', '#e8b830', '#6a2ca0', '#2c7a3c', '#e86a8a', '#d06018', '#8fb8d8', '#7a1c2c'];
+export const PAINT_PRICE = 60, DECAL_PRICE = 40;
+export const DECALS = ['none', 'flames', 'stripes', 'number'];
 
-// Múltiples de admisión (uno por marca). Un 4 cilindros lleva 2 bocas; un 6, 2 bocas o 3×2; un V-8, 2 bocas, 4 bocas, 2×4 o de carrera.
-const INTAKES = {
-  '1x2': { carb: '2', n: 1, k: { 4: 1, 6: 1, 8: 0.86 }, price: 25 },
-  '3x2': { carb: '2', n: 3, k: { 6: 1.14 }, price: 70 },
-  '1x4': { carb: '4', n: 1, k: { 8: 1 }, price: 45 },
-  '2x4': { carb: '4', n: 2, k: { 8: 1.12 }, price: 95 },
-  race:  { carb: '4', n: 2, k: { 8: 1.22 }, price: 180 }
+// ----- mejoras del taller: cada categoría tiene niveles; el precio se multiplica por el "tier" del auto -----
+export const UPGRADES = {
+  engine:  { max: 3, cost: [0, 160, 420, 950], torque: [1, 1.22, 1.45, 1.72], red: [0, 500, 1000, 1500], peak: [0, 300, 600, 900] },
+  intake:  { max: 2, cost: [0, 90, 240], torque: [1, 1.07, 1.14] },
+  exhaust: { max: 2, cost: [0, 70, 180], torque: [1, 1.04, 1.08] },
+  trans:   { max: 2, cost: [0, 220, 480] },
+  tires:   { max: 2, cost: [0, 130, 360], mu: [1, 1.15, 1.38] },
+  susp:    { max: 2, cost: [0, 140, 340], lat: [1, 1.08, 1.17], drop: [0, 0.03, 0.06] },
+  weight:  { max: 2, cost: [0, 160, 460], mass: [1, 0.94, 0.88] },
+  nitro:   { max: 3, cost: [0, 220, 380, 560] }
 };
-const intakeFits = (ik, kind) => kind in INTAKES[ik].k;
-// Carburadores: calzan en cualquier auto. Los de carrera (cromados) usan las fijaciones de 4 bocas.
-const CARBS = {
-  '2':  { slot: '2', price: 25 },
-  '4':  { slot: '4', price: 40 },
-  '4R': { slot: '4', price: 60, k: 1.04 }
-};
-// Cajas: automática, 3 y 4 velocidades por marca, una de 4 que calza en todos y la de carrera
-const TRANS = {
-  auto:  { auto: true, ratios: [2.45, 1.45, 1], price: { gm: 115, ford: 120, mopar: 125 } },
-  man3:  { ratios: [2.58, 1.48, 1], price: { gm: 175, ford: 160, mopar: 170 } },
-  man4:  { ratios: [2.54, 1.92, 1.51, 1], price: { gm: 250, ford: 260, mopar: 245 } },
-  man4u: { ratios: [2.54, 1.92, 1.51, 1], price: { all: 275 }, all: true },
-  race4: { ratios: [2.2, 1.64, 1.28, 1], price: { gm: 400, ford: 405, mopar: 410 } }
-};
-// Neumáticos (se venden de a cuatro). grip = agarre al acelerar; lat = agarre en las curvas.
-const TIRES = {
-  std:   { grip: 0.82, lat: 0.82, price: 45 },
-  ww:    { grip: 0.82, lat: 0.82, price: 65, ww: true },
-  slick: { grip: 1.12, lat: 0.86, price: 150 }
-};
-const PART_TYPES = ['engine', 'intake', 'carb', 'trans', 'tires'];
+export const UP_KEYS = Object.keys(UPGRADES);
+export const GEARS_4 = [2.68, 1.91, 1.39, 1.0], GEARS_CLOSE = [2.2, 1.64, 1.28, 1.0];
+export const noUpgrades = () => ({ engine: 0, intake: 0, exhaust: 0, trans: 0, tires: 0, susp: 0, weight: 0, nitro: 0 });
 
-// Los autos que aparecen en el diario: cada uno sale de un modelo 3D del auto real (ver assets/cars/CREDITS.md).
-// lb = peso; cda = resistencia al aire (m²); price = valor en buen estado (dólares de 1963); axle = relación del diferencial;
-// len = largo real en pulgadas (para dibujarlos a escala).
-const MODELS = {
-  modelA:    { fam: 'ford', year: 1930, name: 'Ford Model A', lb: 2300, cda: 1.15, price: 200, axle: 3.78, len: 165,
-    stock: { engine: 'fd201', intake: '1x2', carb: '2', trans: 'man3', tires: 'std' }, colors: ['#1c3ca8', '#1c1c24', '#1c7a2c', '#6a3c1c'] },
-  ford32:    { fam: 'ford', year: 1932, name: 'Ford Hot Rod Roadster', lb: 2250, cda: 0.95, price: 1100, axle: 3.78, len: 150,
-    stock: { engine: 'fd292', intake: '2x4', carb: '4', trans: 'man3', tires: 'std' }, colors: ['#d02c2c', '#1c1c24', '#f0c830', '#d06018'] },
-  ford40:    { fam: 'ford', year: 1940, name: 'Ford Deluxe Coupe', lb: 2950, cda: 1.0, price: 350, axle: 3.78, len: 188,
-    stock: { engine: 'fd221', intake: '1x2', carb: '2', trans: 'man3', tires: 'std' }, colors: ['#1c1c24', '#8c1820', '#1c7a2c', '#5c5c6a'] },
-  merc48:    { fam: 'ford', year: 1948, name: 'Mercury Eight', lb: 3350, cda: 1.0, price: 300, axle: 3.9, len: 201,
-    stock: { engine: 'fd239', intake: '1x2', carb: '2', trans: 'man3', tires: 'std' }, colors: ['#1c7a2c', '#1c1c24', '#0c1a5a', '#6a3c1c'] },
-  chevy49:   { fam: 'gm', year: 1949, name: 'Chevrolet Fleetline', lb: 3150, cda: 0.98, price: 300, axle: 4.11, len: 197,
-    stock: { engine: 'gm216', intake: '1x2', carb: '2', trans: 'man3', tires: 'std' }, colors: ['#1a8a8a', '#5c5c6a', '#1c3ca8', '#8c1820'] },
-  merc49:    { fam: 'ford', year: 1949, name: 'Mercury Coupe', lb: 3350, cda: 0.95, price: 550, axle: 3.9, len: 206,
-    stock: { engine: 'fd256', intake: '1x2', carb: '2', trans: 'man3', tires: 'ww' }, colors: ['#8c1820', '#1c1c24', '#1c7a2c', '#e0d0a0'] },
-  olds49:    { fam: 'gm', year: 1949, name: 'Oldsmobile 88 Convertible', lb: 3700, cda: 1.0, price: 500, axle: 3.64, len: 202,
-    stock: { engine: 'gm303', intake: '1x2', carb: '2', trans: 'auto', tires: 'ww' }, colors: ['#e0d0a0', '#1a8a8a', '#8c1820', '#1c1c24'] },
-  dodge50:   { fam: 'mopar', year: 1950, name: 'Dodge Coronet', lb: 3450, cda: 1.0, price: 250, axle: 3.9, len: 204,
-    stock: { engine: 'mp230', intake: '1x2', carb: '2', trans: 'man3', tires: 'std' }, colors: ['#5a2ca0', '#1c7a2c', '#0c1a5a', '#8a8a96'] },
-  olds54:    { fam: 'gm', year: 1954, name: 'Oldsmobile 88 Holiday', lb: 3650, cda: 0.95, price: 700, axle: 3.42, len: 206,
-    stock: { engine: 'gm303', intake: '1x4', carb: '4', trans: 'auto', tires: 'ww' }, colors: ['#3cd0d0', '#e0d0a0', '#d02c2c', '#1c1c24'] },
-  nomad56:   { fam: 'gm', year: 1956, name: 'Chevrolet Nomad', lb: 3450, cda: 0.95, price: 950, axle: 3.55, len: 200,
-    stock: { engine: 'gm265', intake: '1x4', carb: '4', trans: 'man3', tires: 'std' }, colors: ['#d06018', '#d02c2c', '#1a8a8a', '#1c1c24'] },
-  chevy57:   { fam: 'gm', year: 1957, name: 'Chevrolet Bel Air', lb: 3300, cda: 0.92, price: 1100, axle: 3.55, len: 200,
-    stock: { engine: 'gm283', intake: '1x4', carb: '4', trans: 'man3', tires: 'ww' }, colors: ['#d02c2c', '#3cd0d0', '#f0c830', '#1c1c24'] },
-  plym57:    { fam: 'mopar', year: 1957, name: 'Plymouth Belvedere', lb: 3450, cda: 0.9, price: 950, axle: 3.73, len: 206,
-    stock: { engine: 'mp318', intake: '1x4', carb: '4', trans: 'auto', tires: 'ww' }, colors: ['#3c6cf0', '#3cd0d0', '#d02c2c', '#ffffff'] },
-  tbird57:   { fam: 'ford', year: 1957, name: 'Ford Thunderbird', lb: 3200, cda: 0.82, price: 1800, axle: 3.56, len: 181,
-    stock: { engine: 'fd312', intake: '1x4', carb: '4', trans: 'man3', tires: 'ww' }, colors: ['#3cd0d0', '#d02c2c', '#ffffff', '#1c1c24'] },
-  pont58:    { fam: 'gm', year: 1958, name: 'Pontiac Bonneville', lb: 3900, cda: 0.92, price: 1600, axle: 3.42, len: 211,
-    stock: { engine: 'gm348', intake: '1x4', carb: '4', trans: 'auto', tires: 'ww' }, colors: ['#1c3ca8', '#d02c2c', '#ffffff', '#1c1c24'] },
-  fair58:    { fam: 'ford', year: 1958, name: 'Ford Fairlane 500', lb: 3700, cda: 0.92, price: 1300, axle: 3.56, len: 207,
-    stock: { engine: 'fd312', intake: '1x4', carb: '4', trans: 'auto', tires: 'ww' }, colors: ['#1c1c24', '#d02c2c', '#3c6cf0', '#ffffff'] },
-  fury58:    { fam: 'mopar', year: 1958, name: 'Plymouth Fury', lb: 3600, cda: 0.88, price: 1700, axle: 3.73, len: 206,
-    stock: { engine: 'mp318', intake: '2x4', carb: '4', trans: 'auto', tires: 'ww' }, colors: ['#d02c2c', '#e0d0a0', '#1c1c24', '#ffffff'] },
-  caddy59:   { fam: 'gm', year: 1959, name: 'Cadillac Fleetwood', lb: 4900, cda: 1.0, price: 2400, axle: 3.21, len: 225,
-    stock: { engine: 'gm409', intake: '1x4', carb: '4', trans: 'auto', tires: 'ww' }, colors: ['#e04ab0', '#ffffff', '#1c1c24', '#8c1820'] },
-  valiant60: { fam: 'mopar', year: 1960, name: 'Plymouth Valiant', lb: 2650, cda: 0.86, price: 650, axle: 3.23, len: 184,
-    stock: { engine: 'mp170', intake: '1x2', carb: '2', trans: 'man3', tires: 'std' }, colors: ['#8cb4ff', '#d02c2c', '#ffffff', '#1c7a2c'] },
-  vette61:   { fam: 'gm', year: 1961, name: 'Corvette', lb: 2950, cda: 0.76, price: 2200, axle: 3.70, len: 177,
-    stock: { engine: 'gm283', intake: '2x4', carb: '4', trans: 'man4', tires: 'ww' }, colors: ['#d02c2c', '#1c3ca8', '#ffffff', '#1c1c24'] },
-  galaxie63: { fam: 'ford', year: 1963, name: 'Ford Galaxie 500', lb: 3800, cda: 0.9, price: 2900, axle: 3.5, len: 210,
-    stock: { engine: 'fd390', intake: '1x4', carb: '4', trans: 'man4', tires: 'std' }, colors: ['#f0c830', '#d02c2c', '#ffffff', '#1c3ca8'] },
-  vette63:   { fam: 'gm', year: 1963, name: 'Corvette Sting Ray', lb: 3050, cda: 0.7, price: 3500, axle: 3.70, len: 175,
-    stock: { engine: 'gm327', intake: '1x4', carb: '4', trans: 'man4', tires: 'std' }, colors: ['#1c1c24', '#d02c2c', '#b4b4bc', '#3cd0d0'] }
-};
-const MODEL_KEYS = Object.keys(MODELS);
-const carTitle = model => `${MODELS[model].year} ${MODELS[model].name}`;
+// ----- categorías por el tiempo en el cuarto de milla -----
+export const CLASSES = ['D', 'C', 'B', 'A', 'S'];
+export const CLASS_ET = { D: Infinity, C: 16.2, B: 14.6, A: 13.2, S: 12.0 };   // tiempo máximo para entrar en cada una
+export const CLASS_BET = { D: 100, C: 250, B: 500, A: 1000, S: 1500 };        // lo más que apuestan los rivales de cada categoría
 
-// Los 12 colores de la pintura del original, más negro y blanco
-const PAINTS = [
-  { c: '#8a8a96', es: 'Gris', en: 'Grey' }, { c: '#a0602c', es: 'Café', en: 'Brown' }, { c: '#d02c2c', es: 'Rojo', en: 'Red' },
-  { c: '#e04ab0', es: 'Rosado', en: 'Pink' }, { c: '#d06018', es: 'Naranjo', en: 'Orange' }, { c: '#f0c830', es: 'Amarillo', en: 'Yellow' },
-  { c: '#1c7a2c', es: 'Verde oscuro', en: 'Dark green' }, { c: '#3cc03c', es: 'Verde claro', en: 'Light green' },
-  { c: '#1c3ca8', es: 'Azul oscuro', en: 'Dark blue' }, { c: '#3c6cf0', es: 'Celeste', en: 'Light blue' },
-  { c: '#5a2ca0', es: 'Morado oscuro', en: 'Dark purple' }, { c: '#9a6ae0', es: 'Morado claro', en: 'Light purple' },
-  { c: '#1c1c24', es: 'Negro', en: 'Black' }, { c: '#ffffff', es: 'Blanco', en: 'White' }
+// ----- rivales: su auto, su mano para manejar (skill 0..1) y su cara -----
+// look: piel, pelo, polera; boss = el jefe de su categoría (hay que ganarle a 3 de esa categoría para que acepte)
+const R = (id, name, cls, model, color, up, skill, look, extra = {}) => ({ id, name, cls, model, color, up: Object.assign(noUpgrades(), up), skill, look, ...extra });
+export const RIVALS = [
+  R('steve', 'Steve', 'D', 'sprite', '#2c4a9a', {}, 0.55, ['#f4c8a0', '#6a3c1c', '#1c3ca8']),
+  R('vinnie', 'Vinnie', 'D', 'bantam', '#16161c', { intake: 1 }, 0.6, ['#d89a60', '#000000', '#ffffff']),
+  R('ralph', 'Ralph', 'D', 'marquis', '#2c7a3c', {}, 0.58, ['#f4c8a0', '#f0c830', '#d02c2c']),
+  R('dolores', 'Dolores', 'D', 'sprite', '#e86a8a', { tires: 1, exhaust: 1 }, 0.66, ['#c58a5c', '#3a2010', '#f0c830']),
+  R('earl', 'Big Earl', 'D', 'marquis', '#7a1c2c', { engine: 1, intake: 1, exhaust: 1 }, 0.72, ['#a0602c', '#000000', '#3cc03c'], { boss: true }),
+  R('eddie', 'Eddie', 'C', 'vandal', '#e8b830', {}, 0.64, ['#f4c8a0', '#d06018', '#16161c']),
+  R('clyde', 'Clyde', 'C', 'starliner', '#16161c', {}, 0.68, ['#f4c8a0', '#3a2010', '#16161c'], { shades: true }),
+  R('charlie', 'Charlie', 'C', 'bantam', '#d06018', { engine: 2, intake: 1, tires: 1 }, 0.7, ['#d89a60', '#3a2010', '#3cd0d0']),
+  R('rosie', 'Rosie', 'C', 'vandal', '#8fb8d8', { intake: 1, exhaust: 1, susp: 1 }, 0.74, ['#f4c8a0', '#b0402a', '#e04ab0']),
+  R('tommy', 'Tommy Two-Tone', 'C', 'starliner', '#1a8a8a', { engine: 1, intake: 1 }, 0.8, ['#f4c8a0', '#000000', '#f2efe6'], { boss: true }),
+  R('lou', 'Lou', 'B', 'monarch', '#e86a8a', { engine: 1, intake: 1, tires: 1 }, 0.7, ['#6a3c1c', '#000000', '#e04ab0']),
+  R('frankie', 'Frankie', 'B', 'vandal', '#c8202a', { engine: 2, intake: 2, tires: 1, trans: 1 }, 0.76, ['#f4c8a0', '#000000', '#c8202a']),
+  R('mike', 'Mike', 'B', 'hornet', '#f2efe6', {}, 0.74, ['#f4c8a0', '#000000', '#ffffff'], { shades: true }),
+  R('rocky', 'Rocky', 'B', 'monarch', '#16161c', { engine: 2, intake: 2, exhaust: 1, tires: 1 }, 0.84, ['#d89a60', '#000000', '#16161c'], { boss: true }),
+  R('joe', 'Joe', 'A', 'hornet', '#2c4a9a', { engine: 1, intake: 1, tires: 1, trans: 1 }, 0.8, ['#a0602c', '#000000', '#2c4a9a']),
+  R('bill', 'Bill', 'A', 'viper', '#c8202a', { engine: 1, tires: 1, susp: 1 }, 0.82, ['#f4c8a0', '#6a3c1c', '#ffffff']),
+  R('spike', 'Spike', 'A', 'starliner', '#e86a8a', { engine: 3, intake: 2, exhaust: 2, tires: 2, trans: 2, weight: 2 }, 0.8, ['#f4c8a0', '#f0c830', '#16161c']),
+  R('ace', 'Ace', 'A', 'hornet', '#e8b830', { engine: 1, intake: 1, exhaust: 1, tires: 1, trans: 2, susp: 1 }, 0.9, ['#f4c8a0', '#e8e8e8', '#16161c'], { boss: true, shades: true }),
+  R('king', 'El Rey', 'S', 'viper', '#0c0c10', { engine: 3, intake: 2, exhaust: 2, tires: 2, trans: 2, susp: 2, weight: 2, nitro: 1 }, 0.96, ['#f4c8a0', '#000000', '#16161c'], { king: true, shades: true })
 ];
-const PAINT_PRICE = 50;
-// Calcomanías y alivianar el auto (sacar asiento trasero, rueda de repuesto y adornos)
-const STICKERS = { hotrod: 15, flames: 25, star: 10, checker: 15, number: 10, lightning: 15 };
-const BODYWORK = { strip: { price: 25, days: 0, lb: 90 } };
+export const rivalById = id => RIVALS.find(r => r.id === id);
 
-// Los rivales de Bob's Drive-In: cada uno con su auto. edge = segundos que les sobran (+) o faltan (-)
-// respecto a tu auto; skill = qué tan bien manejan; look = cómo se ven al volante.
-const RIVALS = [
-  { id: 'steve',   name: 'Steve',   model: 'dodge50',   skill: 0.62, edge: 0.4,  look: { skin: '#f4c8a0', hc: '#6a3c1c', top: '#1c3ca8' } },
-  { id: 'vinnie',  name: 'Vinnie',  model: 'merc48', skill: 0.6,  edge: 0.5,  look: { skin: '#d89a60', hc: '#000000', top: '#ffffff' } },
-  { id: 'ralph',   name: 'Ralph',   model: 'chevy49',    skill: 0.58, edge: 0.7,  look: { skin: '#f4c8a0', hc: '#f0c830', top: '#d02c2c' } },
-  { id: 'george',  name: 'George',  model: 'merc49',    skill: 0.62, edge: 0.6,  look: { skin: '#a0602c', hc: '#000000', top: '#1c7a2c' } },
-  { id: 'eddie',   name: 'Eddie',   model: 'valiant60', skill: 0.55, edge: 0.9,  look: { skin: '#f4c8a0', hc: '#d06018', top: '#f0c830' } },
-  { id: 'clyde',   name: 'Clyde',   model: 'ford40',    skill: 0.7,  edge: 0.2,  look: { skin: '#f4c8a0', hc: '#3a2010', top: '#1c1c24', shades: 1 } },
-  { id: 'charlie', name: 'Charlie', model: 'olds49',    skill: 0.7,  edge: 0.1,  look: { skin: '#d89a60', hc: '#3a2010', top: '#3cd0d0' } },
-  { id: 'mike',    name: 'Mike',    model: 'olds54',   skill: 0.75, edge: 0.0,  look: { skin: '#f4c8a0', hc: '#000000', top: '#ffffff', shades: 1 } },
-  { id: 'lou',     name: 'Lou',     model: 'nomad56',    skill: 0.72, edge: 0.05, look: { skin: '#6a3c1c', hc: '#000000', top: '#e04ab0' } },
-  { id: 'frankie', name: 'Frankie', model: 'chevy57',   skill: 0.8,  edge: -0.2, tier: 2, look: { skin: '#f4c8a0', hc: '#3a2010', top: '#d02c2c' } },
-  { id: 'jim',     name: 'Jim',     model: 'plym57',   skill: 0.8,  edge: -0.2, tier: 2, look: { skin: '#f4c8a0', hc: '#a0602c', top: '#1c3ca8' } },
-  { id: 'tom',     name: 'Tom',     model: 'fair58',   skill: 0.82, edge: -0.3, tier: 3, look: { skin: '#d89a60', hc: '#000000', top: '#ffffff' } },
-  { id: 'spike',   name: 'Spike',   model: 'ford32',    skill: 0.86, edge: -0.4, tier: 4, look: { skin: '#f4c8a0', hc: '#000000', top: '#1c1c24', shades: 1 } },
-  { id: 'rocky',   name: 'Rocky',   model: 'vette61',   skill: 0.86, edge: -0.45, tier: 5, look: { skin: '#a0602c', hc: '#000000', top: '#f0c830' } },
-  { id: 'joe',     name: 'Joe',     model: 'galaxie63',   skill: 0.88, edge: -0.5, tier: 6, look: { skin: '#f4c8a0', hc: '#6a3c1c', top: '#1c1c24' } },
-  { id: 'bill',    name: 'Bill',    model: 'fury58',   skill: 0.9,  edge: -0.6, tier: 7, look: { skin: '#f4c8a0', hc: '#f0c830', top: '#ffffff', shades: 1 } }
-];
-// El Rey: su Corvette '63 negro, preparado al máximo
-const KING = {
-  id: 'king', name: { es: 'El Rey', en: 'The King' }, skill: 0.97, edge: 0, model: 'vette63',
-  look: { skin: '#f4c8a0', hc: '#000000', top: '#ffffff', shades: 1 },
-  car: { model: 'vette63', color: '#1c1c24', engine: 'gm327', intake: 'race', carbs: ['4R', '4R'], trans: 'race4', tires: 'slick' }
-};
-// Para que El Rey te acepte hay que ganar 6 picadas con apuesta y 6 carreras de ruta (como descubrieron los speedrunners)
-const KING_DRAGS = 6, KING_ROADS = 6;
+// ----- el verano -----
+export const START_MONEY = 750, MAX_CARS = 3;
+export const FIRST_DAY = Date.UTC(1963, 5, 15), DAYS = 80;      // del 15 de junio al 3 de septiembre
+export const NIGHT_OPEN = 20 * 60, NIGHT_CLOSE = 25 * 60, RACE_MINUTES = 40;

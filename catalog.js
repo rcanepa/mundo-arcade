@@ -10,13 +10,13 @@ const GAMES = [
     es: {
       title: 'Street Rod: Verano del 63',
       tagline: 'Arma tu hot rod y gánale a El Rey',
-      description: 'Verano de 1963 en California: compra un auto en el diario, ármalo perno a perno en tu garaje y desafía de noche a los rivales de Bob\'s Drive-In en picadas y carreras de ruta. Apuesta dinero o los papeles del auto, escápate de la policía y gánale a El Rey y su Corvette negro. Una nueva versión del clásico de 1989, con 21 autos de verdad de los años 30 a los 60.',
+      description: 'Verano de 1963 en California, ahora en 3D: compra un cacharro en el diario, mejóralo en tu garaje (motor, caja, gomas, nitro) y desafía de noche a los rivales de Bob\'s Drive-In en picadas y carreras de ruta. Apuesta plata o los papeles del auto, sube de categoría y gánale a El Rey y su Viper negro. Una nueva versión del clásico de 1989.',
       players: '1 jugador', controls: 'Mouse y teclado', age: '10+ años'
     },
     en: {
       title: 'Street Rod: Summer of 63',
       tagline: 'Build your hot rod and beat The King',
-      description: 'Summer 1963 in California: buy a car from the paper, build it bolt by bolt in your garage and challenge the rivals at Bob\'s Drive-In to drag races and road races at night. Bet cash or pink slips, outrun the cops and beat The King and his black Corvette. A remake of the 1989 classic, with 21 real cars from the \'30s to the \'60s.',
+      description: 'Summer 1963 in California, now in 3D: buy a beater from the paper, build it up in your garage (engine, gearbox, tires, nitrous) and challenge the rivals at Bob\'s Drive-In to drag races and road races at night. Bet cash or pink slips, move up the classes and beat The King and his black Viper. A remake of the 1989 classic.',
       players: '1 player', controls: 'Mouse and keyboard', age: 'Ages 10+'
     }
   },

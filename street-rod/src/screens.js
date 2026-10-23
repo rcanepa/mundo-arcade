@@ -1,215 +1,249 @@
-// ===== Pantallas: cuál se ve, los diálogos que se abren encima y la barra de estado de abajo =====
-// Cada pantalla (SCENES.algo) tiene: enter(arg), onExit(), update(dt), draw(g), status(), key(code) y sounds().
-const SCENES = {};
-const Game = {
-  t: 0, name: '', scene: null, sceneT: 0, dialogs: [], note: null, fade: 0,
+// ===== Pantallas (HTML encima del 3D): portada, garaje, diario, taller, pintura, Bob's, resultados y finales =====
+import { L } from './i18n.js';
+import { MODELS, UPGRADES, UP_KEYS, COLORS, DECALS, PAINT_PRICE, DECAL_PRICE, CLASS_BET, rivalById } from './data.js';
+import * as G from './game.js';
+import { makeSpec, topSpeed } from './physics.js';
+import { carPhoto, portrait } from './photo.js';
+import { money } from './util.js';
 
-  go(name, arg) {
-    const sc = SCENES[name];
-    if (this.scene && this.scene.onExit) this.scene.onExit();
-    this.name = name; this.scene = sc; this.sceneT = 0; this.dialogs = []; this.note = null;
-    Bubbles.clear(); UI.clicks.length = 0; UI.keys.length = 0;
-    this.fade = COVER ? 0 : 0.3;
-    if (sc.music !== undefined) Sound.setMusic(sc.music);
-    if (sc.enter) sc.enter(arg);
-  },
-  open(d) { this.dialogs.push(d); UI.clicks.length = 0; return d; },
-  close(d) { const i = d ? this.dialogs.indexOf(d) : this.dialogs.length - 1; if (i >= 0) this.dialogs.splice(i, 1); },
-  // Aviso corto en la barra de estado (lo que pasó al hacer clic)
-  tell(text, t = 3) { this.note = { text, t }; },
+const $ = id => document.getElementById(id);
+let handlers = {};
+export function onAction(fn) { document.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || b.disabled) return; const h = handlers[b.dataset.a]; if (h) { fn(); h(b.dataset.v, b); } }); }
+function render(html, on) { $('ui').innerHTML = html; handlers = on; }
+export function toast(text, cls = '') {
+  const t = document.createElement('div'); t.className = 'toast ' + cls; t.textContent = text;
+  $('toasts').appendChild(t); setTimeout(() => t.classList.add('out'), 2200); setTimeout(() => t.remove(), 2700);
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+export const carName = car => `'${String(MODELS[car.model].year).slice(2)} ${MODELS[car.model].name}`;
+const badge = c => `<span class="cls cls-${c}">${c}</span>`;
+const bar = (v, cls = '') => `<i class="bar ${cls}"><b style="width:${Math.round(Math.max(0.04, Math.min(1, v)) * 100)}%"></b></i>`;
+const _top = new Map();
+const topKmh = car => { const k = JSON.stringify([car.model, car.up, car.cond]); if (!_top.has(k)) _top.set(k, topSpeed(makeSpec(car))); return _top.get(k); };
+const btn = (a, label, o = {}) => `<button class="btn ${o.cls || ''}" data-a="${a}" ${o.v !== undefined ? `data-v="${esc(o.v)}"` : ''} ${o.off ? 'disabled' : ''} ${o.title ? `title="${esc(o.title)}"` : ''}>${label}</button>`;
+function topbar(extra) {
+  const T = L(), S = G.S;
+  return `<div class="topbar"><b>${esc(S.name)}</b><span class="money">${money(S.money)}</span><span>${extra}</span></div>`;
+}
+const dateLine = () => `${L().date(G.dateOf(G.S.day))} · ${L().daysLeft(G.daysLeft())}`;
+const clock = t => `${Math.floor(t / 60) % 24}:${String(t % 60).padStart(2, '0')}`;
 
-  key(code) {
-    const d = this.dialogs[this.dialogs.length - 1];
-    if (code === 'Escape' || code === 'blur') {
-      if (d) { if (code === 'Escape' && d.cancel !== false) { this.close(d); if (d.onCancel) d.onCancel(); } return; }
-    }
-    if (this.scene && this.scene.key) this.scene.key(code);
-  },
+// ----- portada y lo que cuelga de ella -----
+export function title(app) {
+  const T = L().title, cont = G.hasSave();
+  render(`<div class="panel titlep">
+      <h1 class="logo">Street Rod</h1><div class="logosub">${T.sub}</div>
+      <div class="menu">
+        ${cont ? btn('cont', T.cont, { cls: 'go' }) : ''}
+        ${btn('fresh', T.fresh, { cls: cont ? '' : 'go' })}
+        ${btn('how', T.how)}${btn('fame', T.fame)}
+        <div class="two">${btn('lang', T.lang)}${btn('sound', app.muted() ? T.soundOff : T.soundOn)}</div>
+        ${btn('more', T.more, { cls: 'ghost' })}
+      </div>
+      <p class="credit">${T.credit}</p></div>`, {
+    cont: () => app.cont(), fresh: () => (cont ? confirmBox(T.sure, () => app.license(), () => title(app)) : app.license()),
+    how: () => how(app, 0), fame: () => fame(app), lang: () => app.toggleLang(), sound: () => { app.toggleSound(); title(app); }, more: () => { location.href = '../index.html'; }
+  });
+}
+export function confirmBox(text, yes, no) {
+  const T = L();
+  render(`<div class="panel dialog"><p>${esc(text)}</p><div class="row2">${btn('yes', T.yes, { cls: 'go' })}${btn('no', T.no)}</div></div>`, { yes, no });
+}
+export function license(app) {
+  const T = L().license;
+  render(`<div class="panel licensep"><div class="lic-top"><small>${T.state}</small><b>${T.title}</b></div>
+    <div class="lic-body"><img src="${portrait(['#f4c8a0', '#2a1a10', '#ffffff'], false, 180)}" alt=""><div>
+    <label>${T.name}</label><input id="nameIn" maxlength="14" autocomplete="off" placeholder="${T.placeholder}" value="">
+    <small>CLASE 3 · 1963</small></div></div>
+    <div class="row2">${btn('ok', T.ok, { cls: 'go' })}${btn('back', L().cancel)}</div></div>`, {
+    ok: () => app.newGame(($('nameIn').value || '').trim().toUpperCase()), back: () => app.title()
+  });
+  const inp = $('nameIn'); inp.focus();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') app.newGame(inp.value.trim().toUpperCase()); });
+}
+export function pages(list, k, onEnd) {
+  const T = L(), p = list[k];
+  render(`<div class="panel pagep"><h2>${p[0]}</h2>${p.slice(1).map(x => `<p>${x}</p>`).join('')}
+    <div class="row2"><span class="pn">${k + 1}/${list.length}</span>${btn('next', k < list.length - 1 ? T.next : T.ok, { cls: 'go' })}</div></div>`, {
+    next: () => (k < list.length - 1 ? pages(list, k + 1, onEnd) : onEnd())
+  });
+}
+export const how = (app, k) => pages(L().how, k, () => app.title());
+export function fame(app) {
+  const T = L().fame, list = G.fame();
+  render(`<div class="panel pagep"><h2>${T.title}</h2>${list.length ? `<ol class="fame">${list.map(f => `<li><b>${esc(f.name)}</b><span>${T.days(f.days)}</span></li>`).join('')}</ol>` : `<p>${T.empty}</p>`}
+    <div class="row2"><span></span>${btn('back', L().back, { cls: 'go' })}</div></div>`, { back: () => app.title() });
+}
 
-  update(dt) {
-    this.t += dt; this.sceneT += dt;
-    this.fade = Math.max(0, this.fade - dt);
-    if (this.note && (this.note.t -= dt) <= 0) this.note = null;
-    Bubbles.update(dt);
-    if (this.scene.update) this.scene.update(dt);
-  },
-
-  draw(g) {
-    g.setTransform(RES, 0, 0, RES, 0, 0);
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-    UI.beginFrame();
-    const top = this.dialogs.length;
-    UI.enabled = !top;
-    this.scene.draw(g);
-    this.dialogs.slice().forEach((d, i) => { UI.enabled = i === top - 1; d.draw(g); });
-    UI.enabled = true;
-    Bubbles.draw(g);
-    if (this.scene.status !== false) {
-      const st = this.scene.status ? this.scene.status() : defaultStatus();
-      statusBar(g, st[0] || '', st[2] || '', this.note ? this.note.text : UI.hover || st[1] || '');
-    }
-    if (touchControls() && !top) drawTouchControls(g);
-    if (this.fade > 0) { g.fillStyle = PAL.k; g.globalAlpha = clamp(this.fade / 0.3, 0, 1); g.fillRect(0, 0, PW, PH); g.globalAlpha = 1; }
-    if (typeof canvas !== 'undefined' && canvas.style) { const cur = UI.cssCursor(); if (canvas.style.cursor !== cur) canvas.style.cursor = cur; }
-    UI.endFrame();
-  },
-
-  // Sonido de motores: solo la carrera y el drive-in los usan
-  sounds() {
-    if (this.scene && this.scene.sounds) this.scene.sounds(); else Sound.stopEngines();
+// ----- el garaje -----
+export function garage(app) {
+  const T = L().garage, car = G.activeCar();
+  let info = `<p class="muted">${T.noCar}</p>`;
+  if (car) {
+    const st = G.carStats(car);
+    info = `<div class="carname">${carName(car)} ${badge(st.cls)}</div>
+      <div class="stats">
+        <span>${T.et}</span><b>${st.et.toFixed(2)} s</b>
+        <span>${T.top}</span><b>${Math.round(topKmh(car))} km/h</b>
+        <span>${T.grip}</span>${bar((st.mu * st.lat - 0.8) / 0.75)}
+        <span>${T.cond}</span>${bar(car.cond, car.cond < 0.8 ? 'warn' : '')}
+      </div>${car.cond < 0.8 ? `<p class="warnp">${T.worn}</p>` : ''}`;
   }
-};
-const defaultStatus = () => [S ? L().bankroll(money(S.money)) : '', '', S ? L().shortDate(dateOf(S.day)) : ''];
-
-// ----- Diálogos -----
-// Cuadro gris con texto y una fila de botones (como "It's yours!" o "Will you take $345?")
-function msgBox(lines, buttons, onPick, o = {}) {
-  lines = [].concat(lines);
-  const d = {
-    cancel: o.cancel, onCancel: () => onPick && onPick(-1),
-    draw(g) {
-      const wrapped = lines.flatMap(l => (l === '' ? [''] : wrapText(l, (o.w || 420) - 40, 2)));
-      const bw = Math.max(90, ...buttons.map(b => textWidth(b, 2) + 24));
-      const w = Math.max(o.w || 300, buttons.length * (bw + 12) + 28, ...wrapped.map(l => textWidth(l, 2) + 40));
-      const h = wrapped.length * 22 + 74 + (o.extraH || 0);
-      const x = Math.round(o.x ?? (PW - w) / 2), y = Math.round(o.y ?? (PH - STATUS_H - h) / 2);
-      UI.greyBox(g, x, y, w, h);
-      wrapped.forEach((l, i) => ptext(g, l, x + w / 2, y + 14 + i * 22, i === 0 && o.title ? PAL.r2 : PAL.k, 2, { align: 'center' }));
-      if (o.extra) o.extra(g, x, y + 14 + wrapped.length * 22, w);
-      const total = buttons.length * bw + (buttons.length - 1) * 12;
-      buttons.forEach((b, i) => {
-        if (UI.button(g, x + (w - total) / 2 + i * (bw + 12), y + h - 44, bw, 30, b)) { Game.close(d); if (onPick) onPick(i); }
-      });
-      if (UI.enabled && UI.takeKey('Enter')) { Game.close(d); if (onPick) onPick(0); }
-    }
-  };
-  return Game.open(d);
+  render(topbar(dateLine()) + `<div class="panel side">
+      <h2>${T.title}</h2>${info}
+      <div class="grid2">${btn('paper', '📰 ' + T.paper)}${btn('shop', '🔧 ' + T.shop, { off: !car })}${btn('paint', '🎨 ' + T.paint, { off: !car })}${btn('cars', '🚗 ' + T.cars, { off: !G.S.cars.length })}${btn('test', '🏁 ' + T.test, { off: !car })}${btn('menu', T.menu)}</div>
+      ${btn('bobs', '🌙 ' + T.bobs, { cls: 'go wide', off: !car })}
+    </div>`, {
+    paper: () => paper(app), shop: () => shop(app), paint: () => paintShop(app), cars: () => myCars(app), test: () => app.testDrive(), menu: () => app.title(), bobs: () => app.bobs()
+  });
 }
-const say = (text, cb) => msgBox(text, [L().ok], cb);
-// Menú de botones grises en un lugar de la pantalla. El último suele ser "Olvídalo".
-function menuBox(x, y, w, items, onPick, o = {}) {
-  const d = {
-    onCancel: () => onPick(-1),
-    draw(g) {
-      if (o.title) { const tw = Math.max(w, textWidth(o.title, 2) + 16); g.fillStyle = PAL.k; g.fillRect(x - 4, y - 28, tw + 8, 26); ptext(g, o.title, x + 4, y - 24, PAL.y3, 2); }
-      const i = UI.menu(g, x, y, w, items, { h: o.h || 26 });
-      if (i >= 0) { Game.close(d); onPick(i); }
-    }
-  };
-  return Game.open(d);
+export function paper(app) {
+  const T = L().paper, P = G.S.paper;
+  const ads = P.ads.map((ad, i) => {
+    const c = ad.car, st = G.carStats(c), extras = c.up.engine || c.up.intake || c.up.tires;
+    return `<div class="ad ${ad.sold ? 'sold' : ''}"><img src="${carPhoto(c, 300, 160)}" alt="">
+      <div class="adt"><b>${carName(c).toUpperCase()}</b><span class="price">${money(ad.price)}</span></div>
+      <small>${T.cond} ${Math.round(c.cond * 100)}% · ${T.lines[ad.line]}${extras ? ' · ' + T.upgrades : ''}</small>
+      <div class="adb">${badge(st.cls)}<span class="et">${st.et.toFixed(2)} s</span>
+      ${ad.sold ? `<span class="stamp">${T.sold}</span>` : btn('buy', T.buy(money(ad.price)), { v: i, cls: 'small go', off: G.S.money < ad.price }) + btn('offer', T.offer, { v: i, cls: 'small', off: ad.haggled })}</div></div>`;
+  }).join('');
+  render(topbar(dateLine()) + `<div class="panel paperp"><div class="mast">${T.title}</div><div class="dateline">${L().date(G.dateOf(G.S.day))}, 1963 · 10¢</div>
+      <h3>${T.sub}</h3><div class="ads">${ads}</div><div class="row2"><span></span>${btn('back', L().close, { cls: 'go' })}</div></div>`, {
+    buy: v => { const ad = P.ads[+v], r = G.buyCar(+v, ad.price); if (r) toast(T[r] || r, 'bad'); else { toast(T.bought(carName(ad.car)), 'good'); app.refreshGarage(); } paper(app); },
+    offer: v => { const r = G.haggle(+v); toast(r ? T.deal(money(r)) : T.noDeal, r ? 'good' : 'bad'); paper(app); },
+    back: () => garage(app)
+  });
 }
-// Lista verde con botones abajo (repuestos, autos, llamadas...). items(): lista viva; buttons: [{label, fn(i), need}]
-function listBox(title, items, buttons, o = {}) {
-  const st = { sel: o.sel ?? 0, top: 0 };
-  const w = o.w || 520, h = o.h || 300, x = (PW - w) / 2, y = o.y ?? (PH - STATUS_H - h) / 2;
-  const d = {
-    draw(g) {
-      const list = items();
-      if (st.sel >= list.length) st.sel = list.length - 1;
-      UI.greenBox(g, x, y, w, h, title);
-      UI.list(g, x + 8, y + 34, w - 16, h - 84, list, st, { empty: o.empty });
-      if (o.info && list[st.sel]) o.info(g, list[st.sel], x + 12, y + h - 66, st.sel);
-      const bw = Math.min(150, (w - 24) / buttons.length - 8);
-      buttons.forEach((b, i) => {
-        const bx = x + w - 12 - (buttons.length - i) * (bw + 8) + 8;
-        const dis = b.need !== false && !list[st.sel];
-        if (UI.button(g, bx, y + h - 40, bw, 28, typeof b.label === 'function' ? b.label(list[st.sel]) : b.label, { disabled: dis || (b.disabled && b.disabled(list[st.sel])) })) {
-          if (b.close !== false) Game.close(d);
-          b.fn(st.sel, list[st.sel]);
-        }
-      });
-    }
-  };
-  return Game.open(d);
+export function shop(app) {
+  const T = L().shop, car = G.activeCar(), st = G.carStats(car);
+  const rows = UP_KEYS.map(k => {
+    const [name, levels] = T.cats[k], lv = car.up[k], max = UPGRADES[k].max, cost = G.upCost(car, k);
+    let after = '';
+    if (cost != null && k !== 'nitro' && k !== 'susp') { const nx = JSON.parse(JSON.stringify(car)); nx.up[k]++; const e2 = G.carStats(nx).et; after = `<em>${(e2 - st.et).toFixed(2).replace('-0.00', '0.00')} s</em>`; }
+    if (k === 'susp' && cost != null) after = `<em>+${Math.round((UPGRADES.susp.lat[lv + 1] / UPGRADES.susp.lat[lv] - 1) * 100)}% ${L().garage.grip.toLowerCase()}</em>`;
+    if (k === 'tires' && cost != null && after.includes('0.00')) after = `<em>+${Math.round((UPGRADES.tires.mu[lv + 1] / UPGRADES.tires.mu[lv] - 1) * 100)}% ${L().garage.grip.toLowerCase()}</em>`;
+    const pips = Array.from({ length: max + 1 }, (_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
+    return `<div class="uprow"><div class="upn"><b>${name}</b><small>${levels[lv]}</small></div><div class="pips">${pips}</div>
+      ${cost == null ? `<span class="maxed">${T.max}</span>` : btn('up', `${levels[lv + 1]} · ${money(cost)} ${after}`, { v: k, cls: 'small', off: G.S.money < cost })}</div>`;
+  }).join('');
+  const rc = G.repairCost(car);
+  render(topbar(dateLine()) + `<div class="panel side wide2">
+      <h2>${T.title} · ${carName(car)} ${badge(st.cls)}</h2>
+      <div class="stats one"><span>${L().garage.et}</span><b>${st.et.toFixed(2)} s</b></div>
+      <div class="uplist">${rows}</div>
+      <div class="uprow"><div class="upn"><b>${L().garage.cond}</b><small>${Math.round(car.cond * 100)}%</small></div>${car.cond < 0.995 ? btn('fix', T.repair(money(rc)), { cls: 'small', off: G.S.money < rc }) : `<span class="maxed">${T.fine}</span>`}</div>
+      <div class="seg">${btn('shift', T.shiftAuto, { v: 1, cls: G.S.autoShift ? 'on' : '' })}${btn('shift', T.shiftManual, { v: 0, cls: G.S.autoShift ? '' : 'on' })}</div>
+      <p class="muted small">${T.shiftHint}</p>
+      ${btn('back', L().back, { cls: 'go wide' })}</div>`, {
+    up: k => { const r = G.buyUpgrade(car, k); if (r) toast(L().paper.money, 'bad'); else { toast(T.bought(T.cats[k][0], T.cats[k][1][car.up[k]]), 'good'); app.refreshGarage(); } shop(app); },
+    fix: () => { if (!G.repair(car)) app.refreshGarage(); shop(app); },
+    shift: v => { G.S.autoShift = v === '1'; G.save(); shop(app); },
+    back: () => garage(app)
+  });
 }
-// Pregunta sí/no con precio (comprar, pintar, vender)
-const confirmBox = (text, yes, no, cb) => msgBox(text, [yes, no], i => { if (i === 0) cb(); });
-
-// Ofertas de compradores: hasta tres, cada una un poco mejor. onSold(monto)
-function offerLoop(value, onSold, round = 0) {
-  if (round >= 3) { say(L().noMoreBuyers); return; }
-  const offer = buyerOffer(value, round);
-  msgBox([L().buyerOffer(money(offer))], [L().ok, L().noThanks], i => {
-    if (i === 0) { Sound.sfx.buy(); onSold(offer); } else if (i === 1) offerLoop(value, onSold, round + 1);
+export function paintShop(app) {
+  const T = L().paint, car = G.activeCar();
+  const sw = COLORS.map(c => `<button class="swatch ${car.color === c ? 'on' : ''}" data-a="color" data-v="${c}" style="background:${c}"></button>`).join('');
+  const dc = DECALS.map(d => btn('decal', T.names[d], { v: d, cls: car.decal === d ? 'on' : '' })).join('');
+  render(topbar(dateLine()) + `<div class="panel side">
+      <h2>${T.title} · ${carName(car)}</h2>
+      <label class="lab">${T.colors(money(PAINT_PRICE))}</label><div class="swatches">${sw}</div>
+      <label class="lab">${T.decals(money(DECAL_PRICE))}</label><div class="seg wrap">${dc}</div>
+      ${btn('back', L().back, { cls: 'go wide' })}</div>`, {
+    color: c => { if (G.paint(car, c)) toast(L().paper.money, 'bad'); app.refreshGarage(); paintShop(app); },
+    decal: d => { if (G.decal(car, d)) toast(L().paper.money, 'bad'); app.refreshGarage(); paintShop(app); },
+    back: () => garage(app)
+  });
+}
+export function myCars(app) {
+  const T = L().cars;
+  const list = G.S.cars.map(c => {
+    const st = G.carStats(c), act = c.id === G.S.active;
+    return `<div class="ad mine ${act ? 'act' : ''}"><img src="${carPhoto(c, 300, 160)}" alt=""><div class="adt"><b>${carName(c)}</b>${badge(st.cls)}</div>
+      <small>${st.et.toFixed(2)} s · ${L().garage.cond} ${Math.round(c.cond * 100)}%</small>
+      <div class="adb">${act ? `<span class="tag">${T.active}</span>` : btn('use', T.use, { v: c.id, cls: 'small go' })}${btn('sell', T.sell(money(G.sellPrice(c))), { v: c.id, cls: 'small' })}</div></div>`;
+  }).join('');
+  render(topbar(dateLine()) + `<div class="panel paperp"><h2>${T.title}</h2><div class="ads">${list}</div><div class="row2"><span></span>${btn('back', L().back, { cls: 'go' })}</div></div>`, {
+    use: id => { G.S.active = +id; G.save(); app.refreshGarage(); myCars(app); },
+    sell: id => { const c = G.S.cars.find(x => x.id === +id); confirmBox(T.sure(carName(c), money(G.sellPrice(c))), () => { toast(T.sold(money(G.sellCar(+id))), 'good'); app.refreshGarage(); if (G.S.over) app.ending(); else garage(app); }, () => myCars(app)); },
+    back: () => garage(app)
   });
 }
 
-// Pantalla de transición: "Paseando por el pueblo..." con el auto cruzando de lado
-SCENES.cruise = {
-  music: null, status: false,
-  enter(o) { this.o = o; this.x = -150; Sound.sfx.door(); },
-  update(dt) { this.x += dt * 330; if (this.x > PW + 160 || (Game.sceneT > 0.4 && UI.clicks.length)) { UI.clicks.length = 0; this.o.then(); } },
-  draw(g) {
-    const night = this.o.night;
-    blit(g, cruiseBackground(night), 0, 0);
-    if (this.o.car) {
-      const box = drawCarSide(g, this.o.car, this.x, 331 + Math.sin(Game.t * 22) * 0.3, 1.25, { night });
-      // de noche, los focos alumbran la calle por delante
-      if (night) {
-        const hx = box.x + box.w - 2, hy = box.y + box.h * 0.55;
-        g.save(); g.globalCompositeOperation = 'lighter';
-        const beam = g.createLinearGradient(hx, 0, hx + 170, 0);
-        beam.addColorStop(0, 'rgba(255,240,200,0.32)'); beam.addColorStop(1, 'rgba(255,240,200,0)');
-        g.fillStyle = beam; g.beginPath(); g.moveTo(hx, hy - 3); g.lineTo(hx + 170, hy + 4); g.lineTo(hx + 170, 336); g.lineTo(hx, hy + 4); g.closePath(); g.fill();
-        glow(g, hx, hy, 10, '#fff4d0', 0.8);
-        g.restore();
-      }
-    }
-    ptext(g, this.o.text, PW / 2, 40, night ? PAL.y3 : PAL.k, 3, { align: 'center', shadow: night ? PAL.r2 : PAL.w });
+// ----- Bob's Drive-In -----
+const pickState = { id: null, type: 'drag', bet: 50, pink: false };
+export function bobs(app, sel) {
+  const T = L().bobs, N = G.S.night, me = G.activeCar();
+  if (sel !== undefined) { pickState.id = sel; pickState.pink = false; }
+  if (pickState.id && !N.present.includes(pickState.id)) pickState.id = null;
+  const mySt = me ? G.carStats(me) : null;
+  const list = N.present.map(id => {
+    const r = rivalById(id), st = G.carStats(G.rivalCar(r)), rec = G.S.rivals[id];
+    return `<button class="rival ${pickState.id === id ? 'on' : ''}" data-a="pick" data-v="${id}"><img src="${portrait(r.look, r.shades, 96)}" alt="">
+      <span><b>${esc(r.name)}</b>${r.king ? `<em class="king">${T.king}</em>` : r.boss ? `<em class="boss">${T.boss}</em>` : ''}<small>${carName(G.rivalCar(r))} ${badge(st.cls)}</small><small>${T.record(rec.w, rec.l)}</small></span></button>`;
+  }).join('');
+  const over = G.nightOver() || !N.present.length;
+  let card = '';
+  if (pickState.id && !over) {
+    const r = rivalById(pickState.id), rc = G.rivalCar(r), st = G.carStats(rc), P = pickState;
+    if (r.king) { P.type = 'road'; P.pink = true; }
+    if (P.type === 'drag') P.pink = false;
+    const maxBet = Math.min(CLASS_BET[r.cls], G.S.money), bets = [25, 50, 100, 250, 500, 1000, 1500].filter(b => b <= CLASS_BET[r.cls]);
+    if (P.bet > maxBet) P.bet = bets.filter(b => b <= maxBet).pop() || 0;
+    const why = G.challenge(r, P.type, P.bet, P.pink), W = T.why;
+    const reason = !why ? '' : typeof W[why] === 'function' ? W[why](why === 'tooMuch' ? money(CLASS_BET[r.cls]) : r.cls) : W[why];
+    const d = st.et - mySt.et, cmp = Math.abs(d) < 0.1 ? T.even : d < 0 ? T.faster((-d).toFixed(2)) : T.slower(d.toFixed(2));
+    const line = r.king ? T.kingHi : T.hi[(G.S.day + r.id.length) % T.hi.length];
+    card = `<div class="panel rcard"><div class="rhead"><img src="${portrait(r.look, r.shades, 160)}" alt=""><div><h2>${esc(r.name)}</h2><p class="quote">“${line}”</p></div></div>
+      <img class="rcar" src="${carPhoto(rc, 360, 190, -0.75)}" alt="">
+      <div class="carname">${carName(rc)} ${badge(st.cls)}</div><p class="cmp ${d < -0.1 ? 'bad' : d > 0.1 ? 'good' : ''}">${cmp}</p>
+      <div class="seg">${btn('type', '🏁 ' + T.drag, { v: 'drag', cls: P.type === 'drag' ? 'on' : '', off: r.king })}${btn('type', '🛣️ ' + T.road, { v: 'road', cls: P.type === 'road' ? 'on' : '' })}</div>
+      ${r.king ? '' : `<label class="lab">${T.bet}</label><div class="seg wrap">${bets.map(b => btn('bet', money(b), { v: b, cls: !P.pink && P.bet === b ? 'on' : '', off: b > G.S.money })).join('')}${P.type === 'road' ? btn('pink', '📄 ' + T.pink, { cls: P.pink ? 'on' : '' }) : ''}</div>`}
+      ${r.king ? `<p class="pinknote">📄 ${T.pink}</p>` : ''}
+      ${btn('go', T.go, { cls: 'go wide', off: !!why })}${why ? `<p class="why">${reason}</p>` : ''}
+      ${btn('unpick', L().back, { cls: 'ghost wide' })}</div>`;
   }
-};
-// La calle del pueblo de lado (de día o de noche)
-const TOWN_SHOPS = [
-  { t: 'DRUGS', c: '#1c6aa8', awn: '#d02c2c' }, { t: 'BARBER', c: '#a83030', door: 1 }, { t: 'CAFE', c: '#2c8a5a', awn: '#2c8a5a' },
-  { t: 'RADIO · TV', c: '#6a3ca0', door: 1 }, { t: 'HARDWARE', c: '#b06a18', awn: '#e0a020' }, { t: 'RECORDS', c: '#c02c78', door: 1 },
-  { t: 'BAKERY', c: '#a0602c', awn: '#3c6cf0' }, { t: 'SHOES', c: '#2c4a8a', door: 1 }
-];
-const TOWN_COLORS = ['#f2d7a6', '#e9b8a0', '#a8d0c8', '#f4ece0', '#c8d4e8', '#e8c86a', '#d8b0c8'];
-function cruiseBackground(night) {
-  return pxBackground('cruise' + (night ? 'n' : 'd'), g => {
-    const R = rng(4);
-    const sky = g.createLinearGradient(0, 0, 0, 270);
-    if (night) { sky.addColorStop(0, '#04050c'); sky.addColorStop(1, '#1e1a3c'); }
-    else { sky.addColorStop(0, '#3f86d8'); sky.addColorStop(1, '#cbe6f6'); }
-    g.fillStyle = sky; g.fillRect(0, 0, PW, 272);
-    if (night) { stars(g, 0, 0, PW, 180, 140); glow(g, 560, 46, 40, '#fff3cc', 0.25); oval(g, 560, 46, 11, 11, '#fff6dc'); }
-    else { softCloud(g, 120, 50, 150); softCloud(g, 470, 34, 120, 0.7); softCloud(g, 610, 80, 90, 0.6); }
-    // cerros lejanos
-    g.fillStyle = night ? '#141228' : '#a8bfd6';
-    g.beginPath(); g.moveTo(0, 230); g.quadraticCurveTo(110, 170, 230, 205); g.quadraticCurveTo(360, 150, 470, 200); g.quadraticCurveTo(570, 175, PW, 195); g.lineTo(PW, 272); g.lineTo(0, 272); g.fill();
-    // tiendas
-    let x = -14, i = Math.floor(R() * TOWN_SHOPS.length);
-    while (x < PW) {
-      const w = 92 + Math.floor(R() * 70), h = 104 + Math.floor(R() * 86);
-      storefront(g, x, w, h, 270, rpick(R, TOWN_COLORS), night, R, TOWN_SHOPS[i++ % TOWN_SHOPS.length]);
-      x += w + 6 + Math.floor(R() * 26);
-    }
-    // vereda con su solera
-    const sw = g.createLinearGradient(0, 270, 0, 290);
-    sw.addColorStop(0, night ? '#34343c' : '#d6d1c6'); sw.addColorStop(1, night ? '#26262c' : '#b9b3a7');
-    g.fillStyle = sw; g.fillRect(0, 270, PW, 20);
-    g.fillStyle = 'rgba(0,0,0,0.1)'; for (let lx = 20; lx < PW; lx += 46) g.fillRect(lx, 270, 1, 20);
-    g.fillStyle = night ? '#4a4a52' : '#ece8e0'; g.fillRect(0, 288, PW, 3);
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 291, PW, 2);
-    // palmeras y faroles
-    for (let k = 0; k < 4; k++) palmTree(g, 70 + k * 165 + Math.floor(R() * 30), 280, 150 + R() * 30, (R() - 0.3) * 0.25, night);
-    for (let lx = 140; lx < PW; lx += 220) {
-      g.fillStyle = night ? '#2a2a30' : '#4a4e56'; g.fillRect(lx, 176, 3, 104); g.fillRect(lx, 176, 16, 3);
-      g.fillStyle = night ? '#fff2c0' : '#d8dce2'; g.fillRect(lx + 10, 178, 9, 3);
-      if (night) { g.save(); g.globalCompositeOperation = 'lighter'; glow(g, lx + 14, 180, 46, '#ffd890', 0.4); g.restore(); }
-    }
-    // la calle
-    const st = g.createLinearGradient(0, 293, 0, PH);
-    st.addColorStop(0, night ? '#1c1d22' : '#585a60'); st.addColorStop(1, night ? '#111216' : '#3c3e44');
-    g.fillStyle = st; g.fillRect(0, 293, PW, PH - 293);
-    for (let n = 0; n < 500; n++) { g.fillStyle = `rgba(255,255,255,${0.03 + R() * 0.05})`; g.fillRect(R() * PW, 293 + R() * 107, 1, 1); }
-    g.fillStyle = night ? '#6a6a60' : '#f2f0e6'; for (let lx = 0; lx < PW; lx += 60) g.fillRect(lx, 348, 30, 3);
-    // la luz de los faroles en la vereda y la calle
-    if (night) for (let lx = 140; lx < PW; lx += 220) {
-      g.save(); g.globalCompositeOperation = 'lighter'; g.translate(lx + 14, 292); g.scale(1, 0.22);
-      const pool = g.createRadialGradient(0, 0, 0, 0, 0, 90);
-      pool.addColorStop(0, 'rgba(255,214,140,0.22)'); pool.addColorStop(1, 'rgba(255,214,140,0)');
-      g.fillStyle = pool; g.fillRect(-90, -90, 180, 180); g.restore();
-    }
+  render(topbar(`${T.title} · ${clock(N.time)}`) + `<div class="panel side bobsp ${card ? 'haspick' : ''}"><h2>${T.title}</h2><small class="muted">${T.tonight} · ${clock(N.time)}</small>
+      <div class="rivals">${over ? `<p class="muted">${N.time >= 25 * 60 ? T.closing : T.empty}</p>` : list}</div>
+      ${btn('home', '🏠 ' + T.home, { cls: over ? 'go wide' : 'wide' })}</div>${card}`, {
+    pick: id => { app.focus(id); bobs(app, id); },
+    unpick: () => { pickState.id = null; app.focus(null); bobs(app); },
+    type: v => { pickState.type = v; bobs(app); },
+    bet: v => { pickState.bet = +v; pickState.pink = false; bobs(app); },
+    pink: () => { pickState.pink = !pickState.pink; bobs(app); },
+    go: () => app.race(pickState.id, pickState.type, pickState.pink ? 0 : pickState.bet, pickState.pink),
+    home: () => app.home()
+  });
+  app.focus(pickState.id);
+}
+export function clearPick() { pickState.id = null; }
+
+// ----- resultado de la carrera -----
+export function result(app, R, out, rivalName) {
+  const T = L().result, TR = L().race, lines = [];
+  if (out) {
+    if (out.money > 0) lines.push(T.money(money(out.money)));
+    if (out.money < 0) lines.push(T.lose(money(-out.money)));
+    if (out.gotCar && out.sold) lines.push(T.soldCar(carName(out.gotCar), money(out.sold)));
+    else if (out.gotCar) lines.push(T.gotCar(carName(out.gotCar)));
+    if (out.lostCar) lines.push(T.lostCar(carName(out.lostCar)));
+    if (out.unlocked && out.unlocked !== 'S') lines.push(T.unlocked(out.unlocked));
+    if (out.unlocked === 'S') lines.push(T.kingNow);
+  }
+  render(`<div class="panel resultp"><h2 class="${R.win ? 'win' : 'lose'}">${R.title}</h2>
+      <table><thead><tr><th></th><th>${TR.you}</th><th>${esc(rivalName || '')}</th></tr></thead><tbody>${R.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>
+      ${lines.map(l => `<p class="resline">${l}</p>`).join('')}
+      ${btn('back', out ? T.back : L().back, { cls: 'go wide' })}</div>`, { back: () => app.afterRace() });
+}
+export function ending(app) {
+  const S = G.S, E = L().end[S.over] || L().end.summer;
+  render(`<div class="panel endp"><h1 class="${S.over === 'king' ? 'win' : ''}">${E[0]}</h1><p>${E[1](esc(S.name))}</p><p class="muted">${L().end.stats(S.stats.wins, S.stats.losses, S.day + 1)}</p>
+    ${btn('menu', L().ok, { cls: 'go wide' })}</div>`, { menu: () => { G.clearSave(); app.title(); } });
+}
+export function pause(app) {
+  const T = L().pause;
+  render(`<div class="panel dialog"><p>${T.title}</p><div class="row2">${btn('resume', T.resume, { cls: 'go' })}${btn('quit', T.quit)}</div></div>`, {
+    resume: () => app.resume(), quit: () => app.quitRace()
   });
 }
+export function clear() { render('', {}); }

@@ -1,336 +1,261 @@
-// ===== Carreras: picadas de cuarto de milla y carreras de ruta, vistas desde el asiento =====
-const POLICE_GIVEUP = 380, FINE_STOP = 20, FINE_CAUGHT = 75;
+// ===== Las carreras: picada con árbol de largada, ruta de dos vueltas contra un rival, y manejo libre =====
+import { Vehicle } from './physics.js';
+import { DRAG_LEN, LANE } from './world.js';
+import { clamp, rnd } from './util.js';
+import { L } from './i18n.js';
 
-// Cuánto puede doblar un auto en una curva sin salirse (m/s²)
-const latGrip = (stats, skill = 1) => stats.lat * G * stats.handling * (0.78 + 0.22 * skill);
-// Velocidad segura mirando la pista que viene (para los pilotos de la computadora y la policía)
-function safeSpeed(T, z, v, grip, brake = 6) {
-  let best = 90;
-  for (let d = 0; d < 170; d += SEG) {
-    const s = segAt(T, z + d), k = Math.abs(s.curve);
-    if (k < 1e-5) continue;
-    const vc = Math.sqrt(grip / k);
-    best = Math.min(best, Math.sqrt(vc * vc + 2 * brake * d));
+const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+const KMH = 3.6;
+export const LAPS = 2;
+
+// Un participante: el auto que se ve, su física y, si no es el jugador, su piloto
+class Racer {
+  constructor(car, spec, skill) {
+    this.car = car; this.v = new Vehicle(spec); this.skill = skill; this.ai = skill !== undefined;
+    this.q = { i: 0, s: 0, lat: 0, y: 0, tx: 0, tz: 1 }; this.hint = -1;
+    this.prog = 0; this.lastS = 0; this.lap = 0; this.lapStart = 0; this.best = null; this.done = false; this.finishT = 0;
+    this.launched = false; this.etStart = null; this.sixty = null; this.et = null; this.trap = 0; this.rt = null;
   }
-  return best;
 }
 
-class Race {
-  // o = { type: 'drag'|'road', car, rival: { name, look, car, skill, king }, bet, seed, police (0..1), units, auto (piloto automático para pruebas) }
-  constructor(o) {
-    this.o = o; this.type = o.type; this.t = 0;
-    this.T = o.type === 'drag' ? buildDragStrip(o.seed) : buildRoadCourse(o.seed);
-    const z0 = this.T.start - 3;
-    const meStats = carStats(o.car), rvStats = carStats(o.rival.car);
-    this.me = { car: o.car, s: meStats, veh: new Vehicle(meStats), z: z0, x: LANE, vx: 0, steer: 0, shake: 0, startZ: z0 };
-    this.rv = { car: o.rival.car, s: rvStats, veh: new Vehicle(rvStats), z: z0, x: -LANE, vx: 0, drv: makeDriver(o.rival.skill), lane: -LANE, startZ: z0, crashed: false };
-    if (o.auto) this.me.drv = makeDriver(1, () => 0.5);
-    this.phase = 'intro'; this.phaseT = 0;
-    this.flag = 0;           // 0 abajo, 1 arriba, 2 bajó (¡ya!)
-    this.goAt = 0; this.goT = null;
-    this.dropAfter = 1.3 + Math.random() * 1.9;
-    this.rivalJump = o.rival.skill < 0.66 && !o.rival.king && Math.random() < 0.12;
-    this.msg = null; this.hint = null; this.flash = 0; this.crack = 0;
-    this.cross = { me: null, rv: null };
-    this.reaction = null;
-    this.scroll = 0;
-    this.result = null; this.endT = 0;
-    this.fuel0 = o.car.fuel;
-    this.trap = 0;
-    this.traffic = [];
-    this.cop = null;
-    this.copZ = o.type === 'road' && Math.random() < (o.police || 0) ? this.T.finish * (0.2 + Math.random() * 0.4) : null;
-    if (o.type === 'road') this.spawnTraffic(rng(o.seed * 31 + 7));
-    this.smoke = [];
+export class Race {
+  // kind: 'drag' | 'road' | 'free'. me / rival: { car, spec, skill? }
+  constructor(kind, world, me, rival) {
+    this.kind = kind; this.world = world; this.track = world.track;
+    this.t = 0; this.goT = null; this.phase = 'ready'; this.msg = null; this.events = []; this.result = null; this.foul = false;
+    this.me = new Racer(me.car, me.spec);
+    this.rv = rival ? new Racer(rival.car, rival.spec, rival.skill ?? 0.9) : null;
+    this.racers = [this.me, this.rv].filter(Boolean);
+    this.wrongT = 0;
+    if (kind === 'drag') this.placeDrag(); else this.placeRoad();
+  }
+  say(text, dur = 1.6, cls = '') { this.msg = { text, until: this.t + dur, cls }; }
+
+  // ----- posiciones de salida -----
+  placeDrag() {
+    for (const r of this.racers) {
+      const x = r === this.me ? -LANE : LANE;
+      r.v.reset(x, 0, -r.car.len / 2 - 0.05, 0); r.v.hold = true; r.startZ = r.v.z;
+    }
+    this.world.tree.reset();
+    for (const b of this.world.boards) b.set('--.---', '---');
+    this.treeAt = 1.4 + rnd(0.5, 1.6);
+    this.phase = 'stage';
+    this.say(L().race.hint, 5, 'hint');
+  }
+  placeRoad() {
+    const s0 = this.world.startS, T = this.track;
+    const put = (r, s, lat) => { const p = T.at(s); r.v.reset(p.x + p.rx * lat, p.y, p.z + p.rz * lat, Math.atan2(p.tx, p.tz)); r.hint = -1; r.lastS = s; r.prog = s - s0; };
+    put(this.me, s0 - 10, 2.1);
+    if (this.rv) put(this.rv, s0 - 4, -2.1);
+    if (this.kind === 'road') { for (const r of this.racers) r.v.hold = true; this.phase = 'grid'; this.say('3', 1, 'count'); }
+    else { this.phase = 'run'; this.goT = 0; this.say(L().race.free, 3, 'hint'); }
   }
 
-  spawnTraffic(R) {
-    const len = this.T.finish;
-    for (let i = 0; i < 11; i++) {
-      const model = rpick(R, ['chevy49', 'dodge50', 'merc48', 'olds54', 'plym57', 'valiant60', 'nomad56']);
-      this.traffic.push({ z: 450 + R() * len * 1.9, x: -LANE, v: -(17 + R() * 6), car: makeCar(model, { color: rpick(R, MODELS[model].colors) }), oncoming: true });
+  // ----- un paso de física (1/120 s) -----
+  step(dt, inp) {
+    this.t += dt;
+    if (this.kind === 'drag') this.dragLogic(inp); else this.roadLogic();
+    for (const r of this.racers) {
+      const env = this.surface(r);
+      const ctl = r.ai ? this.pilot(r) : this.playerInput(r, inp);
+      r.v.update(dt, ctl, env);
+      this.walls(r);
+      for (const e of r.v.events) this.events.push([r, e]);
+      r.v.events.length = 0;
+      this.timing(r);
     }
-    for (let i = 0; i < 5; i++) {
-      const model = rpick(R, ['chevy49', 'dodge50', 'merc48', 'ford40', 'olds49', 'valiant60']);
-      this.traffic.push({ z: 500 + R() * (len - 700), x: LANE, v: 15 + R() * 5, car: makeCar(model, { color: rpick(R, MODELS[model].colors) }), oncoming: false });
+    if (this.rv) this.collide(this.me.v, this.rv.v);
+    if (this.kind !== 'drag' && this.phase === 'run') this.wrongWay(dt);
+    if (this.phase !== 'done' && this.finished()) this.finish();
+  }
+  playerInput(r, inp) {
+    const c = { gas: inp.gas, brake: inp.brake, steer: inp.steer, analog: inp.analog, hand: false, up: inp.up, down: inp.down, nitro: inp.nitro };
+    if (this.kind === 'drag') {
+      // en la picada ESPACIO suelta el embrague y después sube los cambios; el auto se mantiene en su pista
+      if (r.v.hold) { c.up = false; if (inp.launch) this.launch(r); }
+      else if (inp.launch && r.v.spec.manual) c.up = true;
+      if (Math.abs(inp.steer) < 0.1) c.steer = clamp((r.v.x + LANE) * 0.35 + r.v.h * 2.5, -0.5, 0.5);
+      if (r.done) c.gas = 0;
+    } else c.hand = inp.hand;
+    if (this.phase === 'done' && this.kind !== 'free') { c.gas = 0; c.brake = Math.max(c.brake, 0.4); c.noReverse = true; }
+    return c;
+  }
+  launch(r) {
+    r.v.hold = false; r.launched = true;
+    if (this.goT === null || this.t < this.goT) {
+      if (r === this.me) { this.foul = true; this.world.tree.set(-1, 'red', true); this.say(L().race.foul, 2.2, 'bad'); }
+      r.rt = this.goT === null ? -1 : this.t - this.goT;
+    } else r.rt = this.t - this.goT;
+    if (r === this.me && !this.foul) {
+      const q = r.v.rpm / r.v.spec.red;
+      const T = L().race; this.say(q < 0.32 ? T.lowRevs : q > 0.76 ? T.spin : r.rt < 0.2 ? T.greatRt : T.goodStart, 1.4, q < 0.32 || q > 0.76 ? 'warn' : 'good');
     }
   }
-
-  say(text, t = 2.2, color = '#fff') { this.msg = { text, t, color, max: t }; }
-
-  update(dt) {
-    this.t += dt; this.phaseT += dt;
-    const me = this.me, rv = this.rv;
-    if (this.msg && (this.msg.t -= dt) <= 0) this.msg = null;
-    this.flash = Math.max(0, this.flash - dt * 2);
-    const inp = this.playerInput(dt);
-    // ----- partida -----
-    if (this.phase === 'intro' && this.phaseT > 2.2) { this.phase = 'stage'; this.phaseT = 0; }
+  // ----- el árbol de largada -----
+  dragLogic() {
+    const tr = this.world.tree, t = this.t;
     if (this.phase === 'stage') {
-      if (this.flag === 0 && this.phaseT > 0.7) { this.flag = 1; Sound.sfx.flag(); }
-      if (this.flag === 1 && this.phaseT > 0.7 + this.dropAfter) {
-        this.flag = 2; this.goAt = this.t; this.phase = 'run'; this.phaseT = 0;
-        Sound.sfx.go(); this.say(L().race.go, 1, '#ffd23a');
-      } else if (this.rivalJump && this.flag === 1 && this.phaseT > 0.7 + this.dropAfter - 0.35) {
-        rv.veh.launch(); return this.finish('win', 'rivalFoul');
+      if (t > 0.4) { tr.set(-1, 'pre', true); tr.set(1, 'pre', true); }
+      if (t > 1.0) { tr.set(-1, 'stage', true); tr.set(1, 'stage', true); }
+      if (t >= this.treeAt) this.phase = 'tree';
+    }
+    if (this.phase === 'tree') {
+      const k = t - this.treeAt;
+      for (const lane of [-1, 1]) { tr.set(lane, 'a1', k >= 0); tr.set(lane, 'a2', k >= 0.5); tr.set(lane, 'a3', k >= 1); }
+      if (k >= 1.5) {
+        this.goT = this.treeAt + 1.5; this.phase = 'run';
+        for (const lane of [-1, 1]) { for (const a of ['a1', 'a2', 'a3']) tr.set(lane, a, false); tr.set(lane, 'green', !(lane === -1 && this.foul)); }
+        if (!this.me.launched) this.say(L().race.green, 0.8, 'go');
       }
     }
-    if (inp.launch && me.veh.gear === 0 && this.phase !== 'done') {
-      if (this.phase !== 'run') { me.veh.launch(); return this.finish('lose', 'foul'); }
-      me.veh.launch(); this.reaction = this.t - this.goAt;
-    }
-    this.goT = this.phase === 'run' || this.phase === 'done' ? this.t - this.goAt : null;
-    // ----- autos -----
-    this.stepCar(me, dt, inp);
-    const rinp = this.phase === 'stage' || this.phase === 'intro'
-      ? driveStraight(rv.veh, rv.drv, dt, null)
-      : this.rivalInput(dt);
-    this.stepCar(rv, dt, rinp);
-    if (this.phase === 'run' || this.phase === 'done') this.stepTraffic(dt);
-    // ----- llegada -----
-    for (const [k, c] of [['me', me], ['rv', rv]]) {
-      if (this.cross[k] === null && c.z >= this.T.finish) {
-        const over = (c.z - this.T.finish) / Math.max(1, c.veh.v);
-        this.cross[k] = this.t - this.goAt - over;
-        if (k === 'me') this.trap = c.veh.v;
-      }
-    }
-    if (this.phase === 'run') this.checkEnd(dt);
-    if (this.phase === 'done') { this.endT += dt; }
-    // sonido y efectos
-    for (const ev of me.veh.events) {
-      if (ev === 'shift') Sound.sfx.clunk();
-      if (ev === 'grind') { Sound.sfx.grind(); this.say(L().race.grind, 2.4, '#ff8a6a'); }
-      if (ev === 'blown') { Sound.sfx.boom(); this.flash = 0.6; }
-      if (ev === 'broken') Sound.sfx.grind();
-    }
-    me.veh.events.length = 0; rv.veh.events.length = 0;
-    if (me.veh.spin > 0.25 && me.veh.v < 40) this.puff(me, me.veh.spin);
-    if (rv.veh.spin > 0.25 && rv.veh.v < 40) this.puff(rv, rv.veh.spin);
-    for (const p of this.smoke) { p.age += dt; p.x += p.vx * dt; p.y -= dt * 0.6; p.r += dt * 1.6; }
-    this.smoke = this.smoke.filter(p => p.age < 2.2);
-    this.scroll += segAt(this.T, me.z).curve * me.veh.v * dt * 900;
   }
-
-  puff(c, k) {
-    if (Math.random() > k * 0.9) return;
-    for (const side of [-0.75, 0.75]) this.smoke.push({ who: c, z: c.z - 2.2, x: c.x + side, y: 0.3, vx: side * 0.6, r: 0.6, age: 0 });
-  }
-
-  playerInput(dt) {
-    const me = this.me;
-    if (this.o.auto) {
-      if (this.phase === 'intro') return { throttle: 0, brake: 0, steer: 0 };
-      const drv = me.drv;
-      if (me.veh.gear === 0) {
-        const r = driveStraight(me.veh, drv, dt, this.phase === 'run' ? this.t - this.goAt : null);
-        const launch = me.veh.gear > 0; if (launch) { me.veh.gear = 0; }
-        return { throttle: r.throttle, brake: 0, steer: 0, launch };
-      }
-      const target = this.type === 'road' ? Math.min(safeSpeed(this.T, me.z, me.veh.v, latGrip(me.s) * 0.95), this.trafficLimit(me, this.rv)) : Infinity;
-      const r = driveStraight(me.veh, drv, dt, 1, target);
-      if (this.type === 'road') me.lane = this.aiLane(me, this.rv, LANE);
-      const tx = this.type === 'road' ? me.lane : LANE;
-      return { throttle: r.throttle, brake: r.brake, steer: clamp((tx - me.x) * 1.6 - me.vx * 0.5, -1, 1), auto: true };
-    }
-    const k = Input.read();
-    const out = { throttle: k.gas ? 1 : 0, brake: k.brake ? 1 : 0, steer: k.steer, launch: false };
-    if (k.up) { if (me.veh.gear === 0) out.launch = true; else me.veh.shiftUp(); }
-    if (k.down) me.veh.shiftDown();
-    if (k.horn) Sound.sfx.horn();
-    if (this.phase === 'done') { out.throttle = 0; out.brake = 0.4; }
-    return out;
-  }
-
-  // Elige carril con tres estados: va por su pista, adelanta por la izquierda, o aborta y vuelve detrás del lento
-  aiLane(c, other, pref) {
-    const v = c.veh.v, T = this.traffic;
-    const oncoming = win => T.some(o => o.oncoming && o.z > c.z - 6 && o.z - c.z < win);
-    const slowAhead = (x, far) => T.find(o => !o.oncoming && Math.abs(o.x - x) < 1.2 && o.z > c.z - 6 && o.z - c.z < far && o.v < v + 1) ||
-      (Math.abs(other.x - x) < 1.9 && other.z > c.z - 6 && other.z - c.z < Math.min(far, 18) && other.veh.v < v + 1 ? other : null);
-    const beside = x => T.some(o => !o.oncoming && Math.abs(o.x - x) < 1.4 && o.z - c.z > -6 && o.z - c.z < 7.5) || (Math.abs(other.x - x) < 1.9 && other.z - c.z > -6 && other.z - c.z < 7);
-    c.ai = c.ai || 'cruise';
-    if (c.ai === 'cruise') {
-      if (slowAhead(LANE, 22 + v) && !oncoming(260 + v * 5) && !beside(-LANE)) c.ai = 'pass';
-    } else if (c.ai === 'pass') {
-      if (oncoming(170 + v * 3.5)) c.ai = 'abort';
-      else if (!slowAhead(LANE, 10 + v * 0.6) && !beside(LANE)) c.ai = 'cruise';
-    } else if (c.ai === 'abort') {
-      if (!beside(LANE) && !slowAhead(LANE, 6)) c.ai = 'cruise';
-      else if (!oncoming(240 + v * 5)) c.ai = 'pass';
-    }
-    if (pref < 0 && c.ai === 'cruise' && !oncoming(240 + v * 5)) return -LANE;
-    return c.ai === 'pass' ? -LANE : c.ai === 'abort' ? (beside(LANE) ? -LANE : LANE) : LANE;
-  }
-  // Velocidad máxima para no chocar al de adelante (o al que viene de frente por tu pista), mirando también el carril al que va
-  trafficLimit(c, other) {
-    let lim = 90;
-    const b = 6.5, lane = c.lane ?? c.x;
-    const ahead = (oz, ox, ov, oncoming) => {
-      if (oz < c.z || (Math.abs(c.x - ox) > 2.1 && Math.abs(lane - ox) > 1)) return;
-      const d = oz - c.z - 9;
-      lim = Math.min(lim, d < 0 ? Math.max(0, ov - 2) : Math.sqrt(Math.max(0, ov) ** 2 + 2 * b * d));
-    };
-    // frenar no sirve contra el que viene de frente: lo que salva es volver a la derecha
-    for (const o of this.traffic) if (!o.oncoming) ahead(o.z, o.x, o.v, false);
-    if (other) ahead(other.z, other.x, other.veh.v, false);
-    // abortando un adelantamiento: frena para quedar detrás del lento
-    if (c.ai === 'abort') for (const o of this.traffic) if (!o.oncoming && o.x > 0 && o.z - c.z > -9 && o.z - c.z < 12) lim = Math.min(lim, Math.max(8, o.v - 7));
-    return lim;
-  }
-
-  rivalInput(dt) {
-    const rv = this.rv;
-    if (this.type === 'drag') return driveStraight(rv.veh, rv.drv, dt, this.t - this.goAt);
-    rv.lane = this.aiLane(rv, this.me, LANE);
-    const target = Math.min(safeSpeed(this.T, rv.z, rv.veh.v, latGrip(rv.s, rv.drv.skill) * 0.93, 4 + 3 * rv.drv.skill), this.trafficLimit(rv, this.me));
-    return driveStraight(rv.veh, rv.drv, dt, this.t - this.goAt, target);
-  }
-
-  stepCar(c, dt, inp) {
-    const v = c.veh, T = this.T;
-    v.offroad = Math.abs(c.x) > ROAD_W + 0.4 ? 1 : 0;
-    v.step(dt, inp);
-    c.z += v.v * dt;
-    const seg = segAt(T, c.z);
-    if (c === this.me) {
-      // volante: el teclado gira de a poco; las curvas empujan hacia afuera
-      c.steer = approach(c.steer, inp.steer || 0, dt * (inp.auto ? 6 : 3.2));
-      const grip = latGrip(c.s);
-      const aReq = v.v * v.v * seg.curve;
-      const aSteer = c.steer * grip * clamp(v.v / 8, 0, 1);
-      let slide = 0;
-      if (Math.abs(aReq) > grip) slide = (Math.abs(aReq) - grip) * Math.sign(aReq);
-      const target = (aSteer - aReq) * 0.36;
-      c.vx = lerp(c.vx, target, clamp(dt * 5, 0, 1));
-      c.x = clamp(c.x + c.vx * dt, -ROAD_W - 7, ROAD_W + 7);
-      c.slide = Math.abs(slide) + (Math.abs(aSteer) > grip * 0.92 && v.v > 15 ? 0.3 : 0);
-      if (v.offroad) { c.shake = 1; }
-      if (this.type === 'drag' && this.phase === 'run' && v.spin > 0.3) c.vx += (Math.random() - 0.5) * v.spin * 3 * dt;
-    } else {
-      c.x = approach(c.x, c.lane ?? c.x, dt * 2.6);
+  roadLogic() {
+    if (this.phase === 'grid') {
+      const k = Math.floor(this.t);
+      if (this.t < 3 && this.msg && this.msg.text !== String(3 - k)) this.say(String(3 - k), 1, 'count');
+      if (this.t >= 3) { this.phase = 'run'; this.goT = this.t; for (const r of this.racers) { r.v.hold = false; r.v.launchRpm = r.v.rpm; } this.say(L().race.go, 0.9, 'go'); }
     }
   }
-
-  stepTraffic(dt) {
+  // ----- piso: asfalto, ripio o pasto -----
+  surface(r) {
+    const v = r.v, T = this.track;
+    r.q = T.query(v.x, v.z, r.hint, r.q); r.hint = r.q.i;
+    if (this.kind === 'drag') return { mu: 1, drag: 0, y: 0 };
+    const a = Math.abs(r.q.lat), hw = T.hw;
+    r.surf = a < hw + 0.3 ? 'road' : a < hw + 2.6 ? 'gravel' : 'grass';
+    if (r.surf === 'road') return { mu: 1, drag: 0, y: r.q.y };
+    if (r.surf === 'gravel') return { mu: 0.78, drag: 0.15, y: r.q.y - (a - hw) * 0.07 };
+    return { mu: 0.55, drag: 0.55, y: this.world.heightAt(v.x, v.z) + 0.25 };
+  }
+  // ----- muros de la recta, barandas de las curvas y el borde del mundo -----
+  walls(r) {
+    const v = r.v;
+    if (this.kind === 'drag') {
+      const lim = 6.2 - 0.33 - r.car.wid / 2;
+      if (Math.abs(v.x) > lim) { const s = Math.sign(v.x); v.x = s * lim; if (v.vx * s > 0) { v.vx *= -0.2; v.vz *= 0.985; this.events.push([r, 'hit']); } v.h *= 0.9; }
+      if (v.z > DRAG_LEN + 318) { v.z = DRAG_LEN + 318; v.vz = Math.min(v.vz, 0); v.vx *= 0.5; }
+      return;
+    }
+    const q = r.q, hw = this.track.hw, side = Math.sign(q.lat), a = Math.abs(q.lat);
+    const rail = this.world.rails && this.world.rails[q.i] === side;
+    const lim = rail ? hw + 3 - 0.95 : hw + 32;
+    if (a > lim) {
+      const nx = -q.tz * side, nz = q.tx * side, push = a - lim;
+      v.x -= nx * push; v.z -= nz * push;
+      const vn = v.vx * nx + v.vz * nz;
+      if (vn > 0) { v.vx -= nx * vn * 1.25; v.vz -= nz * vn * 1.25; v.vx *= 0.97; v.vz *= 0.97; if (vn > 2) this.events.push([r, 'hit']); }
+    }
+  }
+  collide(a, b) {
+    for (const da of [-1.25, 1.25]) for (const db of [-1.25, 1.25]) {
+      const ax = a.x + Math.sin(a.h) * da, az = a.z + Math.cos(a.h) * da, bx = b.x + Math.sin(b.h) * db, bz = b.z + Math.cos(b.h) * db;
+      const dx = bx - ax, dz = bz - az, d = Math.hypot(dx, dz), R = 2.0;
+      if (d >= R || d < 1e-4) continue;
+      const nx = dx / d, nz = dz / d, push = (R - d) / 2;
+      a.x -= nx * push; a.z -= nz * push; b.x += nx * push; b.z += nz * push;
+      const rv = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
+      if (rv < 0) { const j = -rv * 0.6; a.vx -= nx * j; a.vz -= nz * j; b.vx += nx * j; b.vz += nz * j; if (rv < -2) this.events.push([this.me, 'hit']); }
+    }
+  }
+  wrongWay(dt) {
+    const v = this.me.v, q = this.me.q;
+    const back = Math.sin(v.h) * q.tx + Math.cos(v.h) * q.tz < -0.4 && v.speed > 4;
+    this.wrongT = back ? this.wrongT + dt : 0;
+    if (this.wrongT > 1.5 && (!this.msg || this.msg.until < this.t + 0.2)) this.say(L().race.wrong, 0.6, 'bad');
+  }
+  // ----- tiempos -----
+  timing(r) {
+    const v = r.v;
+    if (this.kind === 'drag') {
+      const moved = v.z - r.startZ;
+      if (r.etStart === null && moved > 0.25) r.etStart = this.t;
+      if (r.sixty === null && moved > 18.3) r.sixty = this.t - r.etStart;
+      if (!r.done && v.z + r.car.len / 2 >= DRAG_LEN) { r.done = true; r.et = this.t - r.etStart; r.trap = v.speed * KMH; r.finishT = this.t; if (r === this.me) this.world.boards[0].set(r.et.toFixed(3), Math.round(r.trap) + ' km/h'); else this.world.boards[1].set(r.et.toFixed(3), Math.round(r.trap) + ' km/h'); }
+      return;
+    }
+    // vueltas: lo recorrido sin saltos al pasar por el comienzo de la pista
+    const len = this.track.length;
+    let ds = r.q.s - r.lastS; if (ds < -len / 2) ds += len; if (ds > len / 2) ds -= len;
+    r.lastS = r.q.s; r.prog += ds;
+    if (this.phase !== 'run') return;
+    const lap = Math.floor(r.prog / len);
+    if (lap > r.lap && r.prog > 0) {
+      const lt = this.t - (r.lap === 0 ? this.goT : r.lapStart);
+      r.lap = lap; r.lapStart = this.t;
+      if (r.prog > len * 0.5) { if (!r.best || lt < r.best) r.best = lt; if (r === this.me && this.kind === 'free') this.say(L().race.lap(fmt(lt)), 2, 'good'); }
+      if (this.kind === 'road' && r.lap >= LAPS && !r.done) { r.done = true; r.finishT = this.t; }
+      else if (r === this.me && this.kind === 'road' && r.lap === LAPS - 1) this.say(L().race.lastLap, 1.6, 'good');
+    }
+  }
+  finished() {
+    if (this.kind === 'free') return false;
     const me = this.me, rv = this.rv;
-    for (const o of this.traffic) {
-      if (!o.oncoming) {
-        // los autos lentos frenan si tienen a alguien pegado adelante
-        o.z += o.v * dt;
-      } else o.z += o.v * dt;
+    if (this.kind === 'drag') return me.done && (rv.done || this.t - me.finishT > 4) || rv.done && this.t - rv.finishT > 12;
+    return me.done || (rv && rv.done && this.t - rv.finishT > 25);
+  }
+  finish() {
+    this.phase = 'done';
+    const me = this.me, rv = this.rv, f = x => (x == null ? '—' : x.toFixed(3)), T = L().race, R = T.rows;
+    if (this.kind === 'drag') {
+      const tot = r => (r.done ? r.finishT - this.goT : Infinity);
+      const win = !this.foul && tot(me) < tot(rv);
+      this.result = {
+        title: this.foul ? T.foulTitle : win ? T.won : T.lost, win,
+        rows: [[R.rt, f(me.rt), f(rv.rt)], [R.sixty, f(me.sixty), f(rv.sixty)], [R.et, f(me.et), f(rv.et)], [R.trap, me.done ? Math.round(me.trap) + ' km/h' : '—', rv.done ? Math.round(rv.trap) + ' km/h' : '—']]
+      };
+    } else {
+      const win = me.done && (!rv.done || me.finishT <= rv.finishT);
+      this.result = {
+        title: win ? T.won : T.lost, win,
+        rows: [[R.total, me.done ? fmt(me.finishT - this.goT) : '—', rv.done ? fmt(rv.finishT - this.goT) : T.unfinished], [R.bestLap, me.best ? fmt(me.best) : '—', rv.best ? fmt(rv.best) : '—']]
+      };
     }
-    // choques con el tráfico
-    for (const o of this.traffic) {
-      for (const c of [me, rv]) {
-        if (Math.abs(o.z - c.z) < 4.4 && Math.abs(o.x - c.x) < 1.8) {
-          const closing = Math.abs(c.veh.v - o.v);
-          if (c === me) {
-            if (closing > 6) return this.crash(closing, o);
-            // toque suave: si es por detrás frena; si van lado a lado se empujan
-            if (Math.abs(o.z - c.z) > 3) { c.veh.v = Math.min(c.veh.v, Math.max(0, o.v - 1)); c.z = o.z - Math.sign(o.z - c.z) * 4.5; }
-            else c.x += c.x > o.x ? 0.25 : -0.25;
-            Sound.sfx.bump(); this.flash = 0.12;
-          } else if (closing > 10 && this.phase === 'run') {
-            c.crashed = true; c.veh.v = 0; c.veh.dry = true;
-            Sound.sfx.crash();
-            return this.finish('win', 'rivalCrash');
-          } else c.veh.v = Math.max(0, o.v - 1);
-        }
+  }
+
+  // ----- piloto automático del rival -----
+  pilot(r) {
+    const v = r.v, sp = v.spec, c = { gas: 0, brake: 0, steer: 0, analog: true, hand: false, up: false, down: false, nitro: false };
+    if (this.kind === 'drag') {
+      if (v.hold) {
+        // acelera en vacío hasta un régimen de largada y suelta un rato después de la verde
+        c.gas = v.rpm < sp.red * (0.42 + r.skill * 0.12) ? 1 : 0.15;
+        if (this.goT !== null && this.t >= this.goT + (r.react ??= rnd(0.26, 0.5) / r.skill)) this.launch(r);
+        return c;
       }
+      c.gas = r.done ? 0 : 1; c.brake = r.done ? 0.5 : 0; c.noReverse = true;
+      r.shiftQ ??= rnd(0.88, 0.97);
+      if (v.rpm >= sp.red * r.shiftQ && v.shiftT <= 0) { c.up = true; r.shiftQ = rnd(0.88, 0.97); }
+      c.steer = clamp((v.x - LANE) * 0.35 + v.h * 2.5, -0.5, 0.5);
+      return c;
     }
-    // roces con el rival
-    if (Math.abs(me.z - rv.z) < 4.4 && Math.abs(me.x - rv.x) < 1.85) {
-      const closing = Math.abs(me.veh.v - rv.veh.v);
-      if (closing > 15) return this.crash(closing, rv);
-      const push = me.x > rv.x ? 1 : -1;
-      me.x += push * 0.35; me.vx = push * 1.5; Sound.sfx.bump(); this.flash = 0.15;
-      if (me.z < rv.z) me.veh.v *= 0.97; else rv.veh.v *= 0.97;
+    if (v.hold) { c.gas = v.rpm < sp.red * 0.45 ? 1 : 0.2; return c; }
+    c.noReverse = true;
+    // seguir la pista mirando adelante; frenar antes de las curvas según lo que agarra
+    const T = this.track, spd = v.speed, s = r.q.s;
+    const ahead = T.at(s + 7 + spd * 0.7);
+    let lat = 0;
+    const o = this.me.v, dxo = o.x - v.x, dzo = o.z - v.z, fwd = dxo * Math.sin(v.h) + dzo * Math.cos(v.h);
+    if (fwd > 0 && fwd < 16 && Math.abs(this.me.q.lat - r.q.lat) < 2.6) lat = this.me.q.lat > 0 ? -2.4 : 2.4;
+    const tx = ahead.x + ahead.rx * lat, tz = ahead.z + ahead.rz * lat;
+    const err = wrapA(Math.atan2(tx - v.x, tz - v.z) - v.h);
+    c.steer = clamp(-err * 2.4, -1, 1);
+    const lead = this.rv && this.me ? r.prog - this.me.prog : 0;
+    const budget = sp.mu * 9.81 * (0.74 + 0.16 * r.skill) * (lead > 90 ? 0.92 : lead < -90 ? 1.06 : 1);
+    let vmax = 80;
+    for (let d = 0; d <= 160; d += 8) {
+      const k = T.curvature(s + d), vc = Math.sqrt(budget / Math.max(k, 1e-4));
+      vmax = Math.min(vmax, Math.sqrt(vc * vc + 2 * budget * 0.8 * d));
     }
-    // postes, árboles y rocas al salirse del camino
-    if (Math.abs(me.x) > ROAD_W + 0.8) {
-      const s = segAt(this.T, me.z + 2);
-      for (const sp of s.sprites) {
-        const S = SPRITES[sp.key];
-        if (S && S.hit && Math.abs(sp.x - me.x) < S.w * S.hit * 0.5 + 0.9) {
-          if (me.veh.v > 9) return this.crash(me.veh.v, null);
-          me.veh.v = 0;
-        }
-      }
-    }
-    // la policía
-    if (this.copZ !== null && !this.cop && me.z > this.copZ) {
-      this.cop = { z: me.z - 130, x: LANE, v: me.veh.v, catchT: 0, s: { lat: 0.9, handling: 0.95 } };
-      this.say(L().race.police, 3.2, '#ff6a6a');
-    }
-    if (this.cop) this.stepCop(dt);
+    if (r.surf && r.surf !== 'road') vmax = Math.min(vmax, 18);
+    if (r.done) vmax = Math.min(vmax, 12);            // ya terminó: sigue despacio para no estorbar
+    c.gas = spd < vmax - 0.5 ? 1 : 0;
+    c.brake = spd > vmax + 1.5 ? clamp((spd - vmax) / 5, 0, 1) : 0;
+    return c;
   }
-
-  stepCop(dt) {
-    const cop = this.cop, me = this.me;
-    const gap = me.z - cop.z;
-    const target = Math.min(64, me.veh.v + 14, safeSpeed(this.T, cop.z, cop.v, 0.92 * G * 0.95, 7));
-    cop.v = approach(cop.v, target, dt * (cop.v < target ? 7.5 : 9));
-    cop.z += cop.v * dt;
-    cop.x = approach(cop.x, gap < 60 ? me.x : LANE, dt * 3);
-    Sound.siren(true, clamp(1 - gap / 400, 0.15, 1));
-    if (gap < 9) cop.catchT += dt; else cop.catchT = Math.max(0, cop.catchT - dt * 0.5);
-    if (me.veh.v < 2.5 && gap < 160) return this.finish('void', 'stopped');
-    if (cop.catchT > 1.4) return this.finish('void', 'caught');
-    if (gap > POLICE_GIVEUP) { this.cop = null; this.copZ = null; Sound.siren(false, 0); this.say(L().race.lostCops, 2.6, '#9dffa0'); }
-  }
-
-  crash(speed, other) {
-    Sound.sfx.crash(); this.flash = 1; this.crack = 1;
-    this.me.veh.v = 0; this.me.veh.throttle = 0;
-    this.damage = clamp(speed / 38, 0.2, 1);
-    return this.finish('lose', 'crash');
-  }
-
-  checkEnd(dt) {
-    const me = this.me, v = me.veh;
-    // bencina
-    if (!v.dry) {
-      const left = this.fuel0 - v.fuelUse * 3;
-      if (left <= 0) { v.dry = true; this.say(L().race.dry, 3, '#ffb36a'); }
-    }
-    if (v.dead() && !this.deadT) this.deadT = this.t;
-    if (this.cross.me !== null || this.cross.rv !== null) {
-      if (this.cop && this.cross.me !== null) return this.finish('void', 'caught');
-      const winMe = this.cross.me !== null && (this.cross.rv === null || this.cross.me <= this.cross.rv);
-      return this.finish(winMe ? 'win' : 'lose', 'finish');
-    }
-    if (this.deadT && this.t - this.deadT > 1.6) return this.finish('lose', v.blown ? 'blown' : v.broken ? 'broken' : 'dry');
-    // si te quedaste muy atrás (más de 30 segundos), la carrera termina
-    if (this.t - this.goAt > (this.type === 'drag' ? 75 : 260)) return this.finish('lose', 'finish');
-  }
-
-  finish(outcome, reason) {
-    if (this.phase === 'done') return;
-    this.phase = 'done'; this.endT = 0;
-    Sound.siren(false, 0);
-    const me = this.me, v = me.veh;
-    const fine = reason === 'stopped' ? FINE_STOP : reason === 'caught' ? FINE_CAUGHT : 0;
-    // el que perdió la picada no alcanzó a llegar: se calcula cuánto le faltaba
-    if (reason === 'finish' && this.type === 'drag') {
-      for (const [k, c] of [['me', this.me], ['rv', this.rv]]) {
-        if (this.cross[k] !== null) continue;
-        this.cross[k] = this.t - this.goAt + Math.max(0, this.T.finish - c.z) / Math.max(8, c.veh.v);
-        if (k === 'me') this.trap = c.veh.v;
-      }
-    }
-    this.result = {
-      outcome, reason, fine,
-      time: this.cross.me, rivalTime: this.cross.rv, trap: this.trap, reaction: this.reaction,
-      engineDmg: v.engineDmg, transDmg: v.transDmg, blown: v.blown, broken: v.broken,
-      body: reason === 'crash' ? this.damage : 0, fuel: Math.min(this.fuel0, v.fuelUse * 3),
-      grinds: v.grinds, tread: (this.type === 'drag' ? 0.03 : 0.06) + (v.grinds ? 0 : 0) + this.smoke.length * 0.0004
-    };
-    const T = L().race;
-    this.say(outcome === 'win' ? T.won : outcome === 'void' ? T.voided : T.lost, 99, outcome === 'win' ? '#ffd23a' : '#fff');
-    if (outcome === 'win') Sound.sfx.win(); else if (outcome === 'lose') Sound.sfx.lose();
-  }
-
-  // ¿Ya se puede salir de la pantalla de la carrera?
-  get over() { return this.phase === 'done' && this.endT > 1.2; }
+}
+export function fmt(t) {
+  if (t == null) return '—';
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
 }

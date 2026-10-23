@@ -16,7 +16,7 @@ turbo-barro/    primer juego
   build.sh      arma index.html a partir de src/
   src/          código del juego (los textos de ambos idiomas están en i18n.js)
 jardin-vivo/    segundo juego, con la misma estructura
-street-rod/     tercer juego, con la misma estructura (más las imágenes de los autos en assets/ y el estudio 3D en tools/)
+street-rod/     tercer juego, en 3D (más dev.html para trabajar y three.js en vendor/)
 ```
 
 ## Probar en el computador
@@ -74,20 +74,14 @@ GitHub actualiza el sitio solo, en uno o dos minutos.
 
 ## Cambiar Street Rod
 
-Edita los archivos de `street-rod/src/` y vuelve a armar el juego:
+Street Rod es en 3D (con [three.js](https://threejs.org), licencia MIT, copiado en `street-rod/vendor/`). Para trabajar, abre `street-rod/dev.html` con el servidor de arriba: carga los archivos de `street-rod/src/` directo, sin armar nada. Cuando esté listo, arma el juego:
 
 ```bash
 ./street-rod/build.sh
 ```
 
-El mismo comando corre las pruebas automáticas (`street-rod/tests/smoke.js`). Sacan y ponen pernos, revisan qué piezas calzan en cada auto, leen el diario de todo el verano, regatean, corren picadas y carreras de ruta con pilotos automáticos (con tráfico y policía), apuestan los papeles, le ganan a El Rey y revisan el guardado, las imágenes de los autos y todas las pantallas.
+`build.sh` junta todo en un solo `index.html` con [esbuild](https://esbuild.github.io) (lo baja `npx` la primera vez) y corre las pruebas automáticas (`street-rod/tests/smoke.mjs`). Revisan los textos en los dos idiomas, que cada auto ande y caiga en su categoría, que cada rival corra en la suya, el diario de todo el verano, comprar, regatear, mejorar, pintar, reparar y vender, una noche en Bob's, los jefes de cada categoría hasta El Rey, los papeles del auto, los finales, el guardado y la física.
 
-El juego se dibuja en una pantalla de 640×400 que se agranda a toda la ventana en alta resolución. Los autos son imágenes sacadas de modelos 3D: cada uno tiene una vista de lado, una de atrás y una de frente (`street-rod/assets/cars/`), con una máscara que marca la pintura para teñirla del color que elijas. `build.sh` las mete dentro de `index.html`, así el juego sigue siendo un solo archivo.
-
-Los modelos son de [Sketchfab](https://sketchfab.com) con licencia CC BY 4.0; los autores están en `street-rod/assets/cars/CREDITS.md` y en la última página de "Cómo se juega". Para volver a sacar las imágenes (o agregar un auto) está el estudio de `street-rod/tools/estudio/`:
-
-1. `python3 skdl.py` baja los modelos de `roster.json` (necesita un token de Sketchfab en `~/.sketchfab_token`).
-2. `python3 studio_server.py` y abrir http://localhost:8771/studio.html. En la consola, `await exportAll()` saca las tres vistas de cada auto a `out/` (`cfg.js` dice qué material es pintura, cromo, goma o vidrio en cada modelo).
-3. `./copy_assets.sh ../../assets/cars ../..` copia las imágenes al juego y escribe `src/carmeta.js` (usa ImageMagick para las máscaras).
+Los autos son inventados: `src/car.js` los arma con unos pocos números de `src/data.js` (largo, capó, techo, aletas…), y las mejoras se ven en el auto (toma de aire, compresor, escapes laterales, slicks, rebaje y calcomanías). Para agregar un auto basta con una entrada nueva en `MODELS`.
 
 La imagen de la tarjeta (`cover.jpg`) es la portada del juego: se saca abriendo `street-rod/index.html?cover&lang=es` a 800×500.

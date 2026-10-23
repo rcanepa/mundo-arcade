@@ -16,7 +16,7 @@ const GAMES = [
     en: {
       title: 'Street Rod: Summer of 63',
       tagline: 'Build your hot rod and beat The King',
-      description: 'Summer 1963 in California: buy a car from the paper, build it bolt by bolt in your garage and challenge the rivals at Bob\'s Drive-In to drag races and road races at night. Bet cash or pink slips, outrun the cops and beat The King and his black Corvette. A remake of the 1989 classic, with 21 real cars from the '30s to the '60s.',
+      description: 'Summer 1963 in California: buy a car from the paper, build it bolt by bolt in your garage and challenge the rivals at Bob\'s Drive-In to drag races and road races at night. Bet cash or pink slips, outrun the cops and beat The King and his black Corvette. A remake of the 1989 classic, with 21 real cars from the \'30s to the \'60s.',
       players: '1 player', controls: 'Mouse and keyboard', age: 'Ages 10+'
     }
   },

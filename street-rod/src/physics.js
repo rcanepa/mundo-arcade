@@ -1,6 +1,7 @@
 // ===== Física: motor, caja de cambios, embrague, patinazos y zona roja =====
 // Todo en metros, segundos y kilos. La velocidad v va en m/s.
 const TIRE_R = 0.33, IDLE = 800, G = 9.81, QUARTER = 402.3;
+const DRAG_DIST = 920;      // la picada de Street Rod es más larga que un cuarto de milla (unos 30 segundos)
 const NET = 0.8;            // los caballos "brutos" de los catálogos de 1963 eran optimistas
 const LAUNCH = 0.68;        // a qué fracción de las rpm de potencia máxima se larga mejor
 const ENGINE_I = 0.16;      // inercia del motor y volante (kg·m²)
@@ -180,7 +181,7 @@ function quarterMile(stats) {
 }
 const _etCache = new Map();
 function carET(car) {
-  const key = JSON.stringify([car.model, car.timing, car.mods.chop, car.mods.lowered, car.mods.nobump, SLOTS.map(sl => car.p[sl] ? car.p[sl].k + (car.p[sl].c ?? 1).toFixed(2) : '')]);
+  const key = JSON.stringify([car.model, Math.round((car.tune || 0) * 2), car.mods.noroof, car.mods.nobump, SLOTS.map(sl => car.p[sl] ? car.p[sl].k + (car.p[sl].c ?? 1).toFixed(2) : '')]);
   let r = _etCache.get(key);
   if (!r) {
     r = carRuns(car) ? quarterMile(carStats(car)) : { et: 60, trap: 0 };

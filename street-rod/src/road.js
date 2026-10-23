@@ -1,7 +1,7 @@
 // ===== La calle de noche: trazado de la pista, adornos y dibujo en perspectiva (3D falso) =====
 // Todo se mide en metros. La pista es una lista de tramos de SEG metros con su curva (1/radio) y su altura.
 const SEG = 5, ROAD_W = 3.6, LANE = 1.8, DRAW_SEGS = 240;
-const HORIZON = 286, CAM_D = 1.3, CAM_H = 1.15;   // línea del horizonte, profundidad de la cámara y altura de los ojos
+const CAM_H = 1.15;   // altura de los ojos del piloto
 
 // ----- Adornos del costado (se dibujan una vez en un canvas aparte) -----
 // Cada adorno tiene: ancho y alto en metros, imagen iluminada, silueta oscura y lo que brilla solo (neón, ventanas, focos)
@@ -85,7 +85,7 @@ function buildSprites() {
     e.strokeStyle = col; e.lineWidth = 0.08; roundRect(e, 1.75, -7.65, 5.3, 1.6, 0.25); e.stroke();
   }, { emit: 1, hit: 1 }));
   // cartel publicitario iluminado por focos
-  const ads = [['LUCKY\'S', 'DRIVE-IN', '#e8452c', '#fff3d6'], ['GAS 31¢', 'REGULAR', '#1f5fa8', '#ffe46b'], ['DRINK', 'COLA ICE COLD', '#b3202a', '#ffffff'], ['VISIT', 'PALM SPRINGS', '#3fb7a8', '#fff6dc']];
+  const ads = [['BOB\'S', 'DRIVE-IN', '#e8452c', '#fff3d6'], ['GUS\' GAS', '31¢ REGULAR', '#1f5fa8', '#ffe46b'], ['DRINK', 'COLA ICE COLD', '#b3202a', '#ffffff'], ['VISIT', 'PALM SPRINGS', '#3fb7a8', '#fff6dc']];
   ads.forEach(([a, b, bg, fg], i) => defSprite('board' + i, 10, 8, (g, e) => {
     g.fillStyle = '#4a3a2a'; g.fillRect(-3.6, -4, 0.25, 4); g.fillRect(3.35, -4, 0.25, 4);
     g.fillStyle = bg; g.fillRect(-4.6, -7.6, 9.2, 3.8);
@@ -145,7 +145,7 @@ function buildSprites() {
     g.beginPath(); for (const x of [-2.6, -0.9, 0.9, 2.6]) { g.moveTo(x * 0.8, -11); g.lineTo(x, 0); } g.stroke();
     g.fillStyle = '#b9bec4'; roundRect(g, -3.4, -16, 6.8, 5, 1.2); g.fill();
     g.fillStyle = '#9aa0a8'; g.beginPath(); g.moveTo(-3.6, -16); g.lineTo(0, -17.8); g.lineTo(3.6, -16); g.fill();
-    g.fillStyle = '#2a4a7a'; g.font = 'bold 1.1px ' + FONT_DISPLAY; g.textAlign = 'center'; g.fillText('SAN LUCAS', 0, -13);
+    g.fillStyle = '#2a4a7a'; g.font = 'bold 1.1px ' + FONT_DISPLAY; g.textAlign = 'center'; g.fillText('VALLEY', 0, -13);
     e.fillStyle = '#ff3020'; e.beginPath(); e.arc(0, -17.9, 0.18, 0, TAU); e.fill();
   }, { emit: 1, hit: 1 });
   // público: siluetas con linternas y cigarrillos encendidos
@@ -205,11 +205,11 @@ function bakeLights(T) {
   });
 }
 
-// La recta de picadas: el viejo aeródromo de San Lucas, con público en la partida y en la meta
+// La recta de picadas: un camino derecho a las afueras del pueblo, con el semáforo en la partida
 function buildDragStrip(seed) {
   buildSprites();
-  const R = rng(seed), T = { kind: 'drag', segs: [], start: 60, finish: 60 + QUARTER };
-  const n = Math.ceil((60 + QUARTER + 420) / SEG) + DRAW_SEGS;
+  const R = rng(seed), T = { kind: 'drag', segs: [], start: 60, finish: 60 + DRAG_DIST };
+  const n = Math.ceil((60 + DRAG_DIST + 420) / SEG) + DRAW_SEGS;
   for (let i = 0; i < n; i++) addSeg(T, 0, Math.sin(i / 37) * 0.6, 'strip');
   const si = Math.floor(T.start / SEG), fi = Math.floor(T.finish / SEG);
   T.segs[si].mark = 1; T.segs[fi].mark = 2;
@@ -217,13 +217,10 @@ function buildDragStrip(seed) {
     placeSprite(T, i, 'pole', -1, 6 + R() * 2);
     if (i % 24 === 0) placeSprite(T, i + 3, 'lamp', 1, 1.2);
   }
-  for (let k = 1; k <= 7; k++) { placeSprite(T, si + k, 'crowd' + ((k + 9) % 3), k % 2 ? 1 : -1, 4.5 + R() * 3); }
-  placeSprite(T, si + 3, 'parked', -1, 2.2); placeSprite(T, si + 5, 'parked', 1, 2.4); placeSprite(T, si + 8, 'parked', 1, 3);
-  for (let k = -2; k <= 4; k++) placeSprite(T, fi + k, 'crowd' + (k + 6) % 3, k % 2 ? -1 : 1, 2 + R() * 2);
-  placeSprite(T, fi - 1, 'parked', 1, 1.5); placeSprite(T, fi + 2, 'parked', -1, 1.5);
-  placeSprite(T, si + 30, 'hangar', -1, 22); placeSprite(T, si + 52, 'hangar', -1, 24); placeSprite(T, fi + 20, 'tower', 1, 26);
-  placeSprite(T, si + 12, 'board0', 1, 9); placeSprite(T, si + 44, 'board1', 1, 10); placeSprite(T, fi + 8, 'board2', -1, 9);
-  for (let i = si + 8; i < n; i += 5 + Math.floor(R() * 6)) placeSprite(T, i, R() < 0.5 ? 'tree' : 'palm', R() < 0.5 ? -1 : 1, 14 + R() * 20);
+  // como en el original: postes blancos, árboles, palmeras y algún letrero; sin público
+  for (let i = si; i < n; i += 6) placeSprite(T, i, 'post', i % 12 ? 1 : -1, 0.8);
+  placeSprite(T, si + 30, 'board0', 1, 9); placeSprite(T, si + 90, 'board1', -1, 10); placeSprite(T, fi + 8, 'tower', 1, 26);
+  for (let i = si + 4; i < n; i += 3 + Math.floor(R() * 5)) placeSprite(T, i, rpick(R, ['tree', 'tree', 'palm', 'orange', 'rock0']), R() < 0.5 ? -1 : 1, 5 + R() * 18);
   bakeLights(T);
   T.length = T.segs.length * SEG;
   return T;
@@ -288,9 +285,7 @@ function buildRoadCourse(seed) {
         break;
     }
   });
-  for (let k = 1; k <= 5; k++) placeSprite(T, si + k, 'crowd' + ((k + 9) % 3), k % 2 ? 1 : -1, 4.5);
-  for (let k = -3; k <= 3; k++) placeSprite(T, fi + k, 'crowd' + ((k + 7) % 3), k % 2 ? -1 : 1, 3.5);
-  placeSprite(T, si + 4, 'parked', 1, 2.4); placeSprite(T, fi + 2, 'parked', -1, 1.6); placeSprite(T, fi + 14, 'tower', 1, 18);
+  placeSprite(T, fi + 14, 'tower', 1, 18);
   bakeLights(T);
   T.length = T.segs.length * SEG;
   // mapa del recorrido (para el mapita de la carrera)
@@ -303,217 +298,4 @@ const segAt = (T, z) => T.segs[clamp(Math.floor(z / SEG), 0, T.segs.length - 1)]
 function heightAt(T, z) {
   const i = clamp(Math.floor(z / SEG), 0, T.segs.length - 2), f = z / SEG - i;
   return lerp(T.segs[i].y, T.segs[i + 1].y, f);
-}
-
-// ----- Cielo -----
-const STARS = (() => { const r = rng(42), a = []; for (let i = 0; i < 260; i++) a.push([r(), r() * r(), 0.3 + r() * 0.9, r() * TAU]); return a; })();
-function drawNightSky(g, horizon, scroll, t, opts = {}) {
-  const sky = g.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, '#04050c'); sky.addColorStop(0.55, '#0c1330'); sky.addColorStop(0.9, '#262245'); sky.addColorStop(1, '#3a2c48');
-  g.fillStyle = sky; g.fillRect(0, 0, W, horizon + 2);
-  for (const [sx, sy, b, ph] of STARS) {
-    const x = ((sx * W * 1.5 - scroll * 0.05) % (W * 1.5) + W * 1.5) % (W * 1.5) - W * 0.25;
-    const tw = 0.6 + 0.4 * Math.sin(t * 2 + ph);
-    g.fillStyle = `rgba(255,255,240,${(b * tw * (1 - sy * 0.8)).toFixed(3)})`;
-    g.fillRect(x, sy * horizon * 0.95, b > 1 ? 2 : 1.3, b > 1 ? 2 : 1.3);
-  }
-  // luna
-  const mx = ((W * 0.78 - scroll * 0.08) % (W * 1.6) + W * 1.6) % (W * 1.6) - W * 0.3, my = horizon * 0.28;
-  glow(g, mx, my, 120, '#a8b8e8', 0.25);
-  g.fillStyle = '#f2f0e0'; g.beginPath(); g.arc(mx, my, 22, 0, TAU); g.fill();
-  g.fillStyle = 'rgba(180,180,170,0.4)'; g.beginPath(); g.arc(mx - 6, my - 4, 5, 0, TAU); g.arc(mx + 7, my + 6, 3.5, 0, TAU); g.fill();
-  // cerros lejanos con luces de la ciudad
-  for (let layer = 0; layer < 2; layer++) {
-    const par = layer ? 0.32 : 0.18, base = horizon + 2;
-    g.fillStyle = layer ? '#0d0f1c' : '#151a30';
-    g.beginPath(); g.moveTo(0, base);
-    for (let x = 0; x <= W; x += 16) {
-      const wx = x + scroll * par;
-      const hh = (layer ? 26 : 52) * (0.5 + 0.5 * Math.sin(wx * 0.004 + layer * 2) * Math.sin(wx * 0.0017 + 1.3)) + (layer ? 8 : 14);
-      g.lineTo(x, base - hh);
-    }
-    g.lineTo(W, base); g.closePath(); g.fill();
-    if (layer === 1) {
-      for (let k = 0; k < 70; k++) {
-        const wx = ((k * 97.3 - scroll * par) % (W + 200) + W + 200) % (W + 200) - 100;
-        const on = (k * 7) % 5 !== 0 || Math.sin(t * 3 + k) > 0;
-        if (on) { g.fillStyle = k % 6 ? 'rgba(255,214,140,0.8)' : 'rgba(170,200,255,0.8)'; g.fillRect(wx, base - 3 - (k % 4) * 2.5, 1.6, 1.6); }
-      }
-    }
-  }
-  if (opts.beacon) {
-    // faro del aeródromo que gira
-    const bx = ((W * 0.25 - scroll * 0.3) % (W + 400) + W + 400) % (W + 400) - 200;
-    const a = t * 2.2;
-    g.save(); g.globalCompositeOperation = 'lighter';
-    const bg = g.createLinearGradient(bx, horizon - 30, bx + Math.cos(a) * 500, horizon - 30 - Math.abs(Math.sin(a)) * 200);
-    bg.addColorStop(0, 'rgba(180,255,190,0.18)'); bg.addColorStop(1, 'rgba(180,255,190,0)');
-    g.fillStyle = bg; g.beginPath(); g.moveTo(bx, horizon - 30); g.lineTo(bx + Math.cos(a) * 520, horizon - 30 - Math.abs(Math.sin(a)) * 220 - 30); g.lineTo(bx + Math.cos(a) * 520, horizon - 30 - Math.abs(Math.sin(a)) * 220 + 30); g.fill();
-    g.restore();
-  }
-}
-
-// ----- Colores del suelo según la zona -----
-const GROUND = {
-  strip: ['#2c2c2a', '#232321'], town: ['#3c3d3a', '#2f302d'], grove: ['#2b3a22', '#25331d'],
-  canyon: ['#5a4634', '#4e3c2c'], oil: ['#463a2c', '#3c3226'], desert: ['#6a5a40', '#5d4f38']
-};
-// Cuánto alumbran los focos a una distancia (m) y a un costado (m)
-function headlight(d, lat = 0, high = 1) {
-  if (d < 0) return 0;
-  const reach = 38 + high * 30;
-  const f = clamp(1.1 - d / reach, 0, 1);
-  const side = clamp(1 - Math.max(0, Math.abs(lat) - 3 - d * 0.18) / (6 + d * 0.15), 0, 1);
-  return f * f * side;
-}
-function litColor(base, light, warm, dist) {
-  const b = rgbOf(base);
-  const k = 0.16 + light * 1.1;
-  let r = b[0] * k + warm * 95, gg = b[1] * k + warm * 58, bb = b[2] * k + warm * 14;
-  const fog = clamp(dist / 1100, 0, 1) * 0.85;
-  r = lerp(r, 22, fog); gg = lerp(gg, 20, fog); bb = lerp(bb, 40, fog);
-  return `rgb(${Math.min(255, r | 0)},${Math.min(255, gg | 0)},${Math.min(255, bb | 0)})`;
-}
-
-// ----- Dibujo de la calle en perspectiva -----
-// cam = { z, x, shake }. objs = autos y otras cosas sobre la pista: { z, x, draw(g, sx, sy, scale, light) }
-function renderRoad(g, T, cam, objs, t) {
-  const baseI = Math.floor(cam.z / SEG), baseF = cam.z / SEG - baseI;
-  const camY = heightAt(T, cam.z) + CAM_H;
-  const base = T.segs[clamp(baseI, 0, T.segs.length - 1)];
-  // el horizonte se mueve un poco con las curvas para que se sienta el giro
-  const scroll = (cam.scroll || 0);
-  drawNightSky(g, HORIZON + (cam.pitch || 0), scroll, t, { beacon: T.kind === 'drag' });
-  const P = [];   // puntos proyectados de cada tramo
-  let x = 0, dx = -base.curve * SEG * SEG * baseF;
-  let maxy = H;
-  const scaleK = W / 2 * CAM_D;
-  for (let n = 0; n < DRAW_SEGS; n++) {
-    const s = T.segs[baseI + n];
-    if (!s) break;
-    const z1 = (baseI + n) * SEG - cam.z, z2 = z1 + SEG;
-    const pr = (zz, xx, yy) => {
-      const zc = Math.max(0.1, zz);
-      const sc = scaleK / zc;
-      return [W / 2 + (xx - cam.x) * sc, HORIZON - (yy - camY) * sc, sc];
-    };
-    const p1 = pr(z1, -x, s.y), p2 = pr(z2, -x - dx, (T.segs[baseI + n + 1] || s).y);
-    P[n] = { s, p1, p2, x, z: z1, clip: maxy };
-    x += dx; dx += s.curve * SEG * SEG;
-    if (z1 < 0.6 || p2[1] >= p1[1] || p2[1] >= maxy) { P[n].hidden = true; continue; }
-    drawSegment(g, s, p1, p2, z1, cam, T);
-    maxy = p2[1];
-  }
-  // adornos y autos: de lejos hacia cerca
-  const pool = [];
-  for (const o of objs) {
-    const n = Math.floor((o.z - baseI * SEG) / SEG);
-    if (n < 0 || n >= DRAW_SEGS || !P[n]) continue;
-    pool.push({ n, o });
-  }
-  const poles = { '-1': [], '1': [] };
-  for (let n = DRAW_SEGS - 1; n >= 1; n--) {
-    const q = P[n];
-    if (!q) continue;
-    for (const sp of q.s.sprites) drawRoadSprite(g, q, sp, cam, t, poles);
-    for (const it of pool) if (it.n === n) {
-      const o = it.o, f = (o.z - (baseI + n) * SEG) / SEG;
-      const sx = lerp(q.p1[0], q.p2[0], f) + o.x * lerp(q.p1[2], q.p2[2], f);
-      const sy = lerp(q.p1[1], q.p2[1], f), sc = lerp(q.p1[2], q.p2[2], f);
-      if (sy > q.clip + 40) continue;
-      const d = o.z - cam.z;
-      o.draw(g, sx, sy, sc, headlight(d, o.x - cam.x), d);
-    }
-  }
-  // cables de teléfono entre postes
-  g.strokeStyle = 'rgba(10,12,20,0.85)'; g.lineWidth = 1;
-  for (const k of ['-1', '1']) {
-    const a = poles[k];
-    for (let i = 0; i + 1 < a.length; i++) {
-      const [x1, y1, s1] = a[i], [x2, y2] = a[i + 1];
-      if (Math.abs(x2 - x1) > W) continue;
-      for (const off of [-1.1, 1.1]) {
-        g.beginPath(); g.moveTo(x1 + off * s1, y1); g.quadraticCurveTo((x1 + x2) / 2, Math.max(y1, y2) + 6, x2 + off * a[i + 1][2], y2); g.stroke();
-      }
-    }
-  }
-  return P;
-}
-
-function drawSegment(g, s, p1, p2, z, cam, T) {
-  const [x1, y1, k1] = p1, [x2, y2, k2] = p2;
-  const alt = Math.floor(s.i / 2) % 2;
-  const hl = headlight(z, 0, 1), warm = s.light * 0.75;
-  const gr = GROUND[s.zone] || GROUND.town;
-  // terreno de los costados
-  g.fillStyle = litColor(gr[alt], hl * 0.55 + warm * 0.4, warm * 0.5, z);
-  g.fillRect(0, y2, W, y1 - y2 + 1);
-  const quad = (xa, wa, xb, wb, col) => {
-    g.fillStyle = col; g.beginPath();
-    g.moveTo(xa - wa, y1); g.lineTo(xa + wa, y1); g.lineTo(xb + wb, y2); g.lineTo(xb - wb, y2); g.closePath(); g.fill();
-  };
-  // berma y vereda
-  const shoulder = s.zone === 'town' ? '#6a6862' : s.zone === 'strip' ? '#3a3a36' : '#4a4236';
-  quad(x1, (ROAD_W + 1.4) * k1, x2, (ROAD_W + 1.4) * k2, litColor(shoulder, hl * 0.8 + warm, warm, z));
-  // asfalto
-  const asphalt = alt ? '#323236' : '#2e2e32';
-  quad(x1, ROAD_W * k1, x2, ROAD_W * k2, litColor(asphalt, hl + warm, warm, z));
-  // líneas: bordes blancos y centro segmentado (más brillantes, reflejan los faros)
-  const lineL = hl * 1.8 + warm * 0.9;
-  const white = litColor('#bfbfb8', lineL, warm * 0.6, z);
-  const lw1 = 0.12 * k1, lw2 = 0.12 * k2;
-  quad(x1 - (ROAD_W - 0.25) * k1, lw1, x2 - (ROAD_W - 0.25) * k2, lw2, white);
-  quad(x1 + (ROAD_W - 0.25) * k1, lw1, x2 + (ROAD_W - 0.25) * k2, lw2, white);
-  if (T.kind === 'drag') quad(x1, lw1, x2, lw2, white);
-  else if (alt) quad(x1, lw1 * 0.9, x2, lw2 * 0.9, litColor('#c9a032', lineL, warm * 0.6, z));
-  // líneas de partida y meta
-  if (s.mark) {
-    if (s.mark === 1) {
-      // línea de partida pintada con tiza: delgada
-      const yb = lerp(y1, y2, 0.1), kb = lerp(k1, k2, 0.1), xb = lerp(x1, x2, 0.1);
-      g.fillStyle = litColor('#e8e8e0', lineL * 0.6, warm, z);
-      g.beginPath(); g.moveTo(x1 - ROAD_W * k1, y1); g.lineTo(x1 + ROAD_W * k1, y1); g.lineTo(xb + ROAD_W * kb, yb); g.lineTo(xb - ROAD_W * kb, yb); g.fill();
-    } else {
-      const n = 12;
-      for (let c = 0; c < n; c++) {
-        const fa = -1 + 2 * c / n, fb = -1 + 2 * (c + 1) / n;
-        for (let r = 0; r < 2; r++) {
-          if ((c + r) % 2) continue;
-          const ya = lerp(y1, y2, r / 2), yb = lerp(y1, y2, (r + 1) / 2), ka = lerp(k1, k2, r / 2), kb = lerp(k1, k2, (r + 1) / 2);
-          const xa = lerp(x1, x2, r / 2), xb = lerp(x1, x2, (r + 1) / 2);
-          g.fillStyle = litColor('#f0f0e8', lineL * 0.7, warm, z);
-          g.beginPath(); g.moveTo(xa + fa * ROAD_W * ka, ya); g.lineTo(xa + fb * ROAD_W * ka, ya); g.lineTo(xb + fb * ROAD_W * kb, yb); g.lineTo(xb + fa * ROAD_W * kb, yb); g.fill();
-        }
-      }
-    }
-  }
-}
-
-function drawRoadSprite(g, q, sp, cam, t, poles) {
-  const S = SPRITES[sp.key];
-  if (!S) return;
-  const sc = q.p1[2], sx = q.p1[0] + sp.x * sc, sy = q.p1[1];
-  const w = S.w * sc, h = S.h * sc;
-  if (sx + w < -50 || sx - w > W + 50 || h < 1.2) return;
-  const d = q.z;
-  const left = sx - w / 2, top = sy - h;
-  const clipH = Math.min(h, q.clip - top);
-  if (clipH <= 0) return;
-  const srcH = S.dark.height * clipH / h;
-  // los adornos asimétricos (faroles) se dan vuelta en el lado izquierdo para mirar a la calle
-  const mirror = S.flip && sp.x < 0;
-  if (mirror) { g.save(); g.translate(sx * 2, 0); g.scale(-1, 1); }
-  g.drawImage(S.dark, 0, 0, S.dark.width, srcH, left, top, w, clipH);
-  let light = headlight(d, sp.x - cam.x, 1) + q.s.light * 0.6;
-  if (S.refl) light = Math.min(1, light * 2.6);
-  if (light > 0.02) { g.globalAlpha = Math.min(1, light); g.drawImage(S.lit, 0, 0, S.lit.width, srcH, left, top, w, clipH); g.globalAlpha = 1; }
-  const fog = 1 - clamp(d / 1400, 0, 0.7);
-  if (S.emit) { g.globalAlpha = fog; g.drawImage(S.emit, 0, 0, S.emit.width, srcH, left, top, w, clipH); g.globalAlpha = 1; }
-  if (mirror) g.restore();
-  if (S.lamp) {
-    g.save(); g.globalCompositeOperation = 'lighter';
-    glow(g, sx + 1.4 * sc * (sp.x > 0 ? -1 : 1), sy - 9.4 * sc, 3.4 * sc, '#ffb860', 0.55 * fog);
-    g.restore();
-  }
-  if (S.pole && poles) poles[sp.x < 0 ? '-1' : '1'].push([sx, sy - 9 * sc, sc]);
 }

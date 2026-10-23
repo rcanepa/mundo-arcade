@@ -6,7 +6,7 @@ OUT="index.html"
   cat src/shell.html
   echo "<script>"
   echo "'use strict';"
-  for f in util data i18n car physics carart road race audio game scenes mechanic ui main; do cat "src/$f.js"; echo; done
+  for f in util pixel data i18n car physics carart road race audio pxcar pxscenes pxrace pxui game screens garage mechanic town raceui title main; do cat "src/$f.js"; echo; done
   echo "</script>"
   echo "</body>"
   echo "</html>"

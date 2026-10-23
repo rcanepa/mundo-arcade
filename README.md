@@ -80,11 +80,8 @@ Edita los archivos de `street-rod/src/` y vuelve a armar el juego:
 ./street-rod/build.sh
 ```
 
-El mismo comando corre las pruebas automáticas (`street-rod/tests/smoke.js`). Arman y desarman motores, revisan qué piezas calzan en cada auto, leen el diario de todo el verano, corren picadas y carreras de ruta con pilotos automáticos (con tráfico y policía), apuestan los papeles, le ganan a El Rey y revisan el guardado y todas las pantallas.
+El mismo comando corre las pruebas automáticas (`street-rod/tests/smoke.js`). Sacan y ponen pernos, revisan qué piezas calzan en cada auto, leen el diario de todo el verano, regatean, corren picadas y carreras de ruta con pilotos automáticos (con tráfico y policía), apuestan los papeles, le ganan a El Rey y revisan el guardado, las letras de píxeles y todas las pantallas.
 
-Para mirar los dibujos sin jugar hay dos hojas de prueba (se abren con el servidor de arriba):
+El juego es pixel art de 640×400: todo se dibuja en esa pantalla chica, se pasa a una paleta de colores con tramado (`src/pixel.js`) y después se agranda sin suavizar. Para mirar los dibujos sin jugar está `street-rod/tests/pixel.html` (se abre con el servidor de arriba): `?s=cars` muestra los 25 autos (`&mods=1` con calcomanías y sin techo), `?s=diner` el drive-in y `?s=race` la cabina en una carrera (`&t=road` en la ruta, `&at=8` a los 8 segundos).
 
-- `street-rod/tests/autos.html`: todos los autos de lado y de atrás (`?one=chevy57` muestra uno grande, `?mods=1` con llamas y llantas, `?rear=1` de atrás).
-- `street-rod/tests/carrera.html`: una carrera suelta (`?t=road` ruta, `?auto=1` piloto automático, `?cop=1` con policía).
-
-La imagen de la tarjeta (`cover.jpg`) es la portada del juego: se saca abriendo `street-rod/index.html?cover&lang=es` a 1280×720.
+La imagen de la tarjeta (`cover.jpg`) es la portada del juego: se saca abriendo `street-rod/index.html?cover&lang=es` a 800×500.

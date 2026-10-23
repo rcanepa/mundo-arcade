@@ -23,7 +23,7 @@ const ES = {
   ],
   how: [
     ['El garaje', 'En el diario hay autos usados: siempre hay uno barato. En el taller mejoras el motor, la admisión, el escape, la caja, las gomas, la suspensión, el peso y el nitro. Cada mejora se ve en el auto.', 'Los autos baratos tienen techo: para llegar arriba vas a tener que cambiar de auto. Puedes tener hasta tres.'],
-    ["Bob's Drive-In", 'Cada noche llegan rivales. Elige uno, mira su auto y desafíalo a una picada o a una carrera de ruta. En la ruta puedes apostar los papeles: el que gana se lleva el auto del otro.', 'Cada carrera toma 40 minutos y Bob\'s cierra a la una.'],
+    ["Bob's Drive-In", 'Cada noche llegan rivales. Elige uno, mira lo que acepta y desafíalo a una picada o a una ruta: por plata (desde $10), por el honor, o en la ruta por los papeles. A veces son ellos los que te desafían.', 'Los sábados hay Copa: tres picadas seguidas con premio y trofeo. Gus te paga $30 cada día por tu turno en la bencinera. Bob\'s cierra a la una.'],
     ['La picada', 'Con ↑ deja las vueltas en la zona verde del tacómetro. Cuando el árbol se ponga verde, suelta con ESPACIO. Cada ESPACIO después sube un cambio: cámbiate cuando se encienda la luz verde. Si largas antes de la verde es falta.', 'N: nitro, si tienes. C: cambia la cámara.'],
     ['La ruta', '↑ acelera, ↓ frena (y retrocede), ← → dobla, ESPACIO es el freno de mano para derrapar. Son dos vueltas por los cerros. Si te sales, R te devuelve a la pista.', 'En el taller puedes elegir si los cambios los pasas tú o el auto.'],
     ['Créditos', 'Basado en Street Rod (1989), de California Dreams. Hecho para Mundo Arcade.', 'Los autos son inventados y se arman en 3D con three.js. Sonido sintetizado.']
@@ -32,7 +32,7 @@ const ES = {
   garage: {
     title: 'Tu garaje', paper: 'Diario', shop: 'Taller', paint: 'Pintura', cars: 'Mis autos', test: 'Probar el auto', bobs: "Ir a Bob's",
     noCar: 'No tienes auto. Busca uno en el diario: siempre hay uno barato.', cond: 'Motor', et: 'Cuarto de milla', top: 'Velocidad máx.', grip: 'Agarre',
-    menu: 'Menú', worn: 'Motor gastado: repáralo en el taller.'
+    menu: 'Menú', worn: 'Motor gastado: repáralo en el taller.', wage: p => `Gus te pagó ${p} por el turno en la bencinera.`
   },
   paper: {
     title: 'Diario del Valle', sub: 'Autos usados', buy: p => `Comprar ${p}`, offer: 'Ofrecer menos', sold: 'VENDIDO', cond: 'Estado',
@@ -68,7 +68,20 @@ const ES = {
     },
     hi: ['¿Una carrera, chico?', '¿Tienes con qué?', 'Mi auto está listo.', '¿Picada o ruta?', 'Te veo nervioso.', 'Esta noche me siento rápido.'],
     yes: ['¡Vamos!', 'Prepárate.', 'Hecho.', 'Ya veremos.'],
-    kingHi: 'Así que tú eres el que anda ganándole a todos. Ruta. Los papeles. Ahora.'
+    kingHi: 'Así que tú eres el que anda ganándole a todos. Ruta. Los papeles. Ahora.',
+    honor: 'Por el honor', terms: (types, max, pink) => `Acepta ${types} · ${max ? 'apuesta hasta ' + max : 'solo por el honor'} · papeles: ${pink ? 'sí' : 'no'}`,
+    both: 'picada y ruta', roadOnly: 'solo la ruta'
+  },
+  offer: {
+    comes: n => `${n} se acerca`, drag: b => (b ? `¿Una picada por ${b}?` : '¿Una picada, por el honor?'), road: b => (b ? `¿Una ruta por ${b}?` : '¿Una ruta, por el honor?'),
+    yes: '¡Vamos!', no: 'Ahora no'
+  },
+  cup: {
+    title: "Copa de Bob's", tonight: c => `Esta noche hay torneo de picadas de la categoría ${c}: tres rondas seguidas.`,
+    terms: (f, p) => `Inscripción ${f} · al campeón ${p}`, enter: 'Inscribirse', why: { done: 'Ya corriste la copa de esta noche.', late: 'Se cerraron las inscripciones.', money: 'No te alcanza para la inscripción.', noCar: 'Necesitas un auto.' },
+    round: k => `Ronda ${k} de 3`, vs: n => `Copa · ${n}`, next: 'Siguiente ronda', passed: k => `¡Pasaste la ronda ${k}!`,
+    champion: (c, p) => `¡Campeón de la Copa ${c}! Te llevas ${p} y el trofeo.`, second: p => `Perdiste la final: te llevas ${p}.`, out: 'Quedaste fuera de la copa.',
+    trophies: 'Trofeos', saturday: 'Los sábados hay Copa en Bob\'s.'
   },
   race: {
     hint: 'Con ↑ deja las vueltas en la zona verde · suelta con ESPACIO en la verde', foul: '¡Falta! Largaste antes de la verde', green: '¡VERDE!', go: '¡YA!',
@@ -80,7 +93,7 @@ const ES = {
   },
   result: {
     money: p => `Te llevas ${p}.`, lose: p => `Pagas ${p}.`, gotCar: n => `¡Te quedas con su ${n}!`, soldCar: (n, p) => `No te cabe su ${n}: lo vendes por ${p}.`,
-    lostCar: n => `Le entregas los papeles de tu ${n}.`, unlocked: c => `¡Se abre la categoría ${c}! Ahora llegan rivales más rápidos.`, kingNow: 'El Rey se enteró. Te va a buscar en Bob\'s.', back: "Volver a Bob's"
+    lostCar: n => `Le entregas los papeles de tu ${n}.`, unlocked: c => `¡Se abre la categoría ${c}! Ahora llegan rivales más rápidos.`, honorWin: "Por el honor: ahora en Bob's todos saben quién eres.", honorLose: 'Por el honor: esta vez solo perdiste el orgullo.', kingNow: 'El Rey se enteró. Te va a buscar en Bob\'s.', back: "Volver a Bob's"
   },
   keys: {
     drag: '<kbd>↑</kbd> acelerar · <kbd>Espacio</kbd> soltar en la verde y subir cambio · <kbd>Q</kbd> bajar · <kbd>N</kbd> nitro · <kbd>C</kbd> cámara · <kbd>M</kbd> sonido',
@@ -110,7 +123,7 @@ const EN = {
   ],
   how: [
     ['The garage', 'The paper has used cars: there is always a cheap one. In the shop you upgrade the engine, intake, exhaust, gearbox, tires, suspension, weight and nitrous. Every upgrade shows on the car.', 'Cheap cars have a ceiling: to reach the top you will have to move up to a better car. You can own up to three.'],
-    ["Bob's Drive-In", 'Rivals show up every night. Pick one, check out their car and challenge them to a drag race or a road race. On the road you can race for pink slips: the winner keeps the other car.', "Each race takes 40 minutes and Bob's closes at one."],
+    ["Bob's Drive-In", 'Rivals show up every night. Pick one, see what they will take and challenge them to a drag or road race: for cash (from $10), for bragging rights, or on the road for pink slips. Sometimes they challenge you.', "Saturdays there's a Cup: three drag races in a row for prize money and a trophy. Gus pays you $30 every day for your shift at the gas station. Bob's closes at one."],
     ['Drag racing', 'Hold ↑ to keep the revs in the green zone of the tach. When the tree turns green, drop the clutch with SPACE. Every SPACE after that shifts up: shift when the green light comes on. Leave before the green and it is a foul.', 'N: nitrous, if you have it. C: camera.'],
     ['Road racing', '↑ gas, ↓ brake (and reverse), ← → steer, SPACE is the handbrake for drifting. Two laps through the hills. If you go off, R puts you back on the road.', 'In the shop you can choose to shift yourself or let the car do it.'],
     ['Credits', 'Based on Street Rod (1989) by California Dreams. Made for Mundo Arcade.', 'The cars are made up and built in 3D with three.js. Synthesized sound.']
@@ -119,7 +132,7 @@ const EN = {
   garage: {
     title: 'Your garage', paper: 'Paper', shop: 'Shop', paint: 'Paint', cars: 'My cars', test: 'Test drive', bobs: "Go to Bob's",
     noCar: "You don't have a car. Find one in the paper: there is always a cheap one.", cond: 'Engine', et: 'Quarter mile', top: 'Top speed', grip: 'Grip',
-    menu: 'Menu', worn: 'Worn engine: fix it in the shop.'
+    menu: 'Menu', worn: 'Worn engine: fix it in the shop.', wage: p => `Gus paid you ${p} for your shift at the gas station.`
   },
   paper: {
     title: 'Valley Gazette', sub: 'Used cars', buy: p => `Buy ${p}`, offer: 'Offer less', sold: 'SOLD', cond: 'Condition',
@@ -155,7 +168,20 @@ const EN = {
     },
     hi: ['Wanna race, kid?', 'Got what it takes?', 'My car is ready.', 'Drag or road?', 'You look nervous.', 'I feel fast tonight.'],
     yes: ["Let's go!", 'Get ready.', 'Deal.', "We'll see."],
-    kingHi: "So you're the one beating everybody. Road. Pink slips. Now."
+    kingHi: "So you're the one beating everybody. Road. Pink slips. Now.",
+    honor: 'For bragging rights', terms: (types, max, pink) => `Takes ${types} · ${max ? 'bets up to ' + max : 'bragging rights only'} · pink slips: ${pink ? 'yes' : 'no'}`,
+    both: 'drag and road', roadOnly: 'road only'
+  },
+  offer: {
+    comes: n => `${n} walks over`, drag: b => (b ? `Drag race for ${b}?` : 'Drag race, for bragging rights?'), road: b => (b ? `Road race for ${b}?` : 'Road race, for bragging rights?'),
+    yes: "Let's go!", no: 'Not now'
+  },
+  cup: {
+    title: "Bob's Cup", tonight: c => `Tonight there's a class ${c} drag tournament: three rounds in a row.`,
+    terms: (f, p) => `Entry ${f} · winner takes ${p}`, enter: 'Sign up', why: { done: "You already raced tonight's cup.", late: 'Sign-up is closed.', money: "You can't afford the entry.", noCar: 'You need a car.' },
+    round: k => `Round ${k} of 3`, vs: n => `Cup · ${n}`, next: 'Next round', passed: k => `You made it through round ${k}!`,
+    champion: (c, p) => `Class ${c} Cup champion! You take ${p} and the trophy.`, second: p => `You lost the final: you take ${p}.`, out: "You're out of the cup.",
+    trophies: 'Trophies', saturday: "Saturdays there's a Cup at Bob's."
   },
   race: {
     hint: 'Hold ↑ to keep the revs in the green · drop the clutch with SPACE on green', foul: 'Foul! You left before the green', green: 'GREEN!', go: 'GO!',
@@ -167,7 +193,7 @@ const EN = {
   },
   result: {
     money: p => `You take ${p}.`, lose: p => `You pay ${p}.`, gotCar: n => `Their ${n} is yours!`, soldCar: (n, p) => `No room for their ${n}: you sell it for ${p}.`,
-    lostCar: n => `You hand over the pink slip for your ${n}.`, unlocked: c => `Class ${c} is open! Faster rivals will show up now.`, kingNow: 'The King heard about you. He will be waiting at Bob\'s.', back: "Back to Bob's"
+    lostCar: n => `You hand over the pink slip for your ${n}.`, unlocked: c => `Class ${c} is open! Faster rivals will show up now.`, honorWin: "For bragging rights: now everybody at Bob's knows who you are.", honorLose: 'For bragging rights: this time you only lost your pride.', kingNow: 'The King heard about you. He will be waiting at Bob\'s.', back: "Back to Bob's"
   },
   keys: {
     drag: '<kbd>↑</kbd> gas · <kbd>Space</kbd> launch on green and shift up · <kbd>Q</kbd> shift down · <kbd>N</kbd> nitrous · <kbd>C</kbd> camera · <kbd>M</kbd> sound',

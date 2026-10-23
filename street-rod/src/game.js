@@ -2,7 +2,7 @@
 // Sin dibujo: todo esto se prueba con node (tests/smoke.mjs).
 import {
   MODELS, MODEL_KEYS, COLORS, UPGRADES, RIVALS, rivalById, CLASSES, CLASS_ET, CLASS_BET,
-  START_MONEY, MAX_CARS, FIRST_DAY, DAYS, NIGHT_OPEN, NIGHT_CLOSE, RACE_MINUTES, PAINT_PRICE, DECAL_PRICE, noUpgrades
+  START_MONEY, MAX_CARS, FIRST_DAY, DAYS, NIGHT_OPEN, NIGHT_CLOSE, RACE_MINUTES, PAINT_PRICE, DECAL_PRICE, noUpgrades, BETS, CUP, WAGE
 } from './data.js';
 import { makeSpec, quarterMile } from './physics.js';
 import { rng, pick } from './util.js';
@@ -20,7 +20,7 @@ export function newGame(name, seed = Math.floor(Math.random() * 1e9)) {
   S = {
     v: 1, name: (name || 'JOHNNY').slice(0, 14), seed, day: 0, money: START_MONEY, cars: [], active: -1, nextId: 1,
     paper: null, night: null, rivals: {}, beaten: [], kingBeaten: false, over: null, autoShift: true,
-    stats: { wins: 0, losses: 0, won: 0, lost: 0, pinks: 0 }
+    stats: { wins: 0, losses: 0, won: 0, lost: 0, pinks: 0 }, trophies: []
   };
   for (const r of RIVALS) S.rivals[r.id] = { w: 0, l: 0 };
   makePaper();
@@ -28,7 +28,7 @@ export function newGame(name, seed = Math.floor(Math.random() * 1e9)) {
 }
 export const save = () => { if (S) store.set(SAVE_KEY, JSON.stringify(S)); };
 export function load() {
-  try { const s = JSON.parse(store.get(SAVE_KEY)); if (s && s.v === 1) { S = s; return true; } } catch (e) { /* guardado roto */ }
+  try { const s = JSON.parse(store.get(SAVE_KEY)); if (s && s.v === 1) { S = s; S.trophies = S.trophies || []; return true; } } catch (e) { /* guardado roto */ }
   return false;
 }
 export const hasSave = () => { try { const s = JSON.parse(store.get(SAVE_KEY)); return !!(s && s.v === 1 && !s.over); } catch (e) { return false; } };
@@ -188,12 +188,22 @@ function fillNight() {
   if (kingReady() && N.time >= 22 * 60 && !N.present.includes('king') && !N.raced.includes('king')) N.present.unshift('king');
 }
 export const nightOver = () => !S.night || S.night.time >= NIGHT_CLOSE;
+// Amanece: Gus paga el turno en la bencinera, llega el diario nuevo. Devuelve lo que pagó Gus.
 export function endNight() {
   S.night = null; S.day++;
   if (S.day >= DAYS && !S.over) S.over = 'summer';
+  const wage = S.over ? 0 : WAGE;
+  S.money += wage;
   makePaper(); save();
+  return wage;
 }
-// ¿Acepta el rival? type: 'drag' | 'road'; pink: los papeles del auto (solo en la ruta)
+// ¿Arriesga el rival su auto? Se tienen fe: aceptan aunque su auto sea algo más lento, más mientras mejor manejan
+export function acceptsPink(r) {
+  if (r.king) return true;
+  const my = carStats(activeCar()).et, their = carStats(rivalCar(r)).et;
+  return their <= my + 0.35 + r.skill * 0.8;
+}
+// ¿Acepta el rival? type: 'drag' | 'road'; bet 0 = por el honor; pink: los papeles del auto (solo en la ruta)
 export function challenge(r, type, bet, pink) {
   const N = S.night, me = activeCar();
   if (!N || !me) return 'noCar';
@@ -201,12 +211,75 @@ export function challenge(r, type, bet, pink) {
   if (r.boss && !bossReady(r.cls)) return 'notYet';
   if (pink && type !== 'road') return 'pinkRoad';
   if (r.king && !(type === 'road' && pink)) return 'kingPink';
-  const my = carStats(me).et, their = carStats(rivalCar(r)).et;
-  if (pink) { if (!r.king && their > my + 0.3) return 'scared'; return ''; }
+  if (pink) return acceptsPink(r) ? '' : 'scared';
+  if (!bet) return '';
   if (bet > S.money) return 'money';
-  if (bet > CLASS_BET[r.cls]) return 'tooMuch';
-  if (their > my + 1.6) return 'tooFast';
+  if (bet > maxBet(r)) return maxBet(r) ? 'tooMuch' : 'tooFast';
   return '';
+}
+// Lo más que apuesta un rival contra tu auto (0 si tu auto es demasiado para él: entonces solo por el honor)
+export function maxBet(r) {
+  const my = carStats(activeCar()).et, their = carStats(rivalCar(r)).et;
+  return their > my + 2.2 ? 0 : CLASS_BET[r.cls];
+}
+// A veces un rival se acerca a desafiarte con una apuesta que puedes pagar
+export function proposal(R = Math.random) {
+  const N = S.night;
+  if (!N || !activeCar() || nightOver()) return null;
+  const cands = N.present.filter(id => !N.raced.includes(id)).map(rivalById).filter(r => !r.king && (!r.boss || bossReady(r.cls)));
+  if (!cands.length) return null;
+  const r = cands[Math.floor(R() * cands.length)], type = R() < 0.6 ? 'drag' : 'road';
+  const cap = Math.min(maxBet(r), Math.floor(S.money * 0.5));
+  const bet = [...BETS].reverse().find(b => b <= cap) || 0;
+  return challenge(r, type, bet, false) ? null : { id: r.id, type, bet };
+}
+
+// ----- la Copa de Bob's: los sábados, tres picadas seguidas contra rivales de tu categoría -----
+export const isSaturday = () => dateOf(S.day).getUTCDay() === 6;
+export const cupClass = () => classOf(carStats(activeCar()).et);
+export function cupStatus() {
+  const N = S.night;
+  if (!N || !isSaturday()) return 'closed';
+  if (N.cupDone) return 'done';
+  if (!activeCar()) return 'noCar';
+  if (N.time > 23 * 60) return 'late';
+  if (S.money < CUP[cupClass()].fee) return 'money';
+  return '';
+}
+export function startCup() {
+  if (cupStatus()) return cupStatus();
+  const cls = cupClass(), my = carStats(activeCar()).et, R = rng(S.seed + S.day * 977);
+  // los de su categoría (sin jefes); si no alcanzan, los de categorías vecinas con autos parecidos
+  let pool = RIVALS.filter(r => !r.king && !r.boss && r.cls === cls);
+  if (pool.length < 3) pool = RIVALS.filter(r => !r.king && !r.boss).sort((a, b) => Math.abs(carStats(rivalCar(a)).et - my) - Math.abs(carStats(rivalCar(b)).et - my)).slice(0, 4);
+  const ids = pool.map(r => r.id).sort(() => R() - 0.5).slice(0, 3).sort((a, b) => carStats(rivalCar(rivalById(b))).et - carStats(rivalCar(rivalById(a))).et);
+  S.money -= CUP[cls].fee;
+  S.night.cup = { cls, ids, round: 0 };
+  save();
+  return '';
+}
+export const cupRival = () => S.night && S.night.cup ? rivalById(S.night.cup.ids[S.night.cup.round]) : null;
+// El resultado de una ronda: pasa a la siguiente, o termina con premio (campeón o finalista)
+export function cupResult(win) {
+  const N = S.night, cup = N.cup, r = rivalById(cup.ids[cup.round]), C = CUP[cup.cls], me = activeCar();
+  const out = { win, round: cup.round, done: false, prize: 0, champion: false, cls: cup.cls };
+  const rec = S.rivals[r.id];
+  if (win) { rec.w++; S.stats.wins++; if (!S.beaten.includes(r.id)) S.beaten.push(r.id); } else { rec.l++; S.stats.losses++; }
+  if (me) me.cond = Math.max(0.5, Math.round((me.cond - 0.006) * 1000) / 1000);
+  if (win && cup.round < 2) cup.round++;
+  else {
+    out.done = true;
+    if (win) { out.prize = C.prize; out.champion = true; S.trophies.push(cup.cls); }
+    else if (cup.round === 2) out.prize = C.second;
+    S.money += out.prize; S.stats.won += out.prize;
+    N.cup = null; N.cupDone = true;
+    for (const id of cup.ids) if (!N.raced.includes(id)) N.raced.push(id);
+    N.present = N.present.filter(id => !cup.ids.includes(id));
+    N.time += 90;
+    if (N.time < NIGHT_CLOSE) fillNight();
+  }
+  save();
+  return out;
 }
 // El resultado de una carrera: plata, papeles, récord, jefes y El Rey
 export function applyResult({ rivalId, bet = 0, pink = false, win }) {

@@ -81,6 +81,10 @@ export const noUpgrades = () => ({ engine: 0, intake: 0, exhaust: 0, trans: 0, t
 export const CLASSES = ['D', 'C', 'B', 'A', 'S'];
 export const CLASS_ET = { D: Infinity, C: 16.2, B: 14.6, A: 13.2, S: 12.0 };   // tiempo máximo para entrar en cada una
 export const CLASS_BET = { D: 100, C: 250, B: 500, A: 1000, S: 1500 };        // lo más que apuestan los rivales de cada categoría
+export const BETS = [10, 25, 50, 100, 250, 500, 1000, 1500];                    // 0 = por el honor
+// La Copa de Bob's (los sábados): inscripción, premio al campeón y al que pierde la final
+export const CUP = { D: { fee: 20, prize: 200, second: 60 }, C: { fee: 40, prize: 400, second: 120 }, B: { fee: 80, prize: 800, second: 240 }, A: { fee: 150, prize: 1500, second: 450 }, S: { fee: 150, prize: 1500, second: 450 } };
+export const WAGE = 30;            // lo que paga Gus cada día por el turno en la bencinera
 
 // ----- rivales: su auto, su mano para manejar (skill 0..1) y su cara -----
 // look: piel, pelo, polera; boss = el jefe de su categoría (hay que ganarle a 3 de esa categoría para que acepte)

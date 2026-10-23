@@ -8,8 +8,8 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏁</text></svg>">
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  /* La pantalla es de 640×400 píxeles y se agranda sin suavizar, como un monitor VGA */
-  #game { position: absolute; display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; }
+  /* La pantalla se dibuja en alta resolución y ocupa toda la ventana */
+  #game { position: absolute; display: block; touch-action: none; }
   /* Campo invisible para escribir el nombre en la licencia (abre el teclado en los teléfonos) */
   #name { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }
 </style>

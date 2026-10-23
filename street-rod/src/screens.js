@@ -35,8 +35,8 @@ const Game = {
   },
 
   draw(g) {
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.imageSmoothingEnabled = false;
+    g.setTransform(RES, 0, 0, RES, 0, 0);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
     UI.beginFrame();
     const top = this.dialogs.length;
     UI.enabled = !top;
@@ -50,7 +50,7 @@ const Game = {
     }
     if (touchControls() && !top) drawTouchControls(g);
     if (this.fade > 0) { g.fillStyle = PAL.k; g.globalAlpha = clamp(this.fade / 0.3, 0, 1); g.fillRect(0, 0, PW, PH); g.globalAlpha = 1; }
-    if (UI.mouse) UI.drawCursor(g);
+    if (typeof canvas !== 'undefined' && canvas.style) { const cur = UI.cssCursor(); if (canvas.style.cursor !== cur) canvas.style.cursor = cur; }
     UI.endFrame();
   },
 
@@ -137,48 +137,79 @@ function offerLoop(value, onSold, round = 0) {
 // Pantalla de transición: "Paseando por el pueblo..." con el auto cruzando de lado
 SCENES.cruise = {
   music: null, status: false,
-  enter(o) { this.o = o; this.x = -240; this.spr = o.car ? pxCarSide(o.car, 230) : null; Sound.sfx.door(); },
-  update(dt) { this.x += dt * 330; if (this.x > PW + 40 || (Game.sceneT > 0.4 && UI.clicks.length)) { UI.clicks.length = 0; this.o.then(); } },
+  enter(o) { this.o = o; this.x = -150; Sound.sfx.door(); },
+  update(dt) { this.x += dt * 330; if (this.x > PW + 160 || (Game.sceneT > 0.4 && UI.clicks.length)) { UI.clicks.length = 0; this.o.then(); } },
   draw(g) {
     const night = this.o.night;
-    g.drawImage(cruiseBackground(night), 0, 0);
-    if (this.spr) {
-      const bob = Math.round(Math.sin(Game.t * 22) * 0.6);
-      g.drawImage(this.spr, Math.round(this.x), 330 - this.spr.height + bob);
+    blit(g, cruiseBackground(night), 0, 0);
+    if (this.o.car) {
+      const box = drawCarSide(g, this.o.car, this.x, 331 + Math.sin(Game.t * 22) * 0.3, 1.25, { night });
+      // de noche, los focos alumbran la calle por delante
+      if (night) {
+        const hx = box.x + box.w - 2, hy = box.y + box.h * 0.55;
+        g.save(); g.globalCompositeOperation = 'lighter';
+        const beam = g.createLinearGradient(hx, 0, hx + 170, 0);
+        beam.addColorStop(0, 'rgba(255,240,200,0.32)'); beam.addColorStop(1, 'rgba(255,240,200,0)');
+        g.fillStyle = beam; g.beginPath(); g.moveTo(hx, hy - 3); g.lineTo(hx + 170, hy + 4); g.lineTo(hx + 170, 336); g.lineTo(hx, hy + 4); g.closePath(); g.fill();
+        glow(g, hx, hy, 10, '#fff4d0', 0.8);
+        g.restore();
+      }
     }
     ptext(g, this.o.text, PW / 2, 40, night ? PAL.y3 : PAL.k, 3, { align: 'center', shadow: night ? PAL.r2 : PAL.w });
   }
 };
 // La calle del pueblo de lado (de día o de noche)
+const TOWN_SHOPS = [
+  { t: 'DRUGS', c: '#1c6aa8', awn: '#d02c2c' }, { t: 'BARBER', c: '#a83030', door: 1 }, { t: 'CAFE', c: '#2c8a5a', awn: '#2c8a5a' },
+  { t: 'RADIO · TV', c: '#6a3ca0', door: 1 }, { t: 'HARDWARE', c: '#b06a18', awn: '#e0a020' }, { t: 'RECORDS', c: '#c02c78', door: 1 },
+  { t: 'BAKERY', c: '#a0602c', awn: '#3c6cf0' }, { t: 'SHOES', c: '#2c4a8a', door: 1 }
+];
+const TOWN_COLORS = ['#f2d7a6', '#e9b8a0', '#a8d0c8', '#f4ece0', '#c8d4e8', '#e8c86a', '#d8b0c8'];
 function cruiseBackground(night) {
   return pxBackground('cruise' + (night ? 'n' : 'd'), g => {
     const R = rng(4);
-    if (night) { g.fillStyle = PAL.k; g.fillRect(0, 0, PW, PH); stars(g, 0, 0, PW, 200, 120); }
-    else { const sky = g.createLinearGradient(0, 0, 0, 260); sky.addColorStop(0, PAL.u3); sky.addColorStop(1, PAL.u4); g.fillStyle = sky; g.fillRect(0, 0, PW, 260); }
-    // casas y tiendas
-    let x = -10;
+    const sky = g.createLinearGradient(0, 0, 0, 270);
+    if (night) { sky.addColorStop(0, '#04050c'); sky.addColorStop(1, '#1e1a3c'); }
+    else { sky.addColorStop(0, '#3f86d8'); sky.addColorStop(1, '#cbe6f6'); }
+    g.fillStyle = sky; g.fillRect(0, 0, PW, 272);
+    if (night) { stars(g, 0, 0, PW, 180, 140); glow(g, 560, 46, 40, '#fff3cc', 0.25); oval(g, 560, 46, 11, 11, '#fff6dc'); }
+    else { softCloud(g, 120, 50, 150); softCloud(g, 470, 34, 120, 0.7); softCloud(g, 610, 80, 90, 0.6); }
+    // cerros lejanos
+    g.fillStyle = night ? '#141228' : '#a8bfd6';
+    g.beginPath(); g.moveTo(0, 230); g.quadraticCurveTo(110, 170, 230, 205); g.quadraticCurveTo(360, 150, 470, 200); g.quadraticCurveTo(570, 175, PW, 195); g.lineTo(PW, 272); g.lineTo(0, 272); g.fill();
+    // tiendas
+    let x = -14, i = Math.floor(R() * TOWN_SHOPS.length);
     while (x < PW) {
-      const w = 70 + Math.floor(R() * 90), h = 80 + Math.floor(R() * 110);
-      const col = night ? rpick(R, [PAL.g1, PAL.p1, PAL.u1, PAL.b1]) : rpick(R, [PAL.c2, PAL.b4, PAL.t3, PAL.m4, PAL.y3, PAL.g5]);
-      g.fillStyle = col; g.fillRect(x, 270 - h, w, h);
-      g.fillStyle = night ? PAL.k : PAL.g4; g.fillRect(x, 270 - h, w, 4);
-      for (let wy = 270 - h + 14; wy < 240; wy += 30) for (let wx = x + 10; wx < x + w - 16; wx += 24) {
-        g.fillStyle = night ? (R() < 0.6 ? PAL.y2 : PAL.g2) : PAL.u2; g.fillRect(wx, wy, 12, 14);
-      }
-      if (R() < 0.4) { g.fillStyle = night ? PAL.m3 : PAL.r3; g.fillRect(x + 8, 270 - h + 8, w - 16, 10); }
-      x += w + 4 + Math.floor(R() * 30);
+      const w = 92 + Math.floor(R() * 70), h = 104 + Math.floor(R() * 86);
+      storefront(g, x, w, h, 270, rpick(R, TOWN_COLORS), night, R, TOWN_SHOPS[i++ % TOWN_SHOPS.length]);
+      x += w + 6 + Math.floor(R() * 26);
     }
-    // palmeras
-    for (let i = 0; i < 4; i++) {
-      const px = 60 + i * 160 + Math.floor(R() * 40);
-      g.fillStyle = night ? PAL.b1 : PAL.b3; g.fillRect(px, 130, 6, 140);
-      g.fillStyle = night ? PAL.e1 : PAL.e2;
-      for (let a = 0; a < 7; a++) { g.beginPath(); g.ellipse(px + 3 + Math.cos(a) * 18, 130 + Math.sin(a) * 6, 22, 5, a, 0, TAU); g.fill(); }
+    // vereda con su solera
+    const sw = g.createLinearGradient(0, 270, 0, 290);
+    sw.addColorStop(0, night ? '#34343c' : '#d6d1c6'); sw.addColorStop(1, night ? '#26262c' : '#b9b3a7');
+    g.fillStyle = sw; g.fillRect(0, 270, PW, 20);
+    g.fillStyle = 'rgba(0,0,0,0.1)'; for (let lx = 20; lx < PW; lx += 46) g.fillRect(lx, 270, 1, 20);
+    g.fillStyle = night ? '#4a4a52' : '#ece8e0'; g.fillRect(0, 288, PW, 3);
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 291, PW, 2);
+    // palmeras y faroles
+    for (let k = 0; k < 4; k++) palmTree(g, 70 + k * 165 + Math.floor(R() * 30), 280, 150 + R() * 30, (R() - 0.3) * 0.25, night);
+    for (let lx = 140; lx < PW; lx += 220) {
+      g.fillStyle = night ? '#2a2a30' : '#4a4e56'; g.fillRect(lx, 176, 3, 104); g.fillRect(lx, 176, 16, 3);
+      g.fillStyle = night ? '#fff2c0' : '#d8dce2'; g.fillRect(lx + 10, 178, 9, 3);
+      if (night) { g.save(); g.globalCompositeOperation = 'lighter'; glow(g, lx + 14, 180, 46, '#ffd890', 0.4); g.restore(); }
     }
-    // vereda y calle
-    g.fillStyle = night ? PAL.g2 : PAL.g5; g.fillRect(0, 270, PW, 20);
-    g.fillStyle = night ? PAL.g1 : PAL.g3; g.fillRect(0, 290, PW, 90);
-    g.fillStyle = night ? PAL.g3 : PAL.w; for (let lx = 0; lx < PW; lx += 60) g.fillRect(lx, 348, 30, 4);
-    if (night) for (let lx = 40; lx < PW; lx += 200) { g.fillStyle = PAL.g3; g.fillRect(lx, 180, 4, 90); g.fillStyle = PAL.y3; g.fillRect(lx - 6, 176, 16, 6); }
+    // la calle
+    const st = g.createLinearGradient(0, 293, 0, PH);
+    st.addColorStop(0, night ? '#1c1d22' : '#585a60'); st.addColorStop(1, night ? '#111216' : '#3c3e44');
+    g.fillStyle = st; g.fillRect(0, 293, PW, PH - 293);
+    for (let n = 0; n < 500; n++) { g.fillStyle = `rgba(255,255,255,${0.03 + R() * 0.05})`; g.fillRect(R() * PW, 293 + R() * 107, 1, 1); }
+    g.fillStyle = night ? '#6a6a60' : '#f2f0e6'; for (let lx = 0; lx < PW; lx += 60) g.fillRect(lx, 348, 30, 3);
+    // la luz de los faroles en la vereda y la calle
+    if (night) for (let lx = 140; lx < PW; lx += 220) {
+      g.save(); g.globalCompositeOperation = 'lighter'; g.translate(lx + 14, 292); g.scale(1, 0.22);
+      const pool = g.createRadialGradient(0, 0, 0, 0, 0, 90);
+      pool.addColorStop(0, 'rgba(255,214,140,0.22)'); pool.addColorStop(1, 'rgba(255,214,140,0)');
+      g.fillStyle = pool; g.fillRect(-90, -90, 180, 180); g.restore();
+    }
   });
 }

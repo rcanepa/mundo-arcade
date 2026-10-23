@@ -1,19 +1,27 @@
 // ===== El garaje: el diario, el auto, los repuestos, la pintura, el reloj y la puerta a la calle =====
-const GARAGE_CAR = { x: 132, bottom: 374, size: 400 };
+const GARAGE_CAR = { x: 342, ground: 374, k: 2.05 };   // centro, suelo y escala (px por pulgada) del auto en el garaje
 
 function garageBackground() {
   return pxBackground('garage', g => {
     // pared de tablas
     for (let x = 0; x < PW; x += 16) {
-      g.fillStyle = [PAL.b2, PAL.b3, PAL.b2, PAL.b3, PAL.b3][(x / 16) % 5]; g.fillRect(x, 0, 16, 240);
-      g.fillStyle = PAL.b1; g.fillRect(x, 0, 1, 240);
-      g.fillStyle = PAL.b4; g.fillRect(x + 1, 0, 1, 240);
-      g.fillStyle = PAL.b1; g.fillRect(x + 7, 60 + (x * 7) % 90, 2, 2); g.fillRect(x + 7, 180 + (x * 3) % 40, 2, 2);
+      const base = ['#7a4a26', '#8a5530', '#74461f', '#83502b', '#8c5934'][(x / 16) % 5];
+      const pg = g.createLinearGradient(x, 0, x + 16, 0);
+      pg.addColorStop(0, css(shade(base, -0.28))); pg.addColorStop(0.15, base); pg.addColorStop(0.8, css(shade(base, 0.06))); pg.addColorStop(1, css(shade(base, -0.2)));
+      g.fillStyle = pg; g.fillRect(x, 0, 16, 240);
+      // vetas de la madera
+      g.strokeStyle = 'rgba(40,20,8,0.18)'; g.lineWidth = 0.6;
+      for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(x + 4 + k * 4, 0); g.bezierCurveTo(x + 2 + k * 4, 80, x + 7 + k * 4, 160, x + 4 + k * 4, 240); g.stroke(); }
+      g.fillStyle = 'rgba(30,16,6,0.7)'; g.beginPath(); g.arc(x + 8, 62 + (x * 7) % 90, 1, 0, TAU); g.arc(x + 8, 182 + (x * 3) % 40, 1, 0, TAU); g.fill();
     }
+    // la luz de la ventana del portón aclara la pared derecha
+    const wl = g.createLinearGradient(140, 0, 330, 0);
+    wl.addColorStop(0, 'rgba(255,240,210,0)'); wl.addColorStop(1, 'rgba(255,240,210,0.12)');
+    g.fillStyle = wl; g.fillRect(140, 0, 190, 240);
     g.fillStyle = PAL.b1; g.fillRect(0, 0, PW, 14); g.fillStyle = PAL.b2; g.fillRect(0, 12, PW, 3);
     // piso de concreto con manchas de aceite
     const fl = g.createLinearGradient(0, 236, 0, 380);
-    fl.addColorStop(0, PAL.g3); fl.addColorStop(1, PAL.g4);
+    fl.addColorStop(0, '#4b4e55'); fl.addColorStop(0.35, '#6c7078'); fl.addColorStop(1, '#8d9199');
     g.fillStyle = fl; g.fillRect(0, 236, PW, 150);
     g.fillStyle = PAL.g2; g.fillRect(0, 236, PW, 4);
     g.fillStyle = PAL.g3; g.fillRect(0, 300, PW, 1); g.fillRect(200, 240, 1, 140); g.fillRect(470, 240, 1, 140);
@@ -76,6 +84,10 @@ function garageBackground() {
     g.fillStyle = PAL.k; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; g.fillRect(Math.round(282 + Math.cos(a) * 14) - 1, Math.round(46 + Math.sin(a) * 14) - 1, 2, 2); }
     g.fillStyle = PAL.w; g.fillRect(262, 76, 40, 64); g.fillStyle = PAL.g5; g.fillRect(262, 138, 40, 2);
     g.fillStyle = PAL.b3; g.fillRect(262, 162, 40, 36); g.fillStyle = PAL.b1; g.fillRect(262, 196, 40, 2);
+    // la lámpara del techo
+    g.fillStyle = '#2a2a2e'; g.fillRect(338, 0, 2, 22);
+    g.fillStyle = '#3c4a3e'; g.beginPath(); g.moveTo(326, 30); g.lineTo(352, 30); g.lineTo(346, 22); g.lineTo(332, 22); g.closePath(); g.fill();
+    lampLight(g, 339, 34, 260, '255,226,170', 0.12);
     // latas de pintura en el piso
     for (const [x, y, c] of [[10, 330, PAL.r3], [44, 334, PAL.u3], [26, 300, PAL.y2], [78, 340, PAL.e3]]) {
       g.fillStyle = PAL.g4; g.fillRect(x, y, 30, 36); g.fillStyle = c; g.fillRect(x, y + 8, 30, 20);
@@ -114,25 +126,19 @@ SCENES.garage = {
   enter() { Bubbles.clear(); },
   back() {},
   draw(g) {
-    g.drawImage(garageBackground(), 0, 0);
+    blit(g, garageBackground(), 0, 0);
     drawGarageDetails(g);
     const car = activeCar();
     const C = GARAGE_CAR;
-    let spr = null, sx = C.x, sy = 0;
-    if (car) {
-      spr = pxCarSide(car, C.size);
-      sy = C.bottom - spr.height;
-      // sombra bajo el auto
-      g.fillStyle = PAL.g2; g.fillRect(sx + 20, C.bottom - 6, spr.width - 40, 6);
-      g.drawImage(spr, sx, sy);
-      if (car.mods.roofDays > 0) { g.fillStyle = PAL.y2; g.fillRect(sx + spr.width * 0.4, sy + 10, 120, 18); ptext(g, L().g.roofWork(car.mods.roofDays), sx + spr.width * 0.4 + 60, sy + 14, PAL.k, 1, { align: 'center' }); }
-    } else {
-      ptext(g, L().g.noCar, PW / 2, 290, PAL.w, 2, { align: 'center', shadow: PAL.k });
-    }
+    let box = null;
+    if (car) box = drawCarSide(g, car, C.x, C.ground, C.k, { reflect: 0.16 });
+    // los bordes en penumbra
+    vignette(g, 0.38);
+    if (!car) ptext(g, L().g.noCar, PW / 2, 290, PAL.w, 2, { align: 'center', shadow: PAL.k });
     if (Game.dialogs.length) return;
     // ----- zonas que se pueden clickear -----
     if (car) {
-      const w = spr.width, h = spr.height;
+      const sx = box.x, sy = box.y, w = box.w, h = box.h;
       if (UI.hot(sx + w * 0.7, sy + h * 0.25, w * 0.3, h * 0.55, L().g.hot.engine, 'wrench')) Game.go('engine', { car });
       else if (UI.hot(sx + w * 0.08, sy + h * 0.55, w * 0.26, h * 0.45, L().g.hot.tires, 'wrench')) Game.go('tires', { car });
       else if (UI.hot(sx + w * 0.34, sy + h * 0.62, w * 0.36, h * 0.38, L().g.hot.trans, 'wrench')) Game.go('trans', { car });
@@ -258,22 +264,22 @@ function fakeText(g, x, y, w, rows, seed) {
   g.fillStyle = PAL.g4;
   for (let i = 0; i < rows; i++) g.fillRect(x, y + i * 5, i === rows - 1 ? w * (0.3 + R() * 0.5) : w - Math.floor(R() * 8), 2);
 }
-// Foto en gris (como impresa en el diario)
-function newsPhoto(car, w) {
-  const key = 'photo:' + car.model + car.color + w;
+// Foto en blanco y negro del auto (como impresa en el diario)
+// foto en blanco y negro del auto; bare: sin fondo, para los avisos chicos
+function newsPhoto(car, w, bare) {
+  const h = Math.round(w * (bare ? 0.36 : 0.55)), key = 'photo:' + car.model + car.color + w + (bare ? 'b' : '') + '@' + RES;
   let c = PXCACHE.get(key);
   if (c) return c;
-  const spr = pxCarSide(car, w - 20);
-  c = makeCanvas(w, Math.round(w * 0.55));
+  c = makeCanvas(w * RES, h * RES); c.lw = w; c.lh = h;
   const g = c.getContext('2d');
-  g.fillStyle = PAL.g5; g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = PAL.g6; g.fillRect(0, 0, c.width, c.height * 0.55);
-  g.drawImage(spr, 10, c.height - spr.height - 4);
-  if (g.getImageData) {
-    const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
-    for (let i = 0; i < d.length; i += 4) { const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11; d[i] = d[i + 1] = d[i + 2] = l * 0.9 + 20; }
-    pixelize(img, 60); g.putImageData(img, 0, 0);
+  g.scale(RES, RES);
+  if (!bare) {
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#d9d9d6'); bg.addColorStop(0.58, '#b9b9b4'); bg.addColorStop(0.6, '#8f8f8a'); bg.addColorStop(1, '#c4c4bf');
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
   }
+  drawCarSide(g, car, w / 2, h - (bare ? 2 : 10), carScale(car.model, w - (bare ? 4 : 24)), { gray: true, shadow: !bare });
+  g.globalCompositeOperation = bare ? 'source-atop' : 'multiply'; g.fillStyle = bare ? 'rgba(120,96,60,0.18)' : 'rgba(230,222,200,0.55)'; g.fillRect(0, 0, w, h);
   PXCACHE.set(key, c);
   return c;
 }
@@ -302,7 +308,7 @@ SCENES.paper = {
     fakeText(g, P.x + 206, hy, 180, 12, S.paper.news + 1);
     // la foto del día: el auto más caro del diario
     const best = S.paper.ads.slice(1).sort((a, b) => b.price - a.price)[0];
-    if (best) { const ph = newsPhoto(best.car, 200); g.drawImage(ph, P.x + 396, P.y + 92); g.fillStyle = PAL.k; g.strokeStyle = PAL.k; g.lineWidth = 1; g.strokeRect(P.x + 395.5, P.y + 91.5, 201, ph.height + 1); ptext(g, carTitle(best.car.model), P.x + 496, P.y + 98 + ph.height, PAL.k, 1, { align: 'center' }); }
+    if (best) { const ph = newsPhoto(best.car, 200); blit(g, ph, P.x + 396, P.y + 92); g.strokeStyle = PAL.k; g.lineWidth = 1; g.strokeRect(P.x + 395.5, P.y + 91.5, 201, ph.lh + 1); ptext(g, carTitle(best.car.model), P.x + 496, P.y + 96 + ph.lh, PAL.k, 1, { align: 'center' }); }
     // las secciones: avisos de autos y de repuestos (se abren con un clic)
     const box = (x, y, w, h, title, sub, onClick) => {
       const hov = UI.over(x, y, w, h);
@@ -333,8 +339,10 @@ SCENES.paper = {
       ptext(g, `'${String(M.year).slice(2)} ${M.name.split(' ')[0].toUpperCase()}`, x + 8, y + 6, PAL.k, 2);
       ptext(g, money(ad.price), x + w - 8, y + 6, PAL.r2, 2, { align: 'right' });
       ptext(g, M.name.split(' ').slice(1).join(' '), x + 8, y + 26, PAL.k, 1);
-      ptext(g, T.paper.adLine(E.kind === '8' ? 'V-8' : T.parts.six, E.ci, T.parts.transShort[ad.car.p.trans.k]), x + 8, y + 37, PAL.k, 1);
+      ptext(g, T.paper.adLine(E.kind === '8' ? 'V-8' : E.kind === '6' ? T.parts.six : T.parts.four, E.ci, T.parts.transShort[ad.car.p.trans.k]), x + 8, y + 37, PAL.k, 1);
       ptext(g, T.paper.words[ad.words] + ' ' + T.paper.cond(ad.car), x + 8, y + 48, PAL.g2, 1);
+      const ph = newsPhoto(ad.car, 92, true);
+      g.globalAlpha = ad.sold ? 0.35 : 1; blit(g, ph, x + w - ph.lw - 6, y + h - ph.lh - 5); g.globalAlpha = 1;
       if (ad.sold) {
         g.save(); g.translate(x + w / 2, y + h / 2); g.rotate(-0.12);
         g.fillStyle = PAL.r3; g.fillRect(-60, -14, 120, 28); g.fillStyle = PAL.c1; g.fillRect(-56, -10, 112, 20);
@@ -403,11 +411,10 @@ SCENES.seller = {
   key(code) { if (code === 'Escape') this.back(); },
   draw(g) {
     const T = L(), ad = this.ad, car = ad.car;
-    g.drawImage(cruiseBackground(false), 0, -10);
-    g.fillStyle = PAL.e3; g.fillRect(0, 270, PW, 20); g.fillStyle = PAL.g4; g.fillRect(0, 290, PW, 90);
-    const spr = pxCarSide(car, 380);
-    g.drawImage(spr, 40, 372 - spr.height);
-    g.drawImage(pxPerson('post', this.look), 500, 372 - pxPerson('post', this.look).height);
+    blit(g, cruiseBackground(false), 0, 0);
+    drawCarSide(g, car, 240, 372, 1.9);
+    const man = pxPerson('post', this.look);
+    blit(g, man, 500, 372 - man.lh);
     // ficha del auto
     UI.greyBox(g, 10, 10, 360, 150);
     ptext(g, carTitle(car.model), 20, 18, PAL.r2, 2);
@@ -447,21 +454,24 @@ SCENES.paint = {
   key(code) { if (code === 'Escape') this.back(); },
   draw(g) {
     const T = L(), car = this.car;
-    g.drawImage(paintBackground(), 0, 0);
+    blit(g, paintBackground(), 0, 0);
     // vista previa: lo que está bajo el mouse se prueba en el auto
     const show = this.preview ? Object.assign({}, car, this.preview, { mods: Object.assign({}, car.mods, this.preview.mods || {}) }) : car;
-    const spr = pxCarSide(show, 420);
-    g.fillStyle = PAL.g2; g.fillRect(130, 342, spr.width - 60, 6);
-    g.drawImage(spr, 100, 346 - spr.height);
+    drawCarSide(g, show, 330, 346, 2.1, { reflect: 0.14 });
     this.preview = null;
     if (Game.dialogs.length) return;
     // colores
     ptext(g, T.paint.colors(money(PAINT_PRICE)), 14, 0, PAL.w, 2, { shadow: PAL.k });
     PAINTS.forEach((p, i) => {
       const x = 14 + i * 44, y = 26, hov = UI.over(x, y, 38, 26);
-      g.fillStyle = hov ? PAL.y3 : PAL.k; g.fillRect(x - 2, y - 2, 42, 30);
-      g.fillStyle = p.c; g.fillRect(x, y, 38, 26);
-      if (car.color === p.c) { g.fillStyle = PAL.w; g.fillRect(x + 15, y + 9, 8, 8); }
+      g.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(g, x + 1, y + 2, 38, 26, 6); g.fill();
+      const sw = g.createLinearGradient(0, y, 0, y + 26); sw.addColorStop(0, css(shade(p.c, 0.28))); sw.addColorStop(0.5, p.c); sw.addColorStop(1, css(shade(p.c, -0.25)));
+      g.fillStyle = sw; roundRect(g, x, y, 38, 26, 6); g.fill();
+      g.strokeStyle = hov ? '#ffd36b' : 'rgba(0,0,0,0.35)'; g.lineWidth = hov ? 2 : 1; roundRect(g, x + 0.5, y + 0.5, 37, 25, 6); g.stroke();
+      if (car.color === p.c) {
+        oval(g, x + 19, y + 13, 7, 7, 'rgba(255,255,255,0.92)');
+        g.strokeStyle = '#1c1e22'; g.lineWidth = 2; g.lineCap = 'round'; g.beginPath(); g.moveTo(x + 15.5, y + 13); g.lineTo(x + 18.5, y + 16); g.lineTo(x + 23, y + 10); g.stroke();
+      }
       if (hov) this.preview = { color: p.c };
       if (UI.hot(x, y, 38, 26, p[LANG]) && car.color !== p.c) confirmBox(T.paint.paintAsk(p[LANG].toLowerCase(), money(PAINT_PRICE)), T.yes, T.forget, () => { if (paintCar(car, p.c)) Sound.sfx.buy(); else say(T.paper.noMoney); });
     });
@@ -478,9 +488,8 @@ SCENES.paint = {
     const bx = 14, by = 352;
     const fix = car.body < 0.97 && canRepair(car);
     const btns = [
-      [T.paint.nobump(money(BODYWORK.nobump.price)), !car.mods.nobump, () => confirmBox(T.paint.nobumpAsk, T.yes, T.forget, () => { if (bodywork(car, 'nobump')) Sound.sfx.clunk(); else say(T.paper.noMoney); }), { mods: { nobump: 1 } }],
-      [T.paint.noroof(money(BODYWORK.noroof.price)), !car.mods.noroof && !car.mods.roofDays && !ART[car.model].open, () => confirmBox(T.paint.noroofAsk(BODYWORK.noroof.days), T.yes, T.forget, () => { if (bodywork(car, 'noroof')) Sound.sfx.clunk(); else say(T.paper.noMoney); }), { mods: { noroof: 1 } }],
-      [fix ? T.paint.fix(money(repairCost(car))) : T.paint.strip, fix || Object.values(car.mods.stickers).some(Boolean), () => fix
+      [T.paint.strip(money(BODYWORK.strip.price)), !car.mods.strip, () => confirmBox(T.paint.stripAsk, T.yes, T.forget, () => { if (bodywork(car, 'strip')) Sound.sfx.clunk(); else say(T.paper.noMoney); }), null],
+      [fix ? T.paint.fix(money(repairCost(car))) : T.paint.unstick, fix || Object.values(car.mods.stickers).some(Boolean), () => fix
         ? confirmBox(T.paint.fixAsk(money(repairCost(car))), T.yes, T.forget, () => { if (fixCrash(car)) Sound.sfx.buy(); else say(T.paper.noMoney); })
         : removeStickers(car), fix ? null : { mods: { stickers: {} } }]
     ];
@@ -494,16 +503,38 @@ SCENES.paint = {
 };
 function paintBackground() {
   return pxBackground('paintshop', g => {
-    g.fillStyle = PAL.g5; g.fillRect(0, 0, PW, 250);
-    g.fillStyle = PAL.g4; for (let x = 0; x < PW; x += 40) g.fillRect(x, 0, 2, 250);
-    g.fillStyle = PAL.g6; g.fillRect(0, 118, PW, 2);
-    // lámparas
-    for (const x of [120, 320, 520]) { g.fillStyle = PAL.g2; g.fillRect(x - 1, 0, 2, 120); g.fillStyle = PAL.y3; g.fillRect(x - 24, 120, 48, 6); }
-    // salpicaduras de pintura en la pared
+    // la cabina de pintura: paredes claras, paneles de luz en el techo y piso de rejilla
+    const wall = g.createLinearGradient(0, 0, 0, 252);
+    wall.addColorStop(0, '#f2f3f5'); wall.addColorStop(1, '#c4c8ce');
+    g.fillStyle = wall; g.fillRect(0, 0, PW, 252);
+    for (let x = 0; x < PW; x += 80) { g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(x, 0, 1.5, 252); g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(x + 1.5, 0, 1, 252); }
+    // el techo oscuro con los controles encima
+    const ceil = g.createLinearGradient(0, 0, 0, 112);
+    ceil.addColorStop(0, '#2c3038'); ceil.addColorStop(1, '#1a1c22');
+    g.fillStyle = ceil; g.fillRect(0, 0, PW, 112);
+    g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(0, 111, PW, 1.5);
+    for (const x of [40, 240, 440]) {
+      g.save(); g.globalCompositeOperation = 'lighter'; glow(g, x + 80, 128, 130, '#fff8e6', 0.32); g.restore();
+      g.fillStyle = '#9aa0aa'; roundRect(g, x - 2, 116, 164, 14, 3); g.fill();
+      const lt = g.createLinearGradient(0, 118, 0, 128); lt.addColorStop(0, '#ffffff'); lt.addColorStop(1, '#e8eef4');
+      g.fillStyle = lt; roundRect(g, x, 118, 160, 10, 2); g.fill();
+    }
+    // filtros a los lados, con algo de pintura que se escapó
+    for (const x of [8, 574]) {
+      g.fillStyle = '#d8dce2'; roundRect(g, x, 150, 58, 90, 4); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.12)'; g.lineWidth = 1; for (let y = 156; y < 236; y += 6) { g.beginPath(); g.moveTo(x + 4, y); g.lineTo(x + 54, y); g.stroke(); }
+    }
     const R = rng(9);
-    for (let i = 0; i < 40; i++) { g.fillStyle = rpick(R, [PAL.r3, PAL.u3, PAL.y2, PAL.e3, PAL.m3]); g.fillRect(Math.floor(R() * PW), 130 + Math.floor(R() * 110), 2 + Math.floor(R() * 3), 2); }
-    g.fillStyle = PAL.g3; g.fillRect(0, 250, PW, 130);
-    g.fillStyle = PAL.g2; g.fillRect(0, 250, PW, 4);
-    g.fillStyle = PAL.g4; for (let x = 0; x < PW; x += 64) g.fillRect(x, 254, 1, 126);
+    for (let i = 0; i < 7; i++) {
+      const hx = R() * PW, hy = 150 + R() * 80, c = rpick(R, ['#d02c2c', '#3c6cf0', '#f0c830', '#3cc03c', '#e04ab0']);
+      const hz = g.createRadialGradient(hx, hy, 0, hx, hy, 40); hz.addColorStop(0, css(c, 0.1)); hz.addColorStop(1, css(c, 0));
+      g.fillStyle = hz; g.fillRect(hx - 40, hy - 40, 80, 80);
+    }
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 248, PW, 4);
+    const fl = g.createLinearGradient(0, 252, 0, PH);
+    fl.addColorStop(0, '#8a8f98'); fl.addColorStop(1, '#4a4e56');
+    g.fillStyle = fl; g.fillRect(0, 252, PW, PH - 252);
+    g.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = 258; y < PH; y += 7) g.fillRect(0, y, PW, 1.5);
+    for (let x = 0; x <= PW; x += 64) { g.beginPath(); g.moveTo(x, 252); g.lineTo(x + 1, 252); g.lineTo((x - PW / 2) * 1.6 + PW / 2 + 1, PH); g.lineTo((x - PW / 2) * 1.6 + PW / 2, PH); g.fill(); }
   });
 }

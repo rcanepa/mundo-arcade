@@ -90,47 +90,65 @@ check('los textos en español e inglés tienen las mismas claves', () => {
   walk(STR.es, STR.en, '');
 });
 
-check('las letras de píxeles tienen todos los caracteres de los textos', () => {
-  const FONT = get('FONT'), missing = new Set();
-  const scan = v => {
-    if (typeof v === 'string') { for (const ch of v) if (!FONT[ch]) missing.add(ch); }
-    else if (v && typeof v === 'object') Object.values(v).forEach(scan);
-  };
-  scan(STR);
-  assert(!missing.size, 'faltan letras: ' + [...missing].join(' '));
+check('cada auto tiene sus imágenes de lado, de atrás y de frente, con su máscara de pintura', () => {
+  const IMG = get('CAR_IMG'), META = get('CAR_META');
+  for (const k of MODEL_KEYS) {
+    for (const v of ['side', 'rear', 'front']) for (const suf of ['', '_mask']) assert(IMG[`${k}_${v}${suf}`] && IMG[`${k}_${v}${suf}`].startsWith('data:image/webp'), `falta la imagen ${k}_${v}${suf}`);
+    assert(META[k] && META[k].img && META[k].ground > 0.8, `faltan los datos de la imagen de ${k}`);
+  }
 });
 
-check('los 25 autos del diario se arman, andan y tienen números razonables', () => {
-  assert(MODEL_KEYS.length === 25, 'deberían ser 25 modelos');
+// Ancho y alto de una imagen WebP (leídos de su encabezado)
+function webpSize(dataUrl) {
+  const b = Buffer.from(dataUrl.split(',')[1], 'base64'), kind = b.toString('ascii', 12, 16);
+  if (kind === 'VP8X') return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
+  if (kind === 'VP8L') { const v = b.readUInt32LE(21); return [1 + (v & 0x3fff), 1 + ((v >> 14) & 0x3fff)]; }
+  return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+}
+check('las máscaras de pintura calzan justo con sus imágenes', () => {
+  const IMG = get('CAR_IMG'), META = get('CAR_META');
+  for (const k of MODEL_KEYS) for (const v of ['side', 'rear', 'front']) {
+    const a = webpSize(IMG[`${k}_${v}`]), m = webpSize(IMG[`${k}_${v}_mask`]);
+    assert(a[0] === m[0] && a[1] === m[1], `${k}_${v}: la imagen mide ${a} y la máscara ${m}`);
+    assert(a[0] === META[k].img[v][0] && a[1] === META[k].img[v][1], `${k}_${v}: los datos dicen ${META[k].img[v]} y la imagen mide ${a}`);
+  }
+});
+
+check('los 21 autos del diario se arman, andan y tienen números razonables', () => {
+  assert(MODEL_KEYS.length === 21, 'deberían ser 21 modelos');
   for (const k of MODEL_KEYS) {
     const car = makeCar(k);
     assert(carRuns(car), `${k} no anda de fábrica: ${carProblems(car)}`);
     const st = carStats(car), q = carET(car);
     num(st.hp, k + ' potencia'); num(q.et, k + ' tiempo');
-    assert(q.et > 12 && q.et < 26, `${k}: cuarto de milla raro (${q.et.toFixed(2)} s)`);
+    assert(q.et > 12 && q.et < 28, `${k}: cuarto de milla raro (${q.et.toFixed(2)} s)`);
     assert(carValue(car) > 100, `${k}: vale muy poco`);
   }
-  assert(carET(buildCar(KING.car)).et < 14, 'el Corvette de El Rey debería ser el más rápido');
+  assert(carET(buildCar(KING.car)).et < 14.5, 'el Corvette de El Rey debería ser el más rápido');
+  // la progresión: los autos baratos son lentos y los caros rápidos
+  const cheap = MODEL_KEYS.filter(k => MODELS[k].price <= 350), pricey = MODEL_KEYS.filter(k => MODELS[k].price >= 1600);
+  const avg = ks => ks.reduce((a, k) => a + carET(makeCar(k)).et, 0) / ks.length;
+  assert(avg(cheap) > avg(pricey) + 3, 'los autos baratos andan casi igual que los caros');
 });
 
 check('más motor = más rápido; mal afinado = más lento', () => {
-  const base = makeCar('chevy55');
-  const hot = buildCar({ model: 'chevy55', engine: 'gm327', intake: 'race', carbs: ['4R', '4R'], trans: 'race4', tires: 'slick' });
+  const base = makeCar('chevy57');
+  const hot = buildCar({ model: 'chevy57', engine: 'gm327', intake: 'race', carbs: ['4R', '4R'], trans: 'race4', tires: 'slick' });
   assert(carET(hot).et < carET(base).et - 1.5, `el 327 no gana: ${carET(hot).et.toFixed(2)} vs ${carET(base).et.toFixed(2)}`);
-  const off = makeCar('chevy55'); off.tune = 7;
+  const off = makeCar('chevy57'); off.tune = 7;
   assert(carET(off).et > carET(base).et, 'el encendido corrido no se nota');
 });
 
 check('las piezas solo calzan en su marca y donde corresponde', () => {
   newGame('Piezas', 3);
-  const car = makeCar('chevy55');
+  const car = makeCar('chevy57');
   assert(fitProblem(car, 'engine', makePart('engine', 'fd390')) === 'family', 'un motor Ford calzó en un Chevrolet');
   assert(fitProblem(car, 'engine', makePart('engine', 'gm409')) === '', 'un motor GM no calzó en un Chevrolet');
   assert(fitProblem(car, 'trans', makePart('trans', 'man4u', { f: 'all' })) === '', 'la caja universal no calzó');
   assert(fitProblem(car, 'trans', makePart('trans', 'man4', { f: 'mopar' })) === 'family', 'una caja Chrysler calzó en un Chevrolet');
   assert(fitProblem(car, 'intake', makePart('intake', '3x2', { f: 'gm' })) === 'kind', 'un múltiple de 6 cilindros calzó en un V-8');
   // en un 2 × 4 bocas no va un carburador de 2 bocas
-  const t = buildCar({ model: 'chevy55', intake: '2x4' });
+  const t = buildCar({ model: 'chevy57', intake: '2x4' });
   unbolt(t, 'carb1');
   assert(fitProblem(t, 'carb1', makePart('carb', '2')) === 'carbType', 'un carburador de 2 bocas calzó en un múltiple de 4');
   assert(fitProblem(t, 'carb1', makePart('carb', '4R')) === '', 'el carburador de carrera no calzó');
@@ -138,7 +156,7 @@ check('las piezas solo calzan en su marca y donde corresponde', () => {
 
 check('taller: los pernos se sacan en orden, la pieza sale y vuelve a entrar', () => {
   newGame('Taller', 5);
-  const S = state(), car = makeCar('chevy55');
+  const S = state(), car = makeCar('chevy57');
   S.cars.push(car); S.active = car.id;
   assert(!get('loosenBolt')(car, 'intake', 0), 'se soltó el múltiple con el carburador puesto');
   get('loosenBolt')(car, 'carb0', 0);
@@ -187,7 +205,7 @@ check('comprar, regatear y vender', () => {
 
 check('los rivales traen su auto de siempre, parecido al tuyo', () => {
   newGame('Rivales', 31);
-  const S = state(), car = makeCar('chevy55', { fuel: 16 });
+  const S = state(), car = makeCar('chevy57', { fuel: 16 });
   S.cars.push(car); S.active = car.id;
   for (const r of RIVALS.slice(0, 9)) {
     const rc = get('rivalCar')(r.id);
@@ -199,7 +217,7 @@ check('los rivales traen su auto de siempre, parecido al tuyo', () => {
 
 check('picada: los dos llegan a la meta y hay ganador', () => {
   for (let i = 0; i < 3; i++) {
-    const r = driveRace({ type: 'drag', car: makeCar('chevy55', { fuel: 10 }), rival: rival(makeCar('ford55')), bet: 10, seed: 3 + i });
+    const r = driveRace({ type: 'drag', car: makeCar('chevy57', { fuel: 10 }), rival: rival(makeCar('nomad56')), bet: 10, seed: 3 + i });
     const res = r.result;
     assert(res && ['win', 'lose'].includes(res.outcome), 'la picada no terminó: ' + (res && res.reason));
     if (res.reason === 'finish') { num(res.time, 'tiempo'); num(res.rivalTime, 'tiempo del rival'); assert(res.time > 20 && res.time < 50, 'tiempo raro ' + res.time); }
@@ -209,7 +227,7 @@ check('picada: los dos llegan a la meta y hay ganador', () => {
 check('carrera de ruta: se completa sin quedarse pegado', () => {
   let finished = 0;
   for (let i = 0; i < 4; i++) {
-    const r = driveRace({ type: 'road', car: makeCar('chevy58', { fuel: 14 }), rival: rival(makeCar('chevy55')), bet: 25, seed: 100 + i * 17, police: 0 });
+    const r = driveRace({ type: 'road', car: makeCar('pont58', { fuel: 14 }), rival: rival(makeCar('chevy57')), bet: 25, seed: 100 + i * 17, police: 0 });
     assert(r.result, 'la carrera no terminó');
     if (r.result.reason === 'finish') finished++;
   }
@@ -219,7 +237,7 @@ check('carrera de ruta: se completa sin quedarse pegado', () => {
 check('la policía aparece y la carrera se anula si te pillan', () => {
   let cops = 0;
   for (let i = 0; i < 3; i++) {
-    const r = new Race({ type: 'road', car: makeCar('chevy49', { fuel: 14 }), rival: rival(makeCar('valiant61')), bet: 25, seed: 9 + i, police: 1, auto: true });
+    const r = new Race({ type: 'road', car: makeCar('chevy49', { fuel: 14 }), rival: rival(makeCar('valiant60')), bet: 25, seed: 9 + i, police: 1, auto: true });
     let n = 0;
     while (r.phase !== 'done' && n < 60 * 320) { r.update(1 / 60); if (r.cop) cops++; n++; }
     assert(r.result, 'no terminó');
@@ -229,14 +247,14 @@ check('la policía aparece y la carrera se anula si te pillan', () => {
 });
 
 check('largar antes de la luz verde es falta', () => {
-  const r = new Race({ type: 'drag', car: makeCar('chevy55', { fuel: 8 }), rival: rival(makeCar('ford55')), bet: 10, seed: 1 });
+  const r = new Race({ type: 'drag', car: makeCar('chevy57', { fuel: 8 }), rival: rival(makeCar('nomad56')), bet: 10, seed: 1 });
   run('Input.read = () => ({ gas: true, brake: false, steer: 0, up: true, down: false, horn: false })');
   for (let i = 0; i < 300 && r.phase !== 'done'; i++) r.update(1 / 60);
   assert(r.result && r.result.reason === 'foul' && r.result.outcome === 'lose', 'la largada anticipada no se castigó');
 });
 
 check('raspar la caja a fondo la rompe', () => {
-  const v = new (get('Vehicle'))(carStats(makeCar('vette56')));
+  const v = new (get('Vehicle'))(carStats(makeCar('vette61')));
   v.launch();
   for (let i = 0; i < 12 && !v.broken; i++) { v.throttle = 1; v.shiftT = 0; v.gear = 1; v.shiftUp(); }
   assert(v.broken, 'la caja aguantó doce raspadas');
@@ -245,7 +263,7 @@ check('raspar la caja a fondo la rompe', () => {
 check('una noche en Bob\'s: llegan rivales, se corre y se apuesta', () => {
   newGame('Noche', 41);
   const S = state(), raceOptions = get('raceOptions'), applyResult = get('applyResult');
-  const car = makeCar('chevy55', { fuel: 16 }); S.cars.push(car); S.active = car.id;
+  const car = makeCar('chevy57', { fuel: 16 }); S.cars.push(car); S.active = car.id;
   assert(get('goDiner')() === '', 'no se pudo ir a Bob\'s');
   let races = 0;
   for (let k = 0; k < 3; k++) {
@@ -267,12 +285,12 @@ check('una noche en Bob\'s: llegan rivales, se corre y se apuesta', () => {
 check('apostar los papeles: si ganas te llevas su auto, si pierdes te quedas sin el tuyo', () => {
   newGame('Papeles', 51);
   const S = state(), applyResult = get('applyResult');
-  const mine = makeCar('chevy55'), theirs = makeCar('ford57');
+  const mine = makeCar('chevy57'), theirs = makeCar('fair58');
   S.cars.push(mine); S.active = mine.id; S.night = { min: 0, queue: [], cur: null, raced: [] };
   const res = (outcome) => ({ outcome, reason: 'finish', engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
   applyResult({ type: 'road', bet: 'pinks', car: mine, rival: { id: 'charlie', name: 'Charlie', car: theirs, skill: 0.8 } }, res('win'));
-  assert(S.cars.some(c => c.model === 'ford57'), 'no te llevaste el Ford');
-  applyResult({ type: 'road', bet: 'pinks', car: mine, rival: { id: 'lou', name: 'Lou', car: makeCar('ford55'), skill: 0.8 } }, res('lose'));
+  assert(S.cars.some(c => c.model === 'fair58'), 'no te llevaste el Fairlane');
+  applyResult({ type: 'road', bet: 'pinks', car: mine, rival: { id: 'lou', name: 'Lou', car: makeCar('nomad56'), skill: 0.8 } }, res('lose'));
   assert(!S.cars.includes(mine) && S.active === S.cars[0].id, 'perdiste los papeles y te quedaste con el auto');
 });
 
@@ -282,7 +300,7 @@ check('sin auto y sin plata se acaba el juego; sin plata para la multa, castigad
   assert(S.over === 'broke', 'sin auto ni plata el juego sigue');
   newGame('Multa', 62);
   const S2 = state(), car = makeCar('chevy49'); S2.cars.push(car); S2.active = car.id; S2.money = 30; S2.night = { min: 0, queue: [], cur: null, raced: [] };
-  get('applyResult')({ type: 'road', bet: 25, car, rival: { id: 'steve', name: 'Steve', car: makeCar('chevy38'), skill: 0.6 } },
+  get('applyResult')({ type: 'road', bet: 25, car, rival: { id: 'steve', name: 'Steve', car: makeCar('ford40'), skill: 0.6 } },
     { outcome: 'void', reason: 'caught', fine: 75, engineDmg: 0, transDmg: 0, body: 0, fuel: 1, tread: 0.05 });
   assert(S2.over === 'jail', 'sin plata para la multa no pasó nada');
 });
@@ -309,7 +327,7 @@ check('El Rey llega con 6 picadas y 6 rutas ganadas, y ganarle termina el juego'
 
 check('el verano se acaba el 3 de septiembre', () => {
   newGame('Verano', 81);
-  const S = state(), car = makeCar('chevy55'); S.cars.push(car); S.active = car.id;
+  const S = state(), car = makeCar('chevy57'); S.cars.push(car); S.active = car.id;
   for (let d = 0; d < get('SUMMER_DAYS'); d++) get('endNight')();
   assert(S.over === 'summer', 'el verano no se acabó');
   const end = get('dateOf')(S.day);
@@ -331,13 +349,13 @@ check('el guardado y el libro de la policía se recuperan igual', () => {
 
 check('todas las pantallas se dibujan sin errores', () => {
   newGame('Pantallas', 101);
-  const S = state(), car = makeCar('chevy55', { fuel: 10 });
+  const S = state(), car = makeCar('chevy57', { fuel: 10 });
   S.cars.push(car); S.active = car.id; S.spares.push(makePart('carb', '4R'), makePart('engine', 'gm283'));
   const go = (name, arg) => { Game.go(name, arg); frames(3); };
   for (const sc of ['title', 'license', 'intro', 'how', 'fame', 'garage', 'paper', 'gas', 'cover']) go(sc);
   go('paper', 'cars'); go('paper', 'parts'); go('seller', 2);
   for (const sc of ['engine', 'trans', 'tires', 'tune', 'paint']) go(sc, { car });
-  go('engine', { car: makeCar('valiant61'), readOnly: true });
+  go('engine', { car: makeCar('valiant60'), readOnly: true });
   go('garage');
   for (const d of ['sparesBox', 'carsBox', 'calendarBox', 'clockMenu', 'goOut']) { get(d)(); frames(2); Game.dialogs = []; }
   get('carInfo')(car); frames(2); Game.dialogs = [];

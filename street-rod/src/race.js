@@ -46,9 +46,12 @@ class Race {
 
   spawnTraffic(R) {
     const len = this.T.finish;
-    for (let i = 0; i < 11; i++) this.traffic.push({ z: 450 + R() * len * 1.9, x: -LANE, v: -(17 + R() * 6), color: rpick(R, ['#b9bec4', '#2f4f3a', '#6a1f2b', '#ece8dc', '#1d2a4d', '#8ab8de']), oncoming: true });
+    for (let i = 0; i < 11; i++) {
+      const model = rpick(R, ['chevy49', 'dodge50', 'merc48', 'olds54', 'plym57', 'valiant60', 'nomad56']);
+      this.traffic.push({ z: 450 + R() * len * 1.9, x: -LANE, v: -(17 + R() * 6), car: makeCar(model, { color: rpick(R, MODELS[model].colors) }), oncoming: true });
+    }
     for (let i = 0; i < 5; i++) {
-      const model = rpick(R, ['chevy49', 'valiant63', 'olds52', 'chevy55', 'valiant61', 'ford40']);
+      const model = rpick(R, ['chevy49', 'dodge50', 'merc48', 'ford40', 'olds49', 'valiant60']);
       this.traffic.push({ z: 500 + R() * (len - 700), x: LANE, v: 15 + R() * 5, car: makeCar(model, { color: rpick(R, MODELS[model].colors) }), oncoming: false });
     }
   }

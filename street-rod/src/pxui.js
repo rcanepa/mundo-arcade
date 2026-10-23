@@ -1,4 +1,4 @@
-// ===== Interfaz dentro del juego, como la del original: botones biselados, cuadros verdes, menús y globos =====
+// ===== Interfaz dentro del juego: botones, cuadros, menús, listas y globos =====
 // Es "inmediata": cada cuadro, la pantalla dibuja sus botones y pregunta si les hicieron clic.
 const UI = {
   mx: -1, my: -1, clicks: [], click: null, keys: [], enabled: true,
@@ -33,64 +33,75 @@ const UI = {
   },
 
   // ----- botones -----
-  // style: 'grey' (los de diálogo), 'red' (TUNE / PARTS / DONE), 'green'
+  // style: 'grey' (crema, los de diálogo), 'red' (los grandes del taller), 'green' (turquesa)
   button(g, x, y, w, h, label, o = {}) {
     const style = o.style || 'grey', dis = o.disabled;
     const hov = !dis && this.over(x, y, w, h), down = hov && this.held;
-    const C = style === 'red' ? [PAL.r3, PAL.r4, PAL.r1, PAL.w] : style === 'green' ? [PAL.e2, PAL.e4, PAL.e1, PAL.e4] : [PAL.g5, PAL.w, PAL.g2, PAL.k];
-    g.fillStyle = PAL.k; g.fillRect(x - 1, y - 1, w + 2, h + 2);
-    if (style === 'red') { g.fillStyle = PAL.g6; g.fillRect(x, y, w, h); g.fillStyle = PAL.g3; g.fillRect(x + 2, y + 2, w - 2, h - 2); bevel(g, x + 3, y + 3, w - 6, h - 6, C[0], C[1], C[2], down); }
-    else bevel(g, x, y, w, h, hov ? (style === 'grey' ? PAL.g6 : PAL.e3) : C[0], C[1], C[2], down);
-    const sc = o.scale || 2, ty = y + Math.round(h / 2) - FONT_H * sc / 2 - (sc > 1 ? 1 : 0) + (down ? 1 : 0);
-    ptext(g, label, x + w / 2 + (down ? 1 : 0), ty, dis ? PAL.g4 : C[3], sc, { align: 'center' });
+    const C = {
+      grey: ['#fbf5e6', '#e9dcc0', '#3a2c22', '#c9b48a'],
+      red: ['#e8463c', '#a8191f', '#ffffff', '#6e0d12'],
+      green: ['#2fb7a8', '#137366', '#ffffff', '#0b4a42']
+    }[style];
+    const r = Math.min(h / 2, 7), dy = down ? 1 : 0;
+    g.save();
+    g.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(g, x + 0.5, y + 2.2, w, h, r); g.fill();
+    const gr = g.createLinearGradient(0, y + dy, 0, y + h + dy);
+    gr.addColorStop(0, hov ? css(shade(C[0], 0.15)) : C[0]); gr.addColorStop(1, hov ? css(shade(C[1], 0.12)) : C[1]);
+    g.fillStyle = dis ? '#9a9590' : gr; roundRect(g, x, y + dy, w, h, r); g.fill();
+    g.strokeStyle = dis ? '#77726c' : C[3]; g.lineWidth = 1; roundRect(g, x + 0.5, y + dy + 0.5, w - 1, h - 1, r); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.28)'; roundRect(g, x + 2, y + dy + 1.5, w - 4, h * 0.42, Math.max(1, r - 1)); g.fill();
+    g.restore();
+    const sc = o.scale || 2, th = sc * 7.4 + 1;
+    ptext(g, label, x + w / 2, y + dy + (h - th) / 2 - sc * 1.6 - 0.5, dis ? '#d8d4ce' : C[2], sc, { align: 'center', weight: 700 });
     if (hov) { this.cursor = 'hand'; if (o.hint) this.hover = o.hint; }
     if (dis) return false;
     return this.clicked(x, y, w, h);
   },
-  // Menú vertical de botones grises (como "Just for kicks / $10 / $50 / Forget it"). Devuelve el índice elegido o -1.
+  // Menú vertical de botones (como "Por puro gusto / $10 / $50 / Olvídalo"). Devuelve el índice elegido o -1.
   menu(g, x, y, w, items, o = {}) {
     const h = o.h || 26;
     let chosen = -1;
-    g.fillStyle = PAL.k; g.fillRect(x - 4, y - 4, w + 8, items.length * (h + 4) + 4);
+    panel(g, x - 7, y - 7, w + 14, items.length * (h + 5) + 9, 'rgba(14,18,26,0.85)');
     items.forEach((it, i) => {
       const label = typeof it === 'string' ? it : it.label;
-      if (this.button(g, x, y + i * (h + 4), w, h, label, { disabled: it.disabled })) chosen = i;
+      if (this.button(g, x, y + i * (h + 5), w, h, label, { disabled: it.disabled })) chosen = i;
     });
     return chosen;
   },
 
   // ----- cuadros -----
-  // Cuadro verde con borde doble (como "Spare parts" del original)
+  // Panel oscuro con título (repuestos, autos, listas)
   greenBox(g, x, y, w, h, title) {
-    g.fillStyle = PAL.k; g.fillRect(x - 3, y - 3, w + 6, h + 6);
-    g.fillStyle = PAL.e3; g.fillRect(x - 1, y - 1, w + 2, h + 2);
-    g.fillStyle = PAL.e2; g.fillRect(x, y, w, h);
-    g.fillStyle = PAL.e4; g.fillRect(x + 3, y + 3, w - 6, 1); g.fillRect(x + 3, y + h - 4, w - 6, 1); g.fillRect(x + 3, y + 3, 1, h - 6); g.fillRect(x + w - 4, y + 3, 1, h - 6);
-    if (title) { ptext(g, title, x + w / 2, y + 6, PAL.e4, 2, { align: 'center' }); g.fillStyle = PAL.e4; g.fillRect(x + 3, y + 26, w - 6, 1); }
+    panel(g, x, y, w, h, null, true);
+    if (title) {
+      ptext(g, title, x + w / 2, y + 5, '#ffd36b', 2, { align: 'center', weight: 800 });
+      g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(x + 10, y + 28, w - 20, 1);
+    }
   },
-  // Cuadro gris claro (diálogos de compra, el diario)
-  greyBox(g, x, y, w, h) {
-    g.fillStyle = PAL.k; g.fillRect(x - 2, y - 2, w + 4, h + 4);
-    bevel(g, x, y, w, h, PAL.g6, PAL.w, PAL.g4);
-  },
-  // Lista con flechas para subir y bajar. st = { sel, top }. Devuelve el índice si se eligió uno con doble clic.
+  // Tarjeta clara (diálogos, avisos)
+  greyBox(g, x, y, w, h) { card(g, x, y, w, h); },
+  // Lista con flechas para subir y bajar. st = { sel, top }.
   list(g, x, y, w, h, items, st, o = {}) {
-    const rowH = 18, rows = Math.floor((h - 8) / rowH);
+    const rowH = 19, rows = Math.floor((h - 8) / rowH);
     st.top = clamp(st.top || 0, 0, Math.max(0, items.length - rows));
     items.slice(st.top, st.top + rows).forEach((it, k) => {
       const i = st.top + k, ry = y + 4 + k * rowH;
       const label = typeof it === 'string' ? it : it.label;
-      if (st.sel === i) { g.fillStyle = PAL.e4; g.fillRect(x + 2, ry - 1, w - 34, rowH); }
-      ptext(g, label.slice(0, Math.floor((w - 40) / 12)), x + 6, ry, st.sel === i ? PAL.e1 : PAL.e4, 2);
-      if (it.right) ptext(g, it.right, x + w - 38, ry, st.sel === i ? PAL.e1 : PAL.e4, 2, { align: 'right' });
-      if (this.over(x, ry - 1, w - 34, rowH)) this.cursor = 'hand';
+      const hov = this.over(x, ry - 1, w - 34, rowH);
+      if (st.sel === i || hov) { g.fillStyle = st.sel === i ? 'rgba(255,211,107,0.92)' : 'rgba(255,255,255,0.08)'; roundRect(g, x + 2, ry - 1, w - 38, rowH - 1, 4); g.fill(); }
+      const col = st.sel === i ? '#1c1408' : '#eef3f7';
+      let txt = label;
+      while (textWidth(txt, 2) > w - (it.right ? 120 : 48) && txt.length > 4) txt = txt.slice(0, -2);
+      if (txt !== label) txt = txt.trim() + '…';
+      ptext(g, txt, x + 8, ry - 2, col, 2);
+      if (it.right) ptext(g, it.right, x + w - 42, ry - 2, col, 2, { align: 'right' });
+      if (hov) this.cursor = 'hand';
       if (this.clicked(x, ry - 1, w - 34, rowH)) st.sel = i;
     });
-    if (!items.length && o.empty) ptext(g, o.empty, x + (w - 34) / 2, y + 30, PAL.e4, 2, { align: 'center' });
-    // flechas
+    if (!items.length && o.empty) ptext(g, o.empty, x + (w - 34) / 2, y + 30, '#b8c4cf', 2, { align: 'center' });
     const ax = x + w - 28;
     const arrow = (ay, dir, dbl) => {
-      if (this.button(g, ax, ay, 24, 22, dbl ? (dir < 0 ? '«' : '»') : (dir < 0 ? '<' : '>'), { style: 'green', scale: 1 })) st.top += dir * (dbl ? rows : 1);
+      if (this.button(g, ax, ay, 24, 22, dbl ? (dir < 0 ? '«' : '»') : (dir < 0 ? '‹' : '›'), { style: 'green', scale: 2 })) st.top += dir * (dbl ? rows : 1);
     };
     arrow(y + 2, -1, false); arrow(y + 28, -1, true); arrow(y + h - 50, 1, true); arrow(y + h - 24, 1, false);
     if (this.takeKey('ArrowDown')) st.sel = Math.min(items.length - 1, (st.sel ?? -1) + 1);
@@ -99,45 +110,41 @@ const UI = {
   },
 
   // ----- textos -----
-  // Pantalla de texto amarillo con esquinas (como el final del original)
+  // Pantalla de texto (intro, cómo se juega, finales): fondo nocturno con un marco dorado
   textScreen(g, lines) {
-    g.fillStyle = PAL.g3; g.fillRect(0, 0, PW, PH);
-    g.fillStyle = PAL.y2;
-    for (const [x, y, dx, dy] of [[30, 30, 1, 1], [PW - 30, 30, -1, 1], [30, PH - 30, 1, -1], [PW - 30, PH - 30, -1, -1]]) {
-      g.fillRect(Math.min(x, x + dx * 40), y, 40, 3); g.fillRect(x, Math.min(y, y + dy * 40), 3, 40);
-    }
-    lines.forEach((l, i) => ptext(g, l, 60, 60 + i * 26, PAL.y3, 2, { shadow: PAL.y1 }));
+    const bg = g.createLinearGradient(0, 0, 0, PH);
+    bg.addColorStop(0, '#141a2c'); bg.addColorStop(1, '#2a1830');
+    g.fillStyle = bg; g.fillRect(0, 0, PW, PH);
+    g.strokeStyle = 'rgba(255,211,107,0.7)'; g.lineWidth = 2; roundRect(g, 26, 22, PW - 52, PH - 44, 14); g.stroke();
+    g.strokeStyle = 'rgba(255,211,107,0.25)'; g.lineWidth = 1; roundRect(g, 32, 28, PW - 64, PH - 56, 10); g.stroke();
+    lines.forEach((l, i) => ptext(g, l, 60, 54 + i * 25, i === 0 ? '#ffd36b' : '#f3eee2', 2, { weight: i === 0 ? 800 : 500 }));
   },
 
-  // ----- campo de texto (el nombre en la licencia) -----
-  field(g, x, y, w, st, max = 14) {
-    for (const k of this.keys.splice(0)) {
-      if (k === 'Backspace') st.text = st.text.slice(0, -1);
-      else if (k === 'Enter') st.done = true;
-      else if (k.length === 1 && st.text.length < max && FONT[k.toUpperCase()]) st.text += k.toUpperCase();
-    }
-    ptext(g, st.text, x, y, PAL.u1, 2);
-    if (Math.floor(performance.now() / 400) % 2) { g.fillStyle = PAL.u1; g.fillRect(x + textWidth(st.text, 2) + 3, y + 2, 2, 18); }
-    g.fillStyle = PAL.k; g.fillRect(x, y + 20, w, 2);
-  },
+  // El cursor del sistema: flecha, mano o llave inglesa
+  cssCursor() { return this.cursor === 'hand' ? 'pointer' : this.cursor === 'wrench' ? WRENCH_CURSOR : 'default'; }
+};
+const WRENCH_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M19 2a7 7 0 0 0-6.6 9.3L2.6 21.1a2.6 2.6 0 0 0 3.7 3.7l9.8-9.8A7 7 0 0 0 25.6 9l-4 4-3.6-1-1-3.6 4-4A7 7 0 0 0 19 2z" fill="#dfe4ea" stroke="#20262e" stroke-width="1.6"/></svg>')}") 3 25, pointer`;
 
-  // ----- cursor (mano, llave o flecha) -----
-  drawCursor(g) {
-    if (this.mx < 0) return;
-    const x = Math.round(this.mx), y = Math.round(this.my);
-    const pts = CURSORS[this.cursor] || CURSORS.arrow;
-    for (const [c, rows] of pts) { g.fillStyle = c; rows.forEach((row, ry) => { for (let rx = 0; rx < row.length; rx++) if (row[rx] === '#') g.fillRect(x + rx * 2 - (this.cursor === 'hand' ? 6 : 0), y + ry * 2, 2, 2); }); }
-  }
-};
-// Cursores dibujados a mano (silueta negra y relleno blanco)
-const CURSORS = {
-  arrow: [[PAL.k, ['#......', '##.....', '###....', '####...', '#####..', '######.', '####...', '#.##...', '..##...']],
-    [PAL.w, ['.......', '.......', '.#.....', '.##....', '.###...', '.......', '.#.....', '.......', '.......']]],
-  hand: [[PAL.k, ['...##.....', '..#..#....', '..#..#....', '..#..###..', '..#..#..##', '###..#..#.#', '#.#.....#.#', '#.........#', '.#.......#.', '..#.....#..', '...#####...']],
-    [PAL.w, ['..........', '...##.....', '...##.....', '...##.....', '...##.##...', '...##.##.#.', '.#.#######.', '.#########.', '..#######..', '...#####...', '...........']]],
-  wrench: [[PAL.k, ['.##.....', '#..#....', '#...#...', '.#..##..', '..#...#.', '...#..##', '....####', '.....##.']],
-    [PAL.r3, ['........', '.##.....', '.###....', '..##....', '...###..', '....##..', '.....##.', '........']]]
-};
+// Panel oscuro redondeado con sombra (glass = con un brillo arriba)
+function panel(g, x, y, w, h, fill, glass) {
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,0.4)'; roundRect(g, x + 2, y + 4, w, h, 12); g.fill();
+  if (fill) g.fillStyle = fill;
+  else { const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#22303f'); gr.addColorStop(1, '#151d28'); g.fillStyle = gr; }
+  roundRect(g, x, y, w, h, 12); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.16)'; g.lineWidth = 1; roundRect(g, x + 0.5, y + 0.5, w - 1, h - 1, 12); g.stroke();
+  if (glass) { g.fillStyle = 'rgba(255,255,255,0.05)'; roundRect(g, x + 2, y + 2, w - 4, Math.min(30, h / 3), 10); g.fill(); }
+  g.restore();
+}
+// Tarjeta clara redondeada con sombra
+function card(g, x, y, w, h) {
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,0.38)'; roundRect(g, x + 2, y + 5, w, h, 12); g.fill();
+  const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#fffaf0'); gr.addColorStop(1, '#efe4cc');
+  g.fillStyle = gr; roundRect(g, x, y, w, h, 12); g.fill();
+  g.strokeStyle = 'rgba(80,56,30,0.35)'; g.lineWidth = 1; roundRect(g, x + 0.5, y + 0.5, w - 1, h - 1, 12); g.stroke();
+  g.restore();
+}
 
 // ----- Globos de diálogo que se van solos (lo que dicen los vendedores, los rivales, Gus...) -----
 const Bubbles = {

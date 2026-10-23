@@ -1,7 +1,8 @@
-// ===== Pixel art: paleta, tramado, letras de píxeles y herramientas de dibujo =====
-// Todo se dibuja en una pantalla chica de 640×400 (el doble del original de 320×200) y después se agranda sin suavizar.
-// Las escenas se dibujan con el canvas normal y luego se pasan a la paleta con tramado (como los juegos VGA de 16 colores).
+// ===== Dibujo: paleta, letras, sprites y herramientas =====
+// Todo se ubica en una pantalla de 640×400 unidades, pero se dibuja RES veces más grande (nítido en cualquier pantalla).
 const PW = 640, PH = 400;
+let RES = 2;                                   // píxeles reales por unidad (main.js lo ajusta al tamaño de la ventana)
+const setRes = r => { RES = r; };
 
 // Paleta: rampas de colores de los años 60 (de oscuro a claro)
 const PAL = {
@@ -17,71 +18,23 @@ const PAL = {
   p1: '#2c1458', p2: '#5a2ca0', p3: '#9a6ae0',
   c1: '#f4ecd0', c2: '#e0d0a0'
 };
-const PAL_LIST = Object.values(PAL).map(h => rgbOf(h));
-
-// Tabla para pasar cualquier color al más parecido de la paleta (5 bits por canal)
-const QLUT = (() => {
-  const t = new Uint8Array(32768);
-  for (let r = 0; r < 32; r++) for (let g = 0; g < 32; g++) for (let b = 0; b < 32; b++) {
-    const R = r * 8 + 4, G = g * 8 + 4, B = b * 8 + 4;
-    let best = 0, bd = Infinity;
-    PAL_LIST.forEach((p, i) => {
-      const dr = R - p[0], dg = G - p[1], db = B - p[2], rm = (R + p[0]) / 2;
-      const d = (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db;
-      if (d < bd) { bd = d; best = i; }
-    });
-    t[(r << 10) | (g << 5) | b] = best;
-  }
-  return t;
-})();
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => v / 16 - 0.47);
-
-// Pasa una imagen a la paleta, con tramado ordenado. Lo que ya es un color de la paleta queda igual.
-function pixelize(img, strength = 34, keepAlpha = false) {
-  const d = img.data, w = img.width;
-  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    const a = d[i + 3];
-    if (a < 110) { d[i + 3] = 0; continue; }
-    let r = d[i], g = d[i + 1], b = d[i + 2];
-    const exact = PAL_LIST[QLUT[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)]];
-    if (!(exact[0] === r && exact[1] === g && exact[2] === b)) {
-      const x = p % w, y = (p / w) | 0, o = BAYER[((y & 3) << 2) | (x & 3)] * strength;
-      r = clamp(r + o, 0, 255); g = clamp(g + o, 0, 255); b = clamp(b + o, 0, 255);
-      const c = PAL_LIST[QLUT[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)]];
-      d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2];
-    }
-    if (!keepAlpha) d[i + 3] = 255;
-  }
-  return img;
+// Rampa de 4 tonos de un color (oscuro, medio, claro y brillo)
+function paintRamp(color) {
+  return { dk: css(shade(color, -0.38)), md: css(rgbOf(color)), lt: css(shade(color, 0.22)), hi: css(shade(color, 0.55)) };
 }
-// Contorno de un píxel alrededor de lo que no es transparente (como los sprites dibujados a mano)
-function outlineImage(img, color = PAL.k) {
-  const d = img.data, w = img.width, h = img.height, c = rgbOf(color);
-  const solid = new Uint8Array(w * h);
-  for (let p = 0; p < w * h; p++) solid[p] = d[p * 4 + 3] > 0 ? 1 : 0;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const p = y * w + x;
-    if (solid[p]) continue;
-    if ((x > 0 && solid[p - 1]) || (x < w - 1 && solid[p + 1]) || (y > 0 && solid[p - w]) || (y < h - 1 && solid[p + w])) {
-      d[p * 4] = c[0]; d[p * 4 + 1] = c[1]; d[p * 4 + 2] = c[2]; d[p * 4 + 3] = 255;
-    }
-  }
-  return img;
-}
-// Dibuja con el canvas normal en un lienzo chico y lo deja en pixel art (sprite con contorno)
-function pixelSprite(w, h, draw, o = {}) {
-  const c = makeCanvas(w + 2, h + 2), g = c.getContext('2d');
-  g.translate(1, 1);
+const PXCACHE = new Map();   // dibujos hechos una vez (personas, fotos, cabina...)
+// Un dibujo hecho una vez en un canvas aparte, en alta resolución. lw/lh = su tamaño en unidades de pantalla.
+function pixelSprite(w, h, draw) {
+  const c = makeCanvas(Math.ceil((w + 2) * RES), Math.ceil((h + 2) * RES)), g = c.getContext('2d');
+  g.scale(RES, RES); g.translate(1, 1);
   draw(g);
-  if (!g.getImageData) return c;
-  const img = g.getImageData(0, 0, c.width, c.height);
-  pixelize(img, o.dither ?? 34, true);
-  if (o.outline !== false) outlineImage(img, o.outline || PAL.k);
-  g.putImageData(img, 0, 0);
+  c.lw = w + 2; c.lh = h + 2;
   return c;
 }
+// Dibuja un sprite en su tamaño de pantalla (o el que se pida)
+function blit(g, c, x, y, w, h) { g.drawImage(c, x, y, w ?? c.lw ?? c.width, h ?? c.lh ?? c.height); }
 
-// ----- Letras de píxeles (5 de ancho; filas: 2 para tildes, 7 de alto, 1 para colas) -----
+// ----- Letras de ampolletas (el letrero de Bob's): 5 de ancho, 7 de alto, con tildes armadas -----
 const GLYPHS = {
   ' ': '.....|.....|.....|.....|.....|.....|.....',
   'A': '.###.|#...#|#...#|#####|#...#|#...#|#...#', 'B': '####.|#...#|#...#|####.|#...#|#...#|####.', 'C': '.###.|#...#|#....|#....|#....|#...#|.###.',
@@ -148,25 +101,22 @@ const FONT = (() => {
   }
   return out;
 })();
-const textWidth = (s, scale = 1) => String(s).length * (FONT_W + 1) * scale - scale;
-// Escribe texto con letras de píxeles. align: 'left' | 'center' | 'right'. shadow: color de la sombra.
+// Letras modernas: 'scale' es el tamaño (1 = chico, 2 = normal, 3+ = títulos). y = borde de arriba del renglón.
+const FONT_UI = '"Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif';
+const FONT_TITLE = '"Futura", "Avenir Next Condensed", "Trebuchet MS", "Arial Black", sans-serif';
+const fontFor = (scale, o = {}) => `${o.italic ? 'italic ' : ''}${o.weight || (scale >= 3 ? 800 : scale >= 2 ? 600 : 500)} ${(scale * 7.4 + 1).toFixed(1)}px ${o.title || scale >= 4 ? FONT_TITLE : FONT_UI}`;
+const _measure = makeCanvas(4, 4).getContext('2d');
+function textWidth(s, scale = 1, o = {}) { _measure.font = fontFor(scale, o); return _measure.measureText(String(s)).width; }
+// align: 'left' | 'center' | 'right'. shadow: color de la sombra.
 function ptext(g, s, x, y, color = PAL.w, scale = 1, o = {}) {
   s = String(s);
-  const w = textWidth(s, scale);
-  let x0 = Math.round(o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x);
-  const y0 = Math.round(y);
-  const draw = (dx, dy, col) => {
-    g.fillStyle = col;
-    let cx = x0 + dx;
-    for (const ch of s) {
-      const pts = FONT[ch] || FONT['?'];
-      for (const [px, py] of pts) g.fillRect(cx + px * scale, y0 + dy + py * scale, scale, scale);
-      cx += (FONT_W + 1) * scale;
-    }
-  };
-  if (o.shadow) draw(scale, scale, o.shadow);
-  draw(0, 0, color);
-  return w;
+  g.save();
+  g.font = fontFor(scale, o); g.textBaseline = 'top'; g.textAlign = o.align || 'left';
+  const yy = y + scale * 1.6;
+  if (o.shadow) { g.fillStyle = o.shadow; g.fillText(s, x + Math.max(0.6, scale * 0.45), yy + Math.max(0.6, scale * 0.45)); }
+  g.fillStyle = color; g.fillText(s, x, yy);
+  g.restore();
+  return textWidth(s, scale, o);
 }
 // Corta un texto en líneas que quepan en un ancho
 function wrapText(s, maxW, scale = 1) {
@@ -186,24 +136,4 @@ function bevel(g, x, y, w, h, face, light, dark, inset = false) {
   g.fillStyle = face; g.fillRect(x, y, w, h);
   g.fillStyle = inset ? dark : light; g.fillRect(x, y, w, 2); g.fillRect(x, y, 2, h);
   g.fillStyle = inset ? light : dark; g.fillRect(x, y + h - 2, w, 2); g.fillRect(x + w - 2, y, 2, h);
-}
-// Tramado de dos colores en un rectángulo (para cielos, sombras y degradados a la antigua)
-function ditherRect(g, x, y, w, h, c1, c2, level = 0.5) {
-  g.fillStyle = c1; g.fillRect(x, y, w, h);
-  g.fillStyle = c2;
-  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
-    if (BAYER[((yy + y) & 3) * 4 + ((xx + x) & 3)] + 0.47 < level) g.fillRect(x + xx, y + yy, 1, 1);
-  }
-}
-// Degradado vertical hecho con bandas tramadas entre colores de la paleta
-function ditherBands(g, x, y, w, h, colors) {
-  const n = colors.length - 1;
-  for (let yy = 0; yy < h; yy++) {
-    const t = yy / Math.max(1, h - 1) * n, i = Math.min(n - 1, Math.floor(t)), f = t - i;
-    for (let xx = 0; xx < w; xx++) {
-      const on = BAYER[((y + yy) & 3) * 4 + ((x + xx) & 3)] + 0.47 < f;
-      g.fillStyle = on ? colors[i + 1] : colors[i];
-      g.fillRect(x + xx, y + yy, 1, 1);
-    }
-  }
 }

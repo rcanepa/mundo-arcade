@@ -72,7 +72,7 @@ function setSpec(car, sp) {
   const kind = ENGINES[car.p.engine.k].kind;
   if (sp.intake || sp.engine) {
     let ik = sp.intake || (kind === '8' ? '1x4' : '1x2');
-    if (!intakeFits(ik, kind)) ik = kind === '8' ? '2x4' : '3x2';
+    if (!intakeFits(ik, kind)) ik = kind === '8' ? '2x4' : kind === '6' ? '3x2' : '1x2';
     set('intake', makePart('intake', ik, { f: fam }));
     const n = INTAKES[ik].n;
     for (let i = 0; i < 3; i++) set('carb' + i, i < n ? makePart('carb', (sp.carbs && sp.carbs[i]) || INTAKES[ik].carb) : null);
@@ -128,7 +128,6 @@ function carProblems(car) {
   if (p.engine && p.engine.c <= 0.02) out.push('blown');
   if (p.trans && p.trans.c <= 0.02) out.push('broken');
   if (car.body <= 0.12) out.push('wrecked');
-  if (car.mods.roofDays > 0) out.push('roof');
   if (car.fuel <= 0.05) out.push('fuel');
   return out;
 }
@@ -147,7 +146,7 @@ function carStats(car) {
   const carbs = [0, 1, 2].slice(0, ik.n).map(i => p['carb' + i]).filter(Boolean);
   const raceCarbs = carbs.length === ik.n && carbs.every(c => c.k === '4R') ? CARBS['4R'].k : 1;
   const ec = p.engine ? p.engine.c : 1;
-  s.engine = E; s.cyl = kind === '6' ? 6 : 8;
+  s.engine = E; s.cyl = { 4: 4, 6: 6 }[kind] || 8;
   s.hp = E.hp * (ik.k[kind] || 1) * raceCarbs * tuneFactor(car.tune) * (0.62 + 0.38 * ec);
   s.peak = E.rpm; s.red = E.red; s.low = 1;
   const tr = TRANS[p.trans ? p.trans.k : M.stock.trans];
@@ -157,10 +156,9 @@ function carStats(car) {
   s.grip = tire.grip * (0.72 + 0.28 * tread);
   s.lat = tire.lat * (0.78 + 0.22 * tread);
   let lb = M.lb - ENGINES[M.stock.engine].lb + E.lb + DRIVER_LB;
-  if (car.mods.nobump) lb -= BODYWORK.nobump.lb;
-  if (car.mods.noroof) lb -= BODYWORK.noroof.lb;
+  if (car.mods.strip) lb -= BODYWORK.strip.lb;
   s.lb = lb; s.mass = lb * LB;
-  s.cda = M.cda * (car.mods.noroof ? 1.05 : 1);
+  s.cda = M.cda;
   s.handling = clamp(1.06 - (lb - 2700) / 9000 + (M.cda < 0.8 ? 0.06 : 0), 0.82, 1.15);
   s.tc = p.trans ? p.trans.c : 1;
   s.ec = ec;

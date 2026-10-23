@@ -5275,7 +5275,8 @@ const UI = {
     const S2 = L().race.reasons;
     const head = res.outcome === 'win' ? L().race.won : res.outcome === 'void' ? L().race.voided : L().race.lost;
     const tm = x => (x == null ? '—' : x.toFixed(2) + ' s');
-    const rows = o.type === 'drag' || res.time != null ? `<table>
+    // la tabla solo aparece si alguien llegó a la meta (no en las faltas, choques ni con la policía)
+    const rows = res.time != null || res.rivalTime != null ? `<table>
       <tr><th></th><th>${R.you}</th><th>${esc(o.rival.name)}</th></tr>
       <tr><td>${R.time}</td><td><b>${tm(res.time)}</b></td><td>${tm(res.rivalTime)}</td></tr>
       ${o.type === 'drag' ? `<tr><td>${R.trap}</td><td>${res.trap ? speedTxt(res.trap) : '—'}</td><td></td></tr>` : ''}

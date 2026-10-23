@@ -293,6 +293,20 @@ check('El Rey aparece un sábado con 10 victorias, y ganarle termina el verano',
   assert(S.cars.some(c => c.model === 'vette63'), 'no te quedaste con el Corvette del Rey');
 });
 
+check('sin tiempos (falta, choque, policía) no se muestra la tabla de tiempos', () => {
+  newGame('Tabla', 101);
+  const S = state(), Game = get('Game'), UI = get('UI'), uiEl = get('uiEl');
+  const car = makeCar('chevy57'); S.cars.push(car); S.active = car.id;
+  Game.raceOpts = { type: 'drag', bet: 10, car, rival: { id: 'slim', name: 'Jim', car: makeCar('chevy49'), skill: 0.6 } };
+  const base = { engineDmg: 0, transDmg: 0, body: 0, fuel: 0.1, tread: 0.02, fine: 0 };
+  Game.out = { res: Object.assign({ outcome: 'win', reason: 'rivalFoul', time: null, rivalTime: null }, base), lines: [], money: 10 };
+  Game.scene = 'result'; UI.render();
+  assert(!uiEl.innerHTML.includes('<table>'), 'la falta muestra una tabla de tiempos vacía');
+  Game.out = { res: Object.assign({ outcome: 'win', reason: 'finish', time: 17.2, rivalTime: 18.1, trap: 38, reaction: 0.3 }, base), lines: [], money: 10 };
+  UI.render();
+  assert(uiEl.innerHTML.includes('<table>'), 'una picada terminada no muestra los tiempos');
+});
+
 check('el guardado se recupera igual', () => {
   newGame('Guardado', 81);
   const S = state(); S.money = 1234; S.cars.push(makeCar('tbird57')); S.active = S.cars[0].id;

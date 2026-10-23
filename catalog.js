@@ -2,6 +2,25 @@
 // Para agregar un juego: crea su carpeta (con su index.html y cover.jpg) y copia una entrada aquí.
 const GAMES = [
   {
+    slug: 'street-rod',
+    color: '#ff4f9a',
+    cover: 'street-rod/cover.jpg',
+    download: 'StreetRod63.html',
+    added: '2026-10-22',
+    es: {
+      title: 'Street Rod: Verano del 63',
+      tagline: 'Arma tu hot rod y gánale a El Rey',
+      description: 'Verano de 1963 en California: compra un auto en el diario, ármalo perno a perno en tu garaje y corre picadas y carreras de ruta de noche en el Lucky\'s Drive-In. Apuesta dinero o los papeles del auto, escápate de la policía y desafía a El Rey en su Corvette. Una nueva versión del clásico de 1989, con gráficos nuevos.',
+      players: '1 jugador', controls: 'Teclado, mouse o control', age: '10+ años'
+    },
+    en: {
+      title: 'Street Rod: Summer of 63',
+      tagline: 'Build your hot rod and beat The King',
+      description: 'Summer 1963 in California: buy a car from the paper, build it bolt by bolt in your garage and drag race and road race at night at Lucky\'s Drive-In. Bet cash or pink slips, outrun the cops and challenge The King in his Corvette. A remake of the 1989 classic with brand-new graphics.',
+      players: '1 player', controls: 'Keyboard, mouse or gamepad', age: 'Ages 10+'
+    }
+  },
+  {
     slug: 'jardin-vivo',
     color: '#6fbf73',
     cover: 'jardin-vivo/cover.jpg',

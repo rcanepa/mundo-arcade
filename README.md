@@ -16,6 +16,7 @@ turbo-barro/    primer juego
   build.sh      arma index.html a partir de src/
   src/          código del juego (los textos de ambos idiomas están en i18n.js)
 jardin-vivo/    segundo juego, con la misma estructura
+street-rod/     tercer juego, con la misma estructura (más dos hojas de prueba en tests/)
 ```
 
 ## Probar en el computador
@@ -70,3 +71,20 @@ git add -A && git commit -m "Describe el cambio" && git push
 ```
 
 GitHub actualiza el sitio solo, en uno o dos minutos.
+
+## Cambiar Street Rod
+
+Edita los archivos de `street-rod/src/` y vuelve a armar el juego:
+
+```bash
+./street-rod/build.sh
+```
+
+El mismo comando corre las pruebas automáticas (`street-rod/tests/smoke.js`). Arman y desarman motores, revisan qué piezas calzan en cada auto, leen el diario de todo el verano, corren picadas y carreras de ruta con pilotos automáticos (con tráfico y policía), apuestan los papeles, le ganan a El Rey y revisan el guardado y todas las pantallas.
+
+Para mirar los dibujos sin jugar hay dos hojas de prueba (se abren con el servidor de arriba):
+
+- `street-rod/tests/autos.html`: todos los autos de lado y de atrás (`?one=chevy57` muestra uno grande, `?mods=1` con llamas y llantas, `?rear=1` de atrás).
+- `street-rod/tests/carrera.html`: una carrera suelta (`?t=road` ruta, `?auto=1` piloto automático, `?cop=1` con policía).
+
+La imagen de la tarjeta (`cover.jpg`) es la portada del juego: se saca abriendo `street-rod/index.html?cover&lang=es` a 1280×720.

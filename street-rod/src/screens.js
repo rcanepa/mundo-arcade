@@ -116,32 +116,54 @@ export function paper(app) {
     back: () => garage(app)
   });
 }
-export function shop(app) {
-  const T = L().shop, car = G.activeCar(), st = G.carStats(car);
-  const rows = UP_KEYS.map(k => {
-    const [name, levels] = T.cats[k], lv = car.up[k], max = UPGRADES[k].max, cost = G.upCost(car, k);
-    let after = '';
-    if (cost != null && k !== 'nitro' && k !== 'susp') { const nx = JSON.parse(JSON.stringify(car)); nx.up[k]++; const e2 = G.carStats(nx).et; after = `<em>${(e2 - st.et).toFixed(2).replace('-0.00', '0.00')} s</em>`; }
-    if (k === 'susp' && cost != null) after = `<em>+${Math.round((UPGRADES.susp.lat[lv + 1] / UPGRADES.susp.lat[lv] - 1) * 100)}% ${L().garage.grip.toLowerCase()}</em>`;
-    if (k === 'tires' && cost != null && after.includes('0.00')) after = `<em>+${Math.round((UPGRADES.tires.mu[lv + 1] / UPGRADES.tires.mu[lv] - 1) * 100)}% ${L().garage.grip.toLowerCase()}</em>`;
-    const pips = Array.from({ length: max + 1 }, (_, i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('');
-    return `<div class="uprow"><div class="upn"><b>${name}</b><small>${levels[lv]}</small></div><div class="pips">${pips}</div>
-      ${cost == null ? `<span class="maxed">${T.max}</span>` : btn('up', `${levels[lv + 1]} · ${money(cost)} ${after}`, { v: k, cls: 'small', off: G.S.money < cost })}</div>`;
+// El taller: el auto en 3D muestra la pieza elegida (con el capó abierto para el motor), y el panel compara antes y después
+const SHOP_ICON = { engine: '⚙️', intake: '🌀', exhaust: '💨', trans: '🕹️', tires: '◎', susp: '📐', weight: '⚖️', nitro: '🧪' };
+const SHOP_VIEW = { engine: 'engine', intake: 'engine', nitro: 'engine', exhaust: 'rear', trans: 'side', tires: 'wheel', susp: 'side', weight: 'side' };
+let shopCat = 'engine';
+export function shop(app, cat) {
+  if (cat) shopCat = cat;
+  const T = L().shop, B = T.bars, car = G.activeCar(), st = G.carStats(car), k = shopCat;
+  const [name, levels] = T.cats[k], lv = car.up[k], cost = G.upCost(car, k);
+  const nx = cost == null ? null : JSON.parse(JSON.stringify(car));
+  if (nx) nx.up[k]++;
+  const s2 = nx ? G.carStats(nx) : null;
+  // las barras: ahora, y en verde lo que se gana con la mejora elegida
+  const fr = {
+    accel: c => (19 - G.carStats(c).et) / 9, top: c => (topKmh(c) - 140) / 140,
+    grip: c => { const q = G.carStats(c); return (q.mu * q.lat - 0.8) / 0.75; }, weight: c => (2150 - G.carStats(c).mass) / 1050
+  };
+  const val = { accel: c => G.carStats(c).et.toFixed(2) + ' s', top: c => Math.round(topKmh(c)) + ' km/h', grip: c => { const q = G.carStats(c); return Math.round(q.mu * q.lat * 100) + '%'; }, weight: c => Math.round(G.carStats(c).mass) + ' kg' };
+  const cl = v => Math.max(0.03, Math.min(1, v));
+  const bars = Object.keys(fr).map(b => {
+    const a = cl(fr[b](car)), z = nx ? cl(fr[b](nx)) : a, gain = z > a + 0.004;
+    return `<span>${B[b]}</span><i class="bar2"><b style="width:${Math.round(a * 100)}%"></b>${gain ? `<u style="left:${Math.round(a * 100)}%;width:${Math.round((z - a) * 100)}%"></u>` : ''}</i>
+      <em class="${gain ? 'up' : ''}">${val[b](car)}${gain ? ` → ${val[b](nx)}` : ''}</em>`;
+  }).join('');
+  const tiles = UP_KEYS.map(c => {
+    const l = car.up[c], max = UPGRADES[c].max;
+    const pips = Array.from({ length: max + 1 }, (_, i) => `<i class="${i <= l ? 'on' : ''}"></i>`).join('');
+    return `<button class="tile ${c === k ? 'on' : ''}" data-a="cat" data-v="${c}"><span class="ic">${SHOP_ICON[c]}</span><b>${T.cats[c][0]}</b><small>${T.cats[c][1][l]}</small><span class="pips">${pips}</span></button>`;
   }).join('');
   const rc = G.repairCost(car);
-  render(topbar(dateLine()) + `<div class="panel side wide2">
-      <h2>${T.title} · ${carName(car)} ${badge(st.cls)}</h2>
-      <div class="stats one"><span>${L().garage.et}</span><b>${st.et.toFixed(2)} s</b></div>
-      <div class="uplist">${rows}</div>
-      <div class="uprow"><div class="upn"><b>${L().garage.cond}</b><small>${Math.round(car.cond * 100)}%</small></div>${car.cond < 0.995 ? btn('fix', T.repair(money(rc)), { cls: 'small', off: G.S.money < rc }) : `<span class="maxed">${T.fine}</span>`}</div>
+  render(topbar(dateLine()) + `<div class="panel side shop2">
+      <h2>${T.title} · ${carName(car)} ${badge(st.cls)}${s2 && s2.cls !== st.cls ? ` → ${badge(s2.cls)}` : ''}</h2>
+      <div class="sbars">${bars}</div>
+      <div class="tiles">${tiles}</div>
+      <div class="detail">
+        <div class="dh"><span class="ic big">${SHOP_ICON[k]}</span><div><b>${name}: ${levels[lv]}</b>${nx ? `<small>→ ${levels[lv + 1]}</small>` : ''}</div></div>
+        <p>${T.desc[k][nx ? lv + 1 : lv]}</p>
+        ${cost == null ? `<span class="maxed">${T.max}</span>` : btn('up', T.upgrade(money(cost)), { cls: 'go wide', off: G.S.money < cost })}
+      </div>
+      <div class="uprow"><div class="upn"><b>${L().garage.cond}</b><small>${Math.round(car.cond * 100)}%</small></div><div></div>${car.cond < 0.995 ? btn('fix', T.repair(money(rc)), { cls: 'small', off: G.S.money < rc }) : `<span class="maxed">${T.fine}</span>`}</div>
       <div class="seg">${btn('shift', T.shiftAuto, { v: 1, cls: G.S.autoShift ? 'on' : '' })}${btn('shift', T.shiftManual, { v: 0, cls: G.S.autoShift ? '' : 'on' })}</div>
-      <p class="muted small">${T.shiftHint}</p>
-      ${btn('back', L().back, { cls: 'go wide' })}</div>`, {
-    up: k => { const r = G.buyUpgrade(car, k); if (r) toast(L().paper.money, 'bad'); else { toast(T.bought(T.cats[k][0], T.cats[k][1][car.up[k]]), 'good'); app.refreshGarage(); } shop(app); },
+      ${btn('back', L().back, { cls: 'ghost wide' })}</div>`, {
+    cat: c => shop(app, c),
+    up: () => { const r = G.buyUpgrade(car, k); if (r) return toast(L().paper.money, 'bad'); app.refreshGarage(); app.upgraded(); toast(T.bought(name, levels[car.up[k]]), 'good'); shop(app); },
     fix: () => { if (!G.repair(car)) app.refreshGarage(); shop(app); },
     shift: v => { G.S.autoShift = v === '1'; G.save(); shop(app); },
-    back: () => garage(app)
+    back: () => { app.shopView(null); garage(app); }
   });
+  app.shopView(SHOP_VIEW[k]);
 }
 export function paintShop(app) {
   const T = L().paint, car = G.activeCar();

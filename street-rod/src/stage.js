@@ -24,7 +24,8 @@ export const stage = {
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
     this.composer = new EffectComposer(r, new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, samples: MOBILE ? 0 : 4 }));
     this.composer.addPass(new RenderPass(S, this.camera));
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.9));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.9);
+    this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     const soft = radialTex([[0, 'rgba(255,255,255,0.9)'], [0.5, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']]);
     const hot = radialTex([[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,200,120,0.9)'], [1, 'rgba(255,80,20,0)']]);
@@ -56,6 +57,7 @@ export const stage = {
     const w = this.worlds[kind] || (this.worlds[kind] = buildWorld(kind, this.renderer));
     this.scene.add(w.group, w.sky);
     this.scene.fog.density = w.fog;
+    this.bloom.strength = kind === 'garage' ? 0.18 : 0.5;
     this.world = w;
     return w;
   },
@@ -64,8 +66,9 @@ export const stage = {
     const key = lookKey(state);
     let c = this.cars.get(slot);
     if (!c || c.lookKey !== key) {
+      const hood = c ? c.hoodNow() : 0;
       if (c) { this.scene.remove(c.root); c.dispose(); }
-      c = buildCar(state); c.lookKey = key; this.cars.set(slot, c);
+      c = buildCar(state); c.lookKey = key; c.hood(hood, 99); this.cars.set(slot, c);
     }
     return c;
   },
@@ -77,6 +80,7 @@ export const stage = {
       const c = this.car(slot, state);
       c.root.position.set(x, y, z); c.root.rotation.y = h; c.body.rotation.set(0, 0, 0); c.setBrake(false);
       c.head.emissiveIntensity = this.mode === 'garage' ? 0.5 : 2;
+      if (this.mode !== 'garage') c.hood(0, 99);
       for (const w of c.wheels) w.pivot.rotation.y = 0;
       if (!c.root.parent) this.scene.add(c.root);
       out[slot] = c;
@@ -98,6 +102,7 @@ export const stage = {
     for (const lane of [-1, 1]) for (const k of ['pre', 'stage', 'a1', 'a2']) w.tree.set(lane, k, true);
   },
   setGarage(state, dateText, dayNum, trophies = 0) {
+    if (this.mode !== 'garage') this.shopFocus = null;
     this.mode = 'garage'; this.race = null;
     const w = this.useWorld('garage');
     w.setDate(dateText, dayNum);
@@ -120,6 +125,15 @@ export const stage = {
     this.showCars(list);
   },
   focus(id) { this.focusId = id; },
+  // taller: qué pieza mira la cámara (null = vuelta lenta alrededor del auto)
+  shop(focus) { if (!this.shopFocus && focus) this.camState.snap = true; this.shopFocus = focus; },
+  // chispas doradas en la pieza recién comprada
+  sparkle() {
+    const me = this.target, V = me && this.shopFocus && me.views[this.shopFocus];
+    if (!V) return;
+    const p = me.root.localToWorld(new THREE.Vector3(...V.look));
+    for (let n = 0; n < 40; n++) this.sparks.emit(p.x + rnd(-0.4, 0.4), p.y + rnd(0, 0.3), p.z + rnd(-0.4, 0.4), rnd(-2, 2), rnd(1.5, 4.5), rnd(-2, 2), rnd(0.08, 0.16), rnd(0.5, 1.1), 0, 1);
+  },
   // Las etiquetas con el nombre de cada rival en Bob's: posición en pantalla
   labels() {
     if (this.mode !== 'bobs') return [];
@@ -135,7 +149,7 @@ export const stage = {
     this.mode = 'race'; this.race = race;
     this.useWorld(race.kind === 'drag' ? 'drag' : 'road');
     for (const [slot, c] of this.cars) if (c.root.parent && !race.racers.some(r => r.car === c)) this.scene.remove(c.root);
-    for (const r of race.racers) { if (!r.car.root.parent) this.scene.add(r.car.root); r.car.head.emissiveIntensity = 3; r.car.sync(r.v, 0); }
+    for (const r of race.racers) { if (!r.car.root.parent) this.scene.add(r.car.root); r.car.head.emissiveIntensity = 3; r.car.hood(0, 99); r.car.sync(r.v, 0); }
     for (const p of this.parts) p.clear();
     this.chase(0, true);
   },
@@ -147,9 +161,23 @@ export const stage = {
     else {
       C.orbit += dt;
       if (this.mode === 'garage') {
-        const a = 0.9 + Math.sin(C.orbit * 0.12) * 0.75, p = new THREE.Vector3(0, 0, 0.3);
-        cam.position.set(p.x + Math.sin(a) * 7.2, 1.75 + Math.sin(C.orbit * 0.09) * 0.25, p.z + Math.cos(a) * 7.2);
-        this.lookShift(p.set(0, 0.7, 0.3), innerWidth > 820 ? -1.9 : 0);
+        const me = this.target, V = me && this.shopFocus && me.views[this.shopFocus];
+        if (me) { me.hood(this.shopFocus === 'engine' ? 1 : 0, dt); me.head.emissiveIntensity = this.shopFocus ? 0.08 : 0.5; }
+        if (V) {
+          // en el taller la cámara va a la pieza que se está mirando
+          const eye = me.root.localToWorld(new THREE.Vector3(...V.eye)), look = me.root.localToWorld(new THREE.Vector3(...V.look));
+          // en un teléfono parado el panel tapa la mitad de abajo: la cámara se aleja y la pieza queda arriba
+          if (cam.aspect < 1) { eye.sub(look).multiplyScalar(1.9).add(look); look.y -= 1.1; }
+          if (C.snap) { if (cam.position.distanceTo(eye) > 30) cam.position.copy(eye); C.pos.copy(cam.position); C.look.copy(look); C.snap = false; }
+          C.pos.lerp(eye, Math.min(1, dt * 2.6)); C.look.lerp(look, Math.min(1, dt * 3));
+          cam.position.copy(C.pos); this.lookShift(C.look.clone(), innerWidth > 820 ? -0.9 : 0);
+        } else {
+          const a = 0.9 + Math.sin(C.orbit * 0.12) * 0.75, p = new THREE.Vector3(0, 0, 0.3);
+          cam.position.set(p.x + Math.sin(a) * 7.2, 1.75 + Math.sin(C.orbit * 0.09) * 0.25, p.z + Math.cos(a) * 7.2);
+          this.lookShift(p.set(0, 0.7, 0.3), innerWidth > 820 ? -1.9 : 0);
+          C.snap = true;
+        }
+        for (const q of this.parts) q.update(dt);
       } else if (this.mode === 'bobs') {
         const w = this.world, s = this.focusId && this.spots[this.focusId];
         const want = s ? new THREE.Vector3(s[0] + 2.2, 1.55, s[1] + 6.6) : new THREE.Vector3(-5 + Math.sin(C.orbit * 0.07) * 2.5, 2.9, 15);

@@ -46,6 +46,8 @@ const app = {
     startRace();
   },
   focus(id) { stage.focus(id); },
+  shopView(v) { stage.shop(v); },
+  upgraded() { stage.sparkle(); sound.beep(880, 0.08, 0.12, 'sine'); setTimeout(() => sound.beep(1320, 0.12, 0.1, 'sine'), 90); },
   home() { const wage = G.endNight(); UI.clearPick(); if (G.S.over) return this.ending(); this.garage(); if (wage) UI.toast(L().garage.wage(money(wage)), 'good'); },
   race(id, type, bet, pink) {
     const r = rivalById(id), me = G.activeCar();

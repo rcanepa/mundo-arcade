@@ -461,7 +461,7 @@ function buildGarage(G, aniso) {
   const cal = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.6), new THREE.MeshStandardMaterial({ roughness: 0.8, map: new THREE.CanvasTexture(calTex) }));
   cal.material.map.colorSpace = THREE.SRGBColorSpace; cal.position.set(0.6, 1.9, -D / 2 + 0.02); G.add(cal);
   // tubos fluorescentes y una ampolleta sobre el banco
-  const tube = new THREE.MeshBasicMaterial({ color: glowColor(1, 0.96, 0.86, 3) });
+  const tube = new THREE.MeshBasicMaterial({ color: glowColor(1, 0.96, 0.86, 1.3) });
   const lights = [];
   for (const z of [-1.3, 1.3]) {
     const t = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.14), tube); t.position.set(0, H - 0.5, z); G.add(t);

@@ -17,6 +17,12 @@ function shared() {
   S.dark = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.7, side: THREE.DoubleSide });
   S.steel = new THREE.MeshStandardMaterial({ color: 0x3a3c42, metalness: 0.6, roughness: 0.45 });
   S.red = new THREE.MeshStandardMaterial({ color: 0xc8202a, roughness: 0.45 });
+  S.bay = new THREE.MeshStandardMaterial({ color: 0x24252a, roughness: 0.85, side: THREE.BackSide });
+  S.under = new THREE.MeshStandardMaterial({ color: 0x2a2b30, roughness: 0.8, side: THREE.BackSide });
+  S.alu = new THREE.MeshStandardMaterial({ color: 0xa8acb4, metalness: 0.8, roughness: 0.35 });
+  S.chromeSoft = new THREE.MeshStandardMaterial({ color: 0xd8dce2, metalness: 1, roughness: 0.32, envMapIntensity: 0.9 });
+  S.iron = new THREE.MeshStandardMaterial({ color: 0x4a3a30, metalness: 0.4, roughness: 0.7 });
+  S.nitro = new THREE.MeshStandardMaterial({ color: 0x2c6ad8, metalness: 0.5, roughness: 0.3 });
   S.shadow = new THREE.MeshBasicMaterial({ map: radialTex([[0, 'rgba(0,0,0,0.9)'], [0.5, 'rgba(0,0,0,0.55)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false });
   return S;
 }
@@ -171,6 +177,57 @@ function numberMat(n) {
   return _numTex.get(n);
 }
 
+// ----- el motor que se ve con el capó abierto: cambia con las mejoras -----
+const ENGINE_COLOR = { sprite: '#2c7a3c', bantam: '#3a5aa8', marquis: '#3a5aa8', vandal: '#d06018', starliner: '#c8202a', monarch: '#26282e', hornet: '#2c4a9a', viper: '#d06018' };
+function engineBay(key, P, F, up, M) {
+  const g = new THREE.Group(), { L2, W2, wsX } = F, v8 = MODELS[key].cyl === 8;
+  const x0 = wsX + 0.07, x1 = L2 - 0.18, len = x1 - x0, xc = (x0 + x1) / 2;
+  const yTop = Math.min(F.top(x0), F.top(x1)) - 0.035, yBot = P.clr + 0.12;
+  // el hueco del motor: una caja oscura vista por dentro
+  g.add(at(new THREE.Mesh(new THREE.BoxGeometry(len, yTop - yBot + 0.02, (W2 - 0.17) * 2), M.bay), xc, (yTop + yBot) / 2, 0));
+  const paintE = new THREE.MeshStandardMaterial({ color: ENGINE_COLOR[key] || '#c8202a', roughness: 0.4, metalness: 0.35 });
+  const ex = xc - 0.04, eb = yBot + 0.04, yTopE = F.top(ex) - 0.04, eh = Math.max(0.12, Math.min(0.36, yTopE - eb - 0.2)), et = eb + eh;
+  const box = (w, h, d, m, x, y, z) => at(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m), x, y, z);
+  g.add(box(Math.min(0.8, len - 0.45), eh, v8 ? 0.48 : 0.34, paintE, ex, eb + eh / 2, 0));
+  // tapas de válvulas: pintadas; cromadas desde el motor "Carrera"
+  const cover = up.engine >= 2 ? M.chromeSoft : paintE;
+  if (v8) for (const s of [-1, 1]) {
+    g.add(box(Math.min(0.76, len - 0.5), 0.07, 0.2, M.dark, ex, et - 0.01, s * 0.2));
+    const c = box(Math.min(0.72, len - 0.52), 0.08, 0.17, cover, ex, et + 0.05, s * 0.21); c.rotation.x = s * 0.22; g.add(c);
+    for (let k = 0; k < 3; k++) g.add(box(0.03, 0.02, 0.15, M.dark, ex - 0.2 + k * 0.2, et + 0.1, s * 0.21));
+  }
+  else g.add(box(Math.min(0.82, len - 0.45), 0.09, 0.2, cover, ex, et + 0.04, 0));
+  g.add(box(0.5, 0.06, 0.2, M.alu, ex, et + 0.07, 0));
+  // carburadores con su filtro de aire (el compresor va aparte, asomado por el capó)
+  const cy = et + 0.13;
+  const dome = (r, x) => { const d = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.chromeSoft); d.scale.y = 0.55; d.position.set(x, cy, 0); g.add(d); g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.35, r * 0.35, 0.06, 12), M.alu), x, cy - 0.03, 0)); };
+  if (up.engine < 3) {
+    if (up.intake === 0) dome(0.12, ex);
+    else if (up.intake === 1) { dome(0.1, ex - 0.15); dome(0.1, ex + 0.15); }
+    else {
+      g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.07, 28), M.chromeSoft), ex, cy + 0.01, 0));
+      g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.02, 28), M.red), ex, cy + 0.055, 0));
+    }
+  }
+  // múltiples de escape: de fierro, o colectores cromados con el escape preparado
+  for (const s of [-1, 1]) {
+    if (up.exhaust >= 1) for (let k = 0; k < (v8 ? 4 : 3); k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.34, 10), M.chromeSoft); t.position.set(ex - 0.27 + k * (v8 ? 0.18 : 0.26), eb + eh * 0.45, s * (v8 ? 0.31 : 0.24)); t.rotation.x = s * 0.9; g.add(t); }
+    else g.add(box(Math.min(0.7, len - 0.5), 0.08, 0.06, M.iron, ex, eb + eh * 0.55, s * (v8 ? 0.29 : 0.22)));
+  }
+  // radiador, ventilador, batería y las botellas de nitro
+  const rh = Math.min(0.46, yTop - yBot - 0.06);
+  g.add(box(0.05, rh, (W2 - 0.32) * 2, M.dark, x1 - 0.05, yBot + rh / 2 + 0.02, 0));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 12), M.chromeSoft), x1 - 0.05, yBot + rh + 0.04, 0.25));
+  const fan = new THREE.Mesh(new THREE.CylinderGeometry(Math.min(0.17, eh * 0.8), Math.min(0.17, eh * 0.8), 0.02, 16), M.dark); fan.rotation.z = Math.PI / 2; fan.position.set(x1 - 0.14, eb + eh * 0.6, 0); g.add(fan);
+  g.add(box(0.24, 0.18, 0.17, M.dark, x1 - 0.36, yBot + 0.1, W2 - 0.36));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.04, 10), M.red), x1 - 0.3, yBot + 0.21, W2 - 0.36));
+  for (let i = 0; i < up.nitro; i++) {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, Math.min(0.5, len - 0.6), 14), M.nitro); b.rotation.z = Math.PI / 2;
+    b.position.set(xc, yBot + 0.09 + i * 0.12, -(W2 - 0.3)); g.add(b);
+  }
+  return { group: g, center: new THREE.Vector3(ex, et, 0) };
+}
+
 // car: { model, color, decal, num, up } — el auto tal como está (con sus mejoras a la vista)
 export function buildCar(car) {
   const M = shared(), key = car.model, up = car.up || {};
@@ -188,8 +245,17 @@ export function buildCar(car) {
   body.position.y = -UPGRADES.susp.drop[up.susp || 0];
 
   // ----- carrocería -----
-  const ar = F.ar, xs = stations(-L2, L2, 110, [fx - ar, fx + ar, rx - ar, rx + ar, L2 - 0.004, -L2 + 0.004]);
-  prof.add(new THREE.Mesh(loft(xs, 64, F.point, () => 0, 1), paint));
+  const ar = F.ar, hx0 = wsX + 0.04, hx1 = L2 - 0.12;
+  const xs = stations(-L2, L2, 110, [fx - ar, fx + ar, rx - ar, rx + ar, L2 - 0.004, -L2 + 0.004, hx0, hx1]);
+  const bodyG = loft(xs, 64, F.point, (x, y, z, th) => (x > hx0 && x < hx1 && Math.sin(th) > 0.72 ? 1 : 0), 2);
+  const part = gi => { const gr = bodyG.groups[gi], g2 = new THREE.BufferGeometry(); for (const k in bodyG.attributes) g2.setAttribute(k, bodyG.attributes[k]); g2.setIndex(new THREE.BufferAttribute(bodyG.index.array.slice(gr.start, gr.start + gr.count), 1)); return g2; };
+  prof.add(new THREE.Mesh(part(0), paint));
+  // el capó cuelga de una bisagra junto al parabrisas
+  const hinge = new THREE.Group(), hy0 = F.top(hx0);
+  hinge.position.set(hx0, hy0, 0); prof.add(hinge);
+  const hoodG = part(1);
+  hinge.add(at(new THREE.Mesh(hoodG, paint), -hx0, -hy0, 0), at(new THREE.Mesh(hoodG, M.under), -hx0, -hy0, 0));
+  const bay = engineBay(key, P, F, up, M); prof.add(bay.group);
   if (P.sweep && car.decal !== 'flames') {
     const x0 = -L2 + 0.42, x1 = 0.75;
     const mid = x => P.belt - 0.2 + 0.03 * (x - x0) / (x1 - x0), hh = x => 0.085 * (1 - Math.pow((x - x0) / (x1 - x0), 2.2)) + 0.004;
@@ -236,7 +302,7 @@ export function buildCar(car) {
   if (stripes) {
     const sMat = paintMat(car.color === '#f2efe6' ? '#16161c' : '#f2efe6');
     for (const z0 of [0.07, -0.22]) {
-      prof.add(new THREE.Mesh(topStrip(F.point, wsX + 0.05, L2 - 0.4, z0, z0 + 0.15), sMat));
+      hinge.add(at(new THREE.Mesh(topStrip(F.point, wsX + 0.05, L2 - 0.4, z0, z0 + 0.15), sMat), -hx0, -hy0, 0));
       prof.add(new THREE.Mesh(topStrip(F.point, -L2 + 0.4, rwX - 0.04, z0, z0 + 0.15), sMat));
       prof.add(new THREE.Mesh(topStrip(cabPoint, rrX + 0.04, rfX - 0.04, z0, z0 + 0.15, 0.005), sMat));
     }
@@ -283,13 +349,13 @@ export function buildCar(car) {
   // ----- lo que se ve de las mejoras: toma de aire, compresor y escapes laterales -----
   const hx = wsX + Math.min(0.75, P.hood * 0.45), hy = F.top(hx);
   if (P.blower) {
-    prof.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.26, 0.42), M.chrome), hx, hy + 0.1, 0));
+    prof.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.42), M.chrome), hx, hy + 0.02, 0));
     prof.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.36), M.dark), hx, hy + 0.25, 0));
     for (const z of [-0.09, 0.09]) prof.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.16, 14), M.chrome), hx + 0.05, hy + 0.36, z));
     const belt = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.08), M.dark); belt.position.set(hx + 0.27, hy + 0.04, 0.12); prof.add(belt);
   } else if (P.scoop) {
-    const sc = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.62, 4, 10), paint); sc.rotation.z = Math.PI / 2; sc.scale.set(1, 1, 3.6); sc.position.set(hx, hy + 0.025, 0); prof.add(sc);
-    prof.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.32), M.dark), hx + 0.37, hy + 0.04, 0));
+    const sc = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.62, 4, 10), paint); sc.rotation.z = Math.PI / 2; sc.scale.set(1, 1, 3.6); sc.position.set(hx - hx0, hy + 0.025 - hy0, 0); hinge.add(sc);
+    hinge.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.32), M.dark), hx + 0.37 - hx0, hy + 0.04 - hy0, 0));
   }
   const pipe = new THREE.CylinderGeometry(0.045, 0.045, 0.22, 12); pipe.rotateZ(Math.PI / 2);
   if (P.sidePipes) {
@@ -315,8 +381,19 @@ export function buildCar(car) {
   const sh = new THREE.Mesh(new THREE.PlaneGeometry(P.wid + 0.7, P.len + 0.9), M.shadow);
   sh.rotation.x = -Math.PI / 2; sh.position.y = 0.025; sh.renderOrder = 1; root.add(sh);
 
+  // puntos de vista del taller (en las medidas del auto: z hacia adelante, x a la izquierda)
+  const ec = bay.center, views = {
+    engine: { eye: [1.2, P.roof + 1.35, ec.x + 1.85], look: [0, ec.y - 0.1, ec.x - 0.05] },
+    rear: { eye: [-1.6, 0.75, -L2 - 2.4], look: [0, P.clr + 0.15, -L2 + 0.4] },
+    wheel: { eye: [W2 + 1.7, 0.75, fx + 1.3], look: [W2 - 0.1, P.tire, fx] },
+    side: { eye: [W2 + 4.6, 1.0, 0.2], look: [0, 0.55, 0] }
+  };
+  let hoodT = 0;
   return {
-    root, body, shape: P, key, paint, head, tail, wheels, len: P.len, wid: P.wid,
+    root, body, shape: P, key, paint, head, tail, wheels, len: P.len, wid: P.wid, views,
+    // abre (1) o cierra (0) el capó; devuelve si sigue moviéndose
+    hoodNow: () => hoodT,
+    hood(target, dt) { hoodT += Math.sign(target - hoodT) * Math.min(Math.abs(target - hoodT), dt * 1.8); hinge.rotation.z = (1 - Math.cos(hoodT * Math.PI)) / 2 * 1.0; return hoodT !== target; },
     setBrake(b) { tail.emissiveIntensity = b ? 5 : 0.9; },
     // Sigue al vehículo de la física: posición, giro de ruedas, dirección e inclinación de la carrocería
     sync(v, dt) {
@@ -335,4 +412,4 @@ export function buildCar(car) {
   };
 }
 // La firma de lo que se ve de un auto (si cambia, hay que armarlo de nuevo)
-export const lookKey = car => [car.model, car.color, car.decal, car.num, car.up.intake >= 1, car.up.engine >= 3, car.up.exhaust >= 2, car.up.tires, car.up.susp].join('|');
+export const lookKey = car => [car.model, car.color, car.decal, car.num, car.up.engine, car.up.intake, car.up.exhaust, car.up.tires, car.up.susp, car.up.nitro].join('|');

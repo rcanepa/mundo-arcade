@@ -53,7 +53,19 @@ const ES = {
       weight: ['Peso', ['De fábrica', 'Alivianado', 'Pelado']],
       nitro: ['Nitro', ['Sin nitro', '1 botella', '2 botellas', '3 botellas']]
     },
-    bought: (c, l) => `${c}: ${l}`
+    bought: (c, l) => `${c}: ${l}`,
+    desc: {
+      engine: ['Tal como salió de la fábrica.', 'Árbol de levas y culata trabajados: más fuerza en todo el rango.', 'Pistones forjados, tapas cromadas y más vueltas: mucha más potencia arriba.', 'Un compresor que mete aire a presión. La bestia.'],
+      intake: ['Un carburador chico.', 'Dos carburadores: el motor respira mejor.', 'Un carburador de cuatro bocas: mucho más aire y nafta.'],
+      exhaust: ['Escape de fábrica, con silenciador.', 'Colectores cromados y doble escape: más fuerza y mejor sonido.', 'Escapes laterales libres: más fuerza y mucho ruido.'],
+      trans: ['La caja de fábrica.', 'Manual de 4 cambios: cada cambio más cerca del otro.', 'Caja cerrada de carrera: cambios rapidísimos.'],
+      tires: ['Gomas de calle.', 'Gomas deportivas con línea roja: agarran más en las curvas y al largar.', 'Slicks de carrera atrás: el máximo agarre para largar sin patinar.'],
+      susp: ['Suspensión de fábrica.', 'Rebajada: el auto va más bajo y dobla más plano.', 'De carrera: dobla como sobre rieles.'],
+      weight: ['Con todo puesto.', 'Alivianado: fuera el asiento de atrás y lo que sobra.', 'Pelado: solo lo necesario para correr.'],
+      nitro: ['Sin nitro.', 'Una botella de óxido nitroso: un empujón por carrera.', 'Dos botellas: dos empujones.', 'Tres botellas: tres empujones.']
+    },
+    bars: { accel: 'Aceleración', top: 'Velocidad máx.', grip: 'Agarre', weight: 'Peso' },
+    now: 'Ahora', next: 'Con la mejora', pick: 'Elige una pieza para ver qué cambia.', upgrade: p => `Mejorar · ${p}`
   },
   paint: { title: 'Pintura', colors: p => `Colores · ${p}`, decals: p => `Calcomanías · ${p}`, names: { none: 'Sin nada', flames: 'Llamas', stripes: 'Franjas', number: 'Número' } },
   cars: { title: 'Mis autos', use: 'Usar este', active: 'En uso', sell: p => `Vender por ${p}`, sure: (n, p) => `¿Vender el ${n} por ${p}?`, sold: p => `Vendido por ${p}.`, last: 'Es tu único auto.' },
@@ -153,7 +165,19 @@ const EN = {
       weight: ['Weight', ['Stock', 'Lightened', 'Stripped']],
       nitro: ['Nitrous', ['None', '1 bottle', '2 bottles', '3 bottles']]
     },
-    bought: (c, l) => `${c}: ${l}`
+    bought: (c, l) => `${c}: ${l}`,
+    desc: {
+      engine: ['Just as it left the factory.', 'Ported heads and a hotter cam: more power everywhere.', 'Forged pistons, chrome valve covers and more revs: a lot more power up top.', 'A supercharger forcing air in. The beast.'],
+      intake: ['One small carburetor.', 'Two carburetors: the engine breathes better.', 'A four-barrel carburetor: lots more air and fuel.'],
+      exhaust: ['Stock exhaust with a muffler.', 'Chrome headers and dual exhaust: more power and a better sound.', 'Open side pipes: more power and a lot of noise.'],
+      trans: ['The stock gearbox.', 'Four-speed manual: every gear closer to the next.', 'Close-ratio race gearbox: lightning-fast shifts.'],
+      tires: ['Street tires.', 'Redline sport tires: more grip in corners and off the line.', 'Racing slicks out back: maximum grip to launch without wheelspin.'],
+      susp: ['Stock suspension.', 'Lowered: the car sits lower and corners flatter.', 'Race suspension: corners like it is on rails.'],
+      weight: ['Everything still on.', 'Lightened: out with the back seat and the extras.', 'Stripped: only what it needs to race.'],
+      nitro: ['No nitrous.', 'One bottle of nitrous oxide: one push per race.', 'Two bottles: two pushes.', 'Three bottles: three pushes.']
+    },
+    bars: { accel: 'Acceleration', top: 'Top speed', grip: 'Grip', weight: 'Weight' },
+    now: 'Now', next: 'With the upgrade', pick: 'Pick a part to see what changes.', upgrade: p => `Upgrade · ${p}`
   },
   paint: { title: 'Paint', colors: p => `Colors · ${p}`, decals: p => `Decals · ${p}`, names: { none: 'Plain', flames: 'Flames', stripes: 'Stripes', number: 'Number' } },
   cars: { title: 'My cars', use: 'Drive this one', active: 'In use', sell: p => `Sell for ${p}`, sure: (n, p) => `Sell the ${n} for ${p}?`, sold: p => `Sold for ${p}.`, last: "It's your only car." },

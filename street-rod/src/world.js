@@ -10,23 +10,38 @@ export const LANE = 2.4;           // centro de cada pista de la recta (la derec
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const glowColor = (r, g, b, k) => new THREE.Color(r, g, b).multiplyScalar(k);
 
-// ----- reflejos de la pintura: un cielo oscuro con algunas luces cálidas -----
-export function nightEnvironment(renderer) {
+// ----- reflejos HDR propios: cielo azul, horizonte y luminarias alargadas -----
+export function nightEnvironment(renderer, garage = false) {
   const s = new THREE.Scene();
-  s.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'varying vec3 vP; void main(){ float h = vP.y; vec3 c = mix(vec3(0.05,0.045,0.07), vec3(0.012,0.016,0.04), smoothstep(0.0, 0.6, h)); c += vec3(0.18,0.09,0.1) * exp(-abs(h) * 10.0) * 0.5; if (h < -0.02) c = vec3(0.012); gl_FragColor = vec4(c, 1.0); }'
-  })));
-  const warm = new THREE.MeshBasicMaterial({ color: glowColor(1, 0.72, 0.42, 7) }), cool = new THREE.MeshBasicMaterial({ color: glowColor(0.6, 0.7, 1, 3) });
-  for (let i = 0; i < 7; i++) {
-    const a = i / 7 * Math.PI * 2, m = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.4), i === 3 ? cool : warm);
-    m.position.set(Math.cos(a) * 30, 14 + (i % 3) * 5, Math.sin(a) * 30); m.lookAt(0, 0, 0); s.add(m);
+  const shell = new THREE.ShaderMaterial({ side: THREE.BackSide,
+    uniforms: { workshop: { value: garage ? 1 : 0 } },
+    vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec3 vP; uniform float workshop; void main(){
+      vec3 p = normalize(vP); float h = p.y;
+      vec3 c = mix(vec3(0.10,0.13,0.20), vec3(0.025,0.045,0.09), smoothstep(0.0,0.8,h));
+      c += vec3(0.13,0.075,0.04) * exp(-abs(h - 0.025) * 18.0);
+      if(h < -0.02) c = vec3(0.014,0.017,0.021);
+      c = mix(c, h > 0.0 ? vec3(0.065,0.058,0.05) : vec3(0.025,0.020,0.016), workshop);
+      gl_FragColor = vec4(c,1.0); }`
+  });
+  s.add(new THREE.Mesh(new THREE.SphereGeometry(40, 24, 12), shell));
+  const card = (x, y, z, w, h, color, power) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(power) }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m);
+  };
+  if (garage) {
+    for (const z of [-9, 9]) for (const x of [-1.0, 1.0]) card(x, 14, z, 0.40, 13, 0xe5efff, 7);
+    card(-15, 4, 0, 8, 5, 0xffbc78, 0.45); card(8, 4, 18, 14, 9, 0x809fc9, 0.65);
+  } else {
+    card(-17, 11, 6, 18, 4, 0xc2d9ff, 2.7);
+    card(15, 8, -10, 12, 2, 0xffc088, 5);
+    card(3, 10, 21, 9, 2, 0xffe1b0, 3.5);
+    card(-12, 1, -21, 18, 0.8, 0x62bdcf, 1.3);
+    card(18, 2, 10, 10, 0.6, 0xe57687, 1.2);
   }
-  const pm = new THREE.PMREMGenerator(renderer);
-  const tex = pm.fromScene(s, 0.03).texture;
-  pm.dispose();
-  return tex;
+  const pm = new THREE.PMREMGenerator(renderer), target = pm.fromScene(s, garage ? 0.008 : 0.025);
+  pm.dispose(); s.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  return target;
 }
 
 // ----- cielo (sigue a la cámara), estrellas y luna -----
@@ -100,16 +115,16 @@ function lampPosts(G, pts, groundY) {
   const arm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.1, 2.2).translate(0, 7.9, 1.1), pole.material, n);
   const headG = new THREE.CylinderGeometry(0.42, 0.3, 0.22, 12).translate(0, 7.8, 2.1);
   const head = new THREE.InstancedMesh(headG, new THREE.MeshBasicMaterial({ color: glowColor(1, 0.78, 0.48, 3.2) }), n);
-  const pool = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: radialTex([[0, 'rgba(255,190,120,0.3)'], [0.45, 'rgba(255,170,100,0.1)'], [1, 'rgba(255,160,90,0)']]), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), n);
+  const pool = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: radialTex([[0, 'rgba(255,222,166,0.24)'], [0.28, 'rgba(255,211,143,0.17)'], [0.62, 'rgba(246,187,117,0.055)'], [1, 'rgba(240,174,98,0)']]), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), n);
   const out = [];
   pts.forEach(([x, y, z, dx, dz], i) => {
     d.position.set(x, y, z); d.rotation.set(0, Math.atan2(dx, dz), 0); d.scale.set(1, 1, 1); d.updateMatrix();
     pole.setMatrixAt(i, d.matrix); arm.setMatrixAt(i, d.matrix); head.setMatrixAt(i, d.matrix);
     const lx = x + dx * 2.1, lz = z + dz * 2.1;
-    d.position.set(lx, groundY(lx, lz) + 0.05, lz); d.rotation.set(0, 0, 0); d.scale.set(17, 1, 17); d.updateMatrix(); pool.setMatrixAt(i, d.matrix);
+    d.position.set(lx, groundY(lx, lz) + 0.065, lz); d.rotation.set(-Math.atan2(groundY(lx, lz + 2) - groundY(lx, lz - 2), 4), 0, Math.atan2(groundY(lx + 2, lz) - groundY(lx - 2, lz), 4)); d.scale.set(20, 1, 20); d.updateMatrix(); pool.setMatrixAt(i, d.matrix);
     out.push(new THREE.Vector3(lx, y + 7.5, lz));
   });
-  pool.renderOrder = 2;
+  pool.renderOrder = 0;
   G.add(pole, arm, head, pool);
   return out;
 }
@@ -190,7 +205,7 @@ function building(G, x, z, w, d, h, rotY, lit = true) {
 function buildDrag(G, aniso) {
   const track = new Track([[0, 0, -70], [0, 0, DRAG_LEN + 330]], { width: 9.6, step: 2 });
   const heightAt = () => 0;
-  const asphalt = new THREE.MeshStandardMaterial({ map: roadTex('drag', aniso), roughness: 0.82 });
+  const asphalt = new THREE.MeshStandardMaterial({ map: roadTex('drag', aniso), roughness: 0.61 });
   asphalt.map.repeat.set(1, 1);
   G.add(ribbon(track, -track.hw, track.hw, asphalt));
   // la losa de concreto de la largada, con las marcas de goma
@@ -203,7 +218,7 @@ function buildDrag(G, aniso) {
     }
     g.fillStyle = '#e9e7df'; g.fillRect(w / 2 - 3, 0, 6, h); g.fillRect(6, 0, 6, h); g.fillRect(w - 12, 0, 6, h);
   }, { aniso });
-  const padM = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 150).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: pad, roughness: 0.75 }));
+  const padM = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 150).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: pad, bumpMap: pad, bumpScale: 0.012, roughness: 0.6 }));
   padM.position.set(0, 0.03, 15); padM.rotation.y = Math.PI; G.add(padM);
   const line = (z, tex, depth) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(9.6, depth).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); m.position.set(0, 0.04, z); G.add(m); };
   line(0, canvasTex(8, 8, (g) => { g.fillStyle = '#f2f0ea'; g.fillRect(0, 0, 8, 8); }), 0.3);
@@ -381,7 +396,7 @@ function buildRoad(G, aniso) {
     const p = track.at(START + s);
     for (const side of [-1, 1]) { const off = side * (hw + 4.2); lampPts.push([p.x + p.rx * off, p.y - 0.2, p.z + p.rz * off, -side * p.rx, -side * p.rz]); }
   }
-  const lamps = lampPosts(G, lampPts, heightAt);
+  const lamps = lampPosts(G, lampPts, (x, z) => track.query(x, z).y + 0.02);
   building(G, 34, 40, 26, 14, 9, 0.02); building(G, 30, 110, 18, 12, 14, -0.05); building(G, -30, 150, 16, 16, 11, 0.1); building(G, -32, -30, 20, 12, 8, -0.04); building(G, 36, -90, 22, 14, 12, 0.08);
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(18, 4.5), neon("BOB'S DRIVE-IN", '#ff3b8d')); sign.position.set(21, 11, 60); sign.rotation.y = -Math.PI / 2 + 0.35; G.add(sign);
   // pórtico de partida
@@ -422,7 +437,11 @@ function buildGarage(G, aniso) {
     for (const [x, y, r] of [[250, 280, 70], [300, 230, 40], [120, 400, 30], [420, 120, 26]]) { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(20,16,12,0.55)'); gr.addColorStop(1, 'rgba(20,16,12,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); }
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, h / 2, w, 2); g.fillRect(w / 2, 0, 2, h);
   }, { aniso }) }));
-  G.add(floor);
+  floor.receiveShadow = true; G.add(floor);
+  const ao = new THREE.MeshBasicMaterial({ map: radialTex([[0, 'rgba(0,0,0,0.55)'], [0.65, 'rgba(0,0,0,0.22)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false });
+  for (const [x, z, w, d] of [[0, -D / 2, W + 2, 1.7], [-W / 2, 0, 1.7, D + 2], [W / 2, 0, 1.7, D + 2], [-2.4, -D / 2 + 0.5, 4.2, 1.5]]) {
+    const a = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), ao); a.position.set(x, 0.012, z); G.add(a);
+  }
   const brick = new THREE.MeshStandardMaterial({ map: brickTex(aniso), roughness: 0.9 });
   brick.map.repeat.set(3, 1.2);
   const wall = (w, x, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, H), brick); m.position.set(x, H / 2, z); m.rotation.y = ry; G.add(m); };
@@ -466,10 +485,10 @@ function buildGarage(G, aniso) {
   for (const z of [-1.3, 1.3]) {
     const t = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.14), tube); t.position.set(0, H - 0.5, z); G.add(t);
     const hous = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.08, 0.26), metalM); hous.position.set(0, H - 0.44, z); G.add(hous);
-    const l = new THREE.PointLight(0xfff2dc, 26, 14, 1.6); l.position.set(0, H - 0.65, z); G.add(l); lights.push(l);
+    const l = new THREE.PointLight(0xe9f1ff, 34, 14, 2); l.position.set(0, H - 0.65, z); G.add(l); lights.push(l);
   }
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshBasicMaterial({ color: glowColor(1, 0.8, 0.5, 6) })); bulb.position.set(-2.4, 2.75, -D / 2 + 0.7); G.add(bulb);
-  const bl = new THREE.PointLight(0xffc888, 8, 6, 1.8); bl.position.copy(bulb.position); G.add(bl);
+  const bl = new THREE.PointLight(0xffb66d, 15, 7, 2); bl.position.copy(bulb.position); G.add(bl);
   // afuera: la calle de noche y un farol
   const street = new THREE.Mesh(new THREE.PlaneGeometry(40, 20).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.9 })); street.position.set(0, -0.01, D / 2 + 10); G.add(street);
   lampPosts(G, [[4, 0, D / 2 + 7, -1, 0]], () => 0);
@@ -489,7 +508,7 @@ function buildGarage(G, aniso) {
 // =================== Bob's Drive-In ===================
 function buildBobs(G, aniso) {
   // estacionamiento con sus líneas
-  const lot = new THREE.Mesh(new THREE.PlaneGeometry(90, 70).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: noiseTex('#2a2b30', ['#232428', '#303136', '#26272b'], aniso), roughness: 0.85 }));
+  const lot = new THREE.Mesh(new THREE.PlaneGeometry(90, 70).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: noiseTex('#2a2b30', ['#232428', '#303136', '#26272b'], aniso), roughness: 0.58 }));
   lot.material.map.repeat.set(18, 14); lot.position.set(0, 0, 4); G.add(lot);
   const lineM = new THREE.MeshBasicMaterial({ color: 0xbfbcb2 });
   const spots = [];
@@ -528,9 +547,9 @@ function buildBobs(G, aniso) {
   const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: glowColor(1, 0.85, 0.55, 2.5) }), 60);
   const d = new THREE.Object3D(); for (let i = 0; i < 60; i++) { d.position.set(-14.5 + (i % 30), 3.56, i < 30 ? -1.2 : -5.8); d.updateMatrix(); bulbs.setMatrixAt(i, d.matrix); } G.add(bulbs);
   const lights = [];
-  for (const x of [-10, 0, 10]) { const l = new THREE.PointLight(0xffd6a0, 22, 14, 1.8); l.position.set(x, 3.3, -3.4); G.add(l); lights.push(l); }
+  for (const x of [-10, 0, 10]) { const l = new THREE.PointLight(0xffd6a0, 42, 16, 2); l.position.set(x, 3.3, -3.4); G.add(l); lights.push(l); }
   // la calle de enfrente, faroles, palmeras y cerros
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(200, 9).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: roadTex('road', aniso), roughness: 0.85 }));
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(200, 9).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: roadTex('road', aniso), roughness: 0.64 }));
   road.material.map.repeat.set(1, 16); road.material.map.rotation = Math.PI / 2; road.position.set(0, 0.01, 22); G.add(road);
   const lamps = lampPosts(G, [[-24, 0, 12, 1, 0], [24, 0, 12, -1, 0], [-30, 0, 26, 0, -1], [0, 0, 27.5, 0, -1], [30, 0, 26, 0, -1]], () => 0);
   palms(G, [[-20, -6], [-27, 4], [26, 2], [30, -8], [-8, 15], [10, 15], [-35, 16], [36, 15]], () => 0);
@@ -545,9 +564,10 @@ export function buildWorld(kind, renderer) {
   const G = new THREE.Group(), aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const w = kind === 'drag' ? buildDrag(G, aniso) : kind === 'road' ? buildRoad(G, aniso) : kind === 'garage' ? buildGarage(G, aniso) : buildBobs(G, aniso);
   const sky = makeSky();
-  const hemi = new THREE.HemisphereLight(0x5a6aa8, 0x120e0a, kind === 'garage' ? 0.35 : 0.6);
-  const moon = new THREE.DirectionalLight(0x9fb2ff, 0.55); moon.position.copy(MOON_DIR).multiplyScalar(100);
+  const hemi = new THREE.HemisphereLight(0x5a6aa8, 0x120e0a, kind === 'garage' ? 0.18 : 0.24);
+  const moon = new THREE.DirectionalLight(0xb4cbff, kind === 'garage' ? 0.12 : 0.65); moon.position.copy(MOON_DIR).multiplyScalar(100);
   G.add(hemi, moon, moon.target);
+  G.traverse(o => { if (o.isMesh && !o.material.transparent) o.receiveShadow = true; });
   return Object.assign({ fog: kind === 'drag' ? 0.0024 : 0.0032 }, w, {
     kind, group: G, sky,
     dispose() {

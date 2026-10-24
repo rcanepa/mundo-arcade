@@ -6,7 +6,7 @@ import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js';
 import { buildCar, lookKey } from './car.js';
 import { buildWorld, nightEnvironment, LANE } from './world.js';
-import { Particles, radialTex } from './fx.js';
+import { Particles, radialTex, canvasTex } from './fx.js';
 import { clamp, rnd } from './util.js';
 
 const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -17,14 +17,16 @@ export const stage = {
   init(canvas) {
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     r.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.shadowMap.autoUpdate = false;
     const S = this.scene = new THREE.Scene();
     S.fog = new THREE.FogExp2(0x0b0c18, 0.003);
-    S.environment = nightEnvironment(r);
+    this.environments = { night: nightEnvironment(r), garage: nightEnvironment(r, true) };
+    S.environment = this.environments.night.texture;
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
     this.composer = new EffectComposer(r, new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, samples: MOBILE ? 0 : 4 }));
     this.composer.addPass(new RenderPass(S, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.9);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.45, 1.15);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     const soft = radialTex([[0, 'rgba(255,255,255,0.9)'], [0.5, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']]);
@@ -34,8 +36,24 @@ export const stage = {
     this.flames = new Particles(S, { max: 160, additive: true, tex: hot, color: 0xff8a3a, drag: 4 });
     this.sparks = new Particles(S, { max: 120, additive: true, tex: hot, color: 0xffd080, drag: 2, rise: -9 });
     this.parts = [this.smoke, this.dust, this.flames, this.sparks];
-    this.lampLights = Array.from({ length: 4 }, () => { const l = new THREE.PointLight(0xffc489, 110, 34, 2); S.add(l); return l; });
-    this.heads = [0, 1].map(() => { const s = new THREE.SpotLight(0xfff1d6, 1400, 120, 0.5, 0.9, 1.7); S.add(s, s.target); return s; });
+    this.lampLights = Array.from({ length: 4 }, () => { const l = new THREE.PointLight(0xffd5a0, 155, 34, 2); S.add(l); return l; });
+    this.heads = [0, 1].map(() => { const s = new THREE.SpotLight(0xffe8b5, 1400, 110, 0.46, 0.85, 1.7); S.add(s, s.target); return s; });
+    // Una sola sombra de taller, acotada al auto; la calle usa sombras de contacto.
+    const key = this.workLight = new THREE.SpotLight(0xf0f4ff, 38, 12, 0.85, 0.7, 2);
+    key.position.set(-1.8, 3.05, 1.5); key.target.position.set(0, 0, 0.3); key.castShadow = true;
+    key.shadow.mapSize.setScalar(MOBILE ? 512 : 1024); key.shadow.bias = -0.0003; key.shadow.normalBias = 0.025;
+    key.shadow.camera.near = 0.3; key.shadow.camera.far = 12; S.add(key, key.target);
+    // Huella suave de los dos faros, sin conos sólidos en el aire.
+    const beamTex = canvasTex(128, 256, (g, w, h) => {
+      for (let y = 0; y < h; y++) {
+        const t = y / h, width = 9 + (1 - t) * 49, alpha = Math.sin(Math.PI * t) * 0.08;
+        const gr = g.createLinearGradient(w / 2 - width, 0, w / 2 + width, 0);
+        for (const [k, a] of [[0, 0], [0.3, alpha], [0.42, alpha * 0.6], [0.58, alpha * 0.6], [0.7, alpha], [1, 0]]) gr.addColorStop(k, `rgba(255,230,174,${a})`);
+        g.fillStyle = gr; g.fillRect(w / 2 - width, y, width * 2, 1);
+      }
+    });
+    const beamMat = new THREE.MeshBasicMaterial({ map: beamTex, side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1 });
+    this.beams = [0, 1].map(() => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 1, 12), beamMat); m.frustumCulled = false; S.add(m); return m; });
     this.camState = { yaw: 0, pos: new THREE.Vector3(), look: new THREE.Vector3(), shake: 0, orbit: 0, t: 0 };
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -57,7 +75,10 @@ export const stage = {
     const w = this.worlds[kind] || (this.worlds[kind] = buildWorld(kind, this.renderer));
     this.scene.add(w.group, w.sky);
     this.scene.fog.density = w.fog;
-    this.bloom.strength = kind === 'garage' ? 0.18 : 0.5;
+    this.bloom.strength = kind === 'garage' ? 0.13 : 0.32;
+    this.scene.environment = this.environments[kind === 'garage' ? 'garage' : 'night'].texture;
+    this.workLight.visible = kind === 'garage';
+    this.renderer.shadowMap.needsUpdate = true;
     this.world = w;
     return w;
   },
@@ -83,8 +104,10 @@ export const stage = {
       if (this.mode !== 'garage') c.hood(0, 99);
       for (const w of c.wheels) w.pivot.rotation.y = 0;
       if (!c.root.parent) this.scene.add(c.root);
+      c.root.traverse(o => { if (o.isMesh) o.castShadow = slot === 'me' && !o.material.transparent; });
       out[slot] = c;
     }
+    this.renderer.shadowMap.needsUpdate = true;
     return out;
   },
   // ----- escenas -----
@@ -157,24 +180,28 @@ export const stage = {
   frame(dt) {
     const C = this.camState, cam = this.camera;
     C.t += dt;
+    if (cam.view?.enabled) cam.clearViewOffset();
     if (this.mode === 'race') { this.effects(dt); this.chase(dt, false); this.nearestLamps(this.race.me.v); }
     else {
       C.orbit += dt;
       if (this.mode === 'garage') {
         const me = this.target, V = me && this.shopFocus && me.views[this.shopFocus];
-        if (me) { me.hood(this.shopFocus === 'engine' ? 1 : 0, dt); me.head.emissiveIntensity = this.shopFocus ? 0.08 : 0.5; }
+        if (me) {
+          const before = me.hoodNow(); me.hood(this.shopFocus === 'engine' ? 1 : 0, dt);
+          if (me.hoodNow() !== before) this.renderer.shadowMap.needsUpdate = true;
+          me.head.emissiveIntensity = this.shopFocus ? 0.08 : 0.5;
+        }
         if (V) {
           // en el taller la cámara va a la pieza que se está mirando
           const eye = me.root.localToWorld(new THREE.Vector3(...V.eye)), look = me.root.localToWorld(new THREE.Vector3(...V.look));
-          // en un teléfono parado el panel tapa la mitad de abajo: la cámara se aleja y la pieza queda arriba
-          if (cam.aspect < 1) { eye.sub(look).multiplyScalar(1.9).add(look); look.y -= 1.1; }
+          this.garageFrame(eye, look, V.frame);
           if (C.snap) { if (cam.position.distanceTo(eye) > 30) cam.position.copy(eye); C.pos.copy(cam.position); C.look.copy(look); C.snap = false; }
           C.pos.lerp(eye, Math.min(1, dt * 2.6)); C.look.lerp(look, Math.min(1, dt * 3));
-          cam.position.copy(C.pos); this.lookShift(C.look.clone(), innerWidth > 820 ? -0.9 : 0);
+          cam.position.copy(C.pos); cam.lookAt(C.look);
         } else {
           const a = 0.9 + Math.sin(C.orbit * 0.12) * 0.75, p = new THREE.Vector3(0, 0, 0.3);
           cam.position.set(p.x + Math.sin(a) * 7.2, 1.75 + Math.sin(C.orbit * 0.09) * 0.25, p.z + Math.cos(a) * 7.2);
-          this.lookShift(p.set(0, 0.7, 0.3), innerWidth > 820 ? -1.9 : 0);
+          p.set(0, 0.7, 0.3); this.garageFrame(cam.position, p, [me ? me.len + 0.6 : 5.6, 2.3]); cam.lookAt(p);
           C.snap = true;
         }
         for (const q of this.parts) q.update(dt);
@@ -193,7 +220,7 @@ export const stage = {
         cam.position.set(Math.sin(a) * 8.2, this.cover ? 1.35 : 1.25 + Math.sin(C.orbit * 0.13) * 0.2, 5 + Math.cos(a) * 8.2);
         this.lookShift(new THREE.Vector3(0, 0.95, 5), this.cover ? 0 : innerWidth > 820 ? -2.2 : 0);
       }
-      const fov = this.mode === 'cover' ? 52 : 50;
+      const fov = this.mode === 'cover' ? 52 : this.mode === 'garage' && innerWidth <= 760 ? 95 : 50;
       if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); this.particleScale(); }
       this.nearestLamps(cam.position);
     }
@@ -201,9 +228,26 @@ export const stage = {
     if (this.world) this.world.sky.position.copy(cam.position);
     this.composer.render();
   },
+  // Centra la pieza en el espacio que dejan los paneles, sin inclinar la perspectiva.
+  garageFrame(eye, look, extent) {
+    const cam = this.camera, w = innerWidth, h = innerHeight;
+    const panel = document.querySelector('.panel.side')?.getBoundingClientRect();
+    const topbar = document.querySelector('.topbar')?.getBoundingClientRect();
+    const phone = w <= 760, left = !phone && panel ? panel.right + 20 : 12;
+    const top = topbar ? topbar.bottom + 12 : 48, right = w - 12, bottom = phone && panel ? panel.top - 14 : h - 24;
+    const aw = Math.max(160, right - left), ah = Math.max(180, bottom - top), tan = Math.tan((phone ? 95 : 50) * Math.PI / 360);
+    const [ew, eh] = extent || [3.4, 2.6];
+    const distance = Math.max(ew / (2 * tan * cam.aspect * aw / w), eh / (2 * tan * ah / h)) * 1.08;
+    eye.sub(look).normalize().multiplyScalar(distance).add(look);
+    if (phone && eye.y > 2.75) {
+      const dy = 2.75 - look.y, dx = eye.x - look.x, dz = eye.z - look.z, k = Math.sqrt(Math.max(0.1, distance * distance - dy * dy) / (dx * dx + dz * dz));
+      eye.set(look.x + dx * k, 2.75, look.z + dz * k);
+    }
+    cam.setViewOffset(w, h, w / 2 - (left + right) / 2, h / 2 - (top + bottom) / 2, w, h);
+  },
   // mirar a un punto, corrido hacia un lado para dejar lugar al panel
   lookShift(p, side) {
-    this.camera.lookAt(p);
+    this.camera.lookAt(p); this.camera.updateMatrixWorld();
     if (side) { const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0); p.addScaledVector(right, side); this.camera.lookAt(p); }
   },
   chase(dt, snap) {
@@ -234,11 +278,22 @@ export const stage = {
     const cars = this.mode === 'race' ? this.race.racers.map(r => r.car) : this.mode === 'title' ? [this.cars.get('title')] : this.mode === 'cover' ? [] : this.mode === 'garage' ? [] : [this.cars.get('me')];
     this.heads.forEach((s, i) => {
       const c = cars[i];
-      if (!c || !c.root.parent) { s.visible = false; return; }
-      s.visible = true;
+      const beam = this.beams[i];
+      if (!c || !c.root.parent) { s.visible = beam.visible = false; return; }
+      s.visible = beam.visible = true;
       const h = c.root.rotation.y, p = c.root.position, fx = Math.sin(h), fz = Math.cos(h);
-      s.position.set(p.x + fx * (c.len / 2 - 0.1), p.y + 0.72, p.z + fz * (c.len / 2 - 0.1));
+      // el foco va delante del parachoques, un poco más alto que el faro, y apunta al suelo para alumbrar la calle
+      s.position.set(p.x + fx * (c.len / 2 + 0.3), p.y + 0.72, p.z + fz * (c.len / 2 + 0.3));
       s.target.position.set(p.x + fx * 30, p.y - 1.2, p.z + fz * 30);
+      const pos = beam.geometry.attributes.position, uv = beam.geometry.attributes.uv;
+      for (let k = 0; k < pos.count; k++) {
+        const dist = c.len / 2 + 0.5 + uv.getY(k) * 16, side = (uv.getX(k) - 0.5) * 5.5;
+        const x = p.x + fx * dist + fz * side, z = p.z + fz * dist - fx * side;
+        const track = this.world.track, q = this.world.kind === 'road' ? track.query(x, z) : null;
+        const y = q ? (Math.abs(q.lat) < track.hw ? q.y : this.world.heightAt(x, z)) : p.y;
+        pos.setXYZ(k, x, y + 0.075, z);
+      }
+      pos.needsUpdate = true;
     });
   },
   nearestLamps(p) {
